@@ -288,7 +288,7 @@ function onBack(): void {
 }
 
 .ch-row:focus-visible {
-  outline: 2px solid var(--blue, #1565c0);
+  outline: 2px solid var(--blue, #1783ff);
   outline-offset: -2px;
 }
 
@@ -372,7 +372,7 @@ function onBack(): void {
 }
 
 .back-btn:focus-visible {
-  outline: 2px solid var(--blue, #1565c0);
+  outline: 2px solid var(--blue, #1783ff);
   outline-offset: 1px;
 }
 
