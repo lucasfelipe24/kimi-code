@@ -1280,8 +1280,7 @@ function selectModel(modelId: string): void {
 }
 
 .queue-label {
-  font-family: var(--mono);
-  font-size: max(9px, calc(var(--ui-font-size) - 3.5px));
+  font-size: var(--ui-font-size-xs);
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -1296,8 +1295,7 @@ function selectModel(modelId: string): void {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 6px 8px;
-  font-family: var(--mono);
-  font-size: calc(var(--ui-font-size) - 1.5px);
+  font-size: var(--ui-font-size);
   color: var(--text);
   min-width: 0;
 }
@@ -1330,8 +1328,7 @@ function selectModel(modelId: string): void {
   border: none;
   padding: 0;
   margin: 0;
-  font-family: var(--mono);
-  font-size: calc(var(--ui-font-size) - 1.5px);
+  font-size: var(--ui-font-size);
   color: var(--text);
   cursor: pointer;
   text-align: left;
@@ -1379,9 +1376,8 @@ function selectModel(modelId: string): void {
   background: var(--bg);
   color: var(--blue2);
   padding: 3px 10px 3px 9px;
-  font-family: var(--mono);
-  font-size: calc(var(--ui-font-size) - 2.5px);
-  font-weight: 600;
+  font-size: var(--ui-font-size-xs);
+  font-weight: 500;
   cursor: pointer;
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
@@ -1512,6 +1508,10 @@ function selectModel(modelId: string): void {
   margin-bottom: 6px;
 }
 
+.ph::placeholder {
+  color: var(--muted);
+}
+
 .ph:not(:placeholder-shown) {
   color: var(--ink);
 }
@@ -1636,7 +1636,7 @@ function selectModel(modelId: string): void {
   padding: 2px 7px;
   border-radius: 6px;
   font-size: var(--ui-font-size);
-  color: var(--dim);
+  color: var(--text);
   cursor: pointer;
   user-select: none;
   transition: background 0.1s, color 0.15s;
@@ -1699,7 +1699,7 @@ function selectModel(modelId: string): void {
   border-radius: 6px;
   font-size: var(--ui-font-size);
   line-height: 16px;
-  color: var(--dim);
+  color: var(--text);
   cursor: pointer;
   user-select: none;
   transition: background 0.1s;
@@ -1897,7 +1897,7 @@ function selectModel(modelId: string): void {
   border-radius: 6px;
   font-size: var(--ui-font-size);
   font-family: var(--sans);
-  color: var(--dim);
+  color: var(--text);
   cursor: pointer;
   user-select: none;
   transition: background 0.1s, color 0.15s;
