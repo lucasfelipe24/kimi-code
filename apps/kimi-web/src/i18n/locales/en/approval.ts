@@ -10,7 +10,7 @@ export default {
     todo: 'Update todo?',
     generic: 'Approve action?',
   },
-  subagentBadge: 'subagent · {name}',
+  subagentBadge: 'sub agent · {name}',
   required: 'APPROVAL REQUIRED',
   danger: 'Danger: {detail}',
   searchQueryLabel: 'query',

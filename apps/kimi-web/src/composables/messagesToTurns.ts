@@ -203,7 +203,7 @@ function agentMemberFromToolUse(
   return {
     id: toolCallId,
     toolCallId,
-    name: parsed.description && parsed.description.length > 0 ? parsed.description : 'subagent',
+    name: parsed.description && parsed.description.length > 0 ? parsed.description : 'Sub Agent',
     subagentType: parsed.subagentType,
     prompt: parsed.prompt,
     phase,

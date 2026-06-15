@@ -3009,7 +3009,7 @@ function setSwarmMode(on: boolean): void {
 function toggleSwarmMode(): void {
   const on = !rawState.swarmMode;
   if (on && rawState.permission === 'manual') {
-    const ok = confirm('Enable swarm mode? The agent will run multiple subagents in parallel.');
+    const ok = confirm('Enable swarm mode? The agent will run multiple sub agents in parallel.');
     if (!ok) return;
   }
   setSwarmMode(on);
