@@ -272,13 +272,17 @@ function startArchive(): void {
         <path d="M4 5.7v4.6M5.7 4H9a2 2 0 0 1 2 2v.3" />
       </svg>
       <span class="ch-branch" :class="{ 'ch-detached': !branch }">{{ branch || t('header.detached') }}</span>
-      <span v-if="ahead > 0" class="ch-ahead">↑{{ ahead }}</span>
-      <span v-if="behind > 0" class="ch-behind">↓{{ behind }}</span>
+      <span v-if="ahead > 0 || behind > 0" class="ch-pill ch-sync-pill">
+        <span v-if="ahead > 0" class="ch-ahead">↑{{ ahead }}</span>
+        <span v-if="behind > 0" class="ch-behind">↓{{ behind }}</span>
+      </span>
       <template v-if="hasLineStats">
-        <span v-if="adds > 0" class="ch-add">+{{ adds }}</span>
-        <span v-if="dels > 0" class="ch-del">-{{ dels }}</span>
+        <span class="ch-pill ch-diff-pill">
+          <span v-if="adds > 0" class="ch-add">+{{ adds }}</span>
+          <span v-if="dels > 0" class="ch-del">-{{ dels }}</span>
+        </span>
       </template>
-      <span v-else-if="changes > 0" class="ch-changes">{{ t('header.changed', { n: changes }) }}</span>
+      <span v-else-if="changes > 0" class="ch-pill ch-changes-pill">{{ t('header.changed', { n: changes }) }}</span>
     </div>
 
     <!-- GitHub PR status -->
@@ -342,29 +346,35 @@ function startArchive(): void {
 .ch-git {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 3px;
   color: var(--muted);
   font-family: var(--mono);
   font-size: calc(var(--ui-font-size) - 2.5px);
   min-width: 0;
 }
-.ch-git svg { flex: none; }
-.ch-branch { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+.ch-git svg { flex: none; margin-right: 1px; }
+.ch-branch { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; margin-right: 4px; }
 .ch-detached { color: var(--muted); font-style: italic; }
-.ch-ahead { color: var(--warn); flex: none; }
-.ch-behind { color: var(--blue2); flex: none; }
-.ch-changes {
-  flex: none;
+.ch-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-size: calc(var(--ui-font-size) - 3px);
+}
+.ch-sync-pill { border-color: var(--line); }
+.ch-diff-pill { border-color: color-mix(in srgb, var(--ok) 20%, var(--line)); }
+.ch-changes-pill {
+  border-color: color-mix(in srgb, var(--warn) 20%, var(--line));
   color: var(--warn);
 }
-.ch-add {
-  flex: none;
-  color: var(--ok);
-}
-.ch-del {
-  flex: none;
-  color: var(--err);
-}
+.ch-ahead { color: var(--warn); flex: none; }
+.ch-behind { color: var(--blue2); flex: none; }
+.ch-add { color: var(--ok); flex: none; }
+.ch-del { color: var(--err); flex: none; }
 .ch-spacer { flex: 1; min-width: 0; }
 
 .ch-act {
@@ -398,6 +408,7 @@ function startArchive(): void {
   padding: 2px 9px;
   cursor: pointer;
   color: var(--dim);
+  margin-left: -4px;
 }
 .ch-pr.pr-open { color: #1a7f37; border-color: color-mix(in srgb, #1a7f37 30%, var(--line)); }
 .ch-pr.pr-merged { color: #8250df; border-color: color-mix(in srgb, #8250df 30%, var(--line)); }
