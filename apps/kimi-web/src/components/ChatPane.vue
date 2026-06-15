@@ -448,37 +448,39 @@ function renderBlockKey(block: AssistantRenderBlock, index: number): string {
           <!-- User input renders verbatim (pre-wrap), never through Markdown -->
           <div v-else class="u-text">{{ turn.text }}</div>
         </div>
-        <div v-if="turn.createdAt" class="u-time">{{ formatMessageTime(turn.createdAt, t('conversation.yesterday')) }}</div>
-        <div v-if="canEditTurn(turn)" class="u-edit-wrap" :class="{ undoing: undoingTurnId === turn.id }">
-          <button
-            v-if="confirmingEditTurnId !== turn.id"
-            type="button"
-            class="u-edit"
-            :title="t('conversation.undo')"
-            @click="confirmingEditTurnId = turn.id"
-          >
-            <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M6.5 2.5 3 6l3.5 3.5"/>
-              <path d="M3 6h6.5a3.8 3.8 0 1 1 0 7.6H7.5"/>
-            </svg>
-            <span>{{ t('conversation.undo') }}</span>
-          </button>
-          <div v-else class="u-edit-confirm" @click.stop>
-            <span>{{ t('conversation.undoConfirm') }}</span>
+        <div v-if="turn.createdAt || canEditTurn(turn)" class="u-meta">
+          <div v-if="turn.createdAt" class="u-time">{{ formatMessageTime(turn.createdAt, t('conversation.yesterday')) }}</div>
+          <div v-if="canEditTurn(turn)" class="u-edit-wrap" :class="{ undoing: undoingTurnId === turn.id }">
             <button
+              v-if="confirmingEditTurnId !== turn.id"
               type="button"
-              class="u-edit-confirm-btn confirm"
-              @click.stop="confirmEditMessage(turn)"
+              class="u-edit"
+              :title="t('conversation.undo')"
+              @click="confirmingEditTurnId = turn.id"
             >
-              {{ t('conversation.confirm') }}
+              <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6.5 2.5 3 6l3.5 3.5"/>
+                <path d="M3 6h6.5a3.8 3.8 0 1 1 0 7.6H7.5"/>
+              </svg>
+              <span>{{ t('conversation.undo') }}</span>
             </button>
-            <button
-              type="button"
-              class="u-edit-confirm-btn"
-              @click.stop="confirmingEditTurnId = null"
-            >
-              {{ t('conversation.cancel') }}
-            </button>
+            <div v-else class="u-edit-confirm" @click.stop>
+              <span>{{ t('conversation.undoConfirm') }}</span>
+              <button
+                type="button"
+                class="u-edit-confirm-btn confirm"
+                @click.stop="confirmEditMessage(turn)"
+              >
+                {{ t('conversation.confirm') }}
+              </button>
+              <button
+                type="button"
+                class="u-edit-confirm-btn"
+                @click.stop="confirmingEditTurnId = null"
+              >
+                {{ t('conversation.cancel') }}
+              </button>
+            </div>
           </div>
         </div>
       </template>
@@ -880,15 +882,20 @@ function renderBlockKey(block: AssistantRenderBlock, index: number): string {
   font-size: var(--ui-font-size);
   line-height: 1.55;
 }
-.u-time {
+.u-meta {
   align-self: flex-end;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
   max-width: 84%;
   margin-top: 2px;
   margin-right: 4px;
+}
+.u-meta .u-time {
   font-size: 0.75rem;
   line-height: 1.2;
   color: var(--muted);
-  text-align: right;
   white-space: nowrap;
 }
 @keyframes undo-bubble-exit {
