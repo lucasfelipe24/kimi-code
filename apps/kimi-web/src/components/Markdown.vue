@@ -553,22 +553,35 @@ function copyDiff(code: string, idx: number) {
   margin: 0.8em 0;
 }
 
-/* Tables */
-.md :deep(table) {
+/* Tables. markstream-vue renders markdown tables as `.table-node` and relies on
+   its own table layout/border model. Keep this generic fallback for any raw
+   HTML tables only; skin `.table-node` without overriding its structure. */
+.md :deep(table:not(.table-node)) {
   border-collapse: collapse;
   font-size: var(--ui-font-size);
   margin: 0.5em 0;
 }
-.md :deep(th),
-.md :deep(td) {
+.md :deep(table:not(.table-node) th),
+.md :deep(table:not(.table-node) td) {
   border: 1px solid var(--line);
   padding: 4px 10px;
   text-align: left;
 }
-.md :deep(th) {
+.md :deep(table:not(.table-node) th) {
   background: var(--panel2);
   color: var(--ink);
   font-weight: 600;
+}
+.md :deep(.table-node) {
+  --table-border: var(--line);
+  --table-header-bg: var(--panel2);
+  font-size: var(--ui-font-size);
+  margin: 0.5em 0;
+}
+.md :deep(.table-node th),
+.md :deep(.table-node td) {
+  text-align: left;
+  vertical-align: top;
 }
 
 /* Drop markstream-vue's default table-row hover background — the conversation

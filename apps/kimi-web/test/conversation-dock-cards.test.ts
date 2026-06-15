@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { nextTick } from 'vue';
 
 import ConversationPane from '../src/components/ConversationPane.vue';
+import type { SwarmGroup } from '../src/composables/swarmGroups';
 import type { ConversationStatus, TaskItem, TodoView, UIQuestion } from '../src/types';
 
 const status: ConversationStatus = {
@@ -148,5 +149,33 @@ describe('ConversationPane dock work panel', () => {
 
     await chips[2]!.trigger('click');
     expect(wrapper.find('todo-card-stub').exists()).toBe(true);
+  });
+});
+
+function swarmGroup(members: { phase: SwarmGroup['members'][number]['phase']; id?: string }[]): SwarmGroup {
+  const ms = members.map((m, i) => ({
+    id: m.id ?? `agent_${i + 1}`,
+    name: `Agent ${i + 1}`,
+    phase: m.phase,
+    swarmIndex: i + 1,
+  }));
+  const counts: SwarmGroup['counts'] = { queued: 0, working: 0, suspended: 0, completed: 0, failed: 0 };
+  for (const m of ms) counts[m.phase]++;
+  return { id: 'swarm_1', members: ms, counts };
+}
+
+describe('ConversationPane swarm stack', () => {
+  it('shows the swarm stack while at least one member is active', () => {
+    const wrapper = mountPane({
+      swarms: [swarmGroup([{ phase: 'working' }, { phase: 'completed' }])],
+    });
+    expect(wrapper.find('.swarm-stack').exists()).toBe(true);
+  });
+
+  it('hides the swarm stack once all members are completed or failed', () => {
+    const wrapper = mountPane({
+      swarms: [swarmGroup([{ phase: 'completed' }, { phase: 'failed' }])],
+    });
+    expect(wrapper.find('.swarm-stack').exists()).toBe(false);
   });
 });

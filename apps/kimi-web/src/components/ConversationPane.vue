@@ -160,6 +160,19 @@ const activeWorkspaceLabel = computed(() => {
   const w = props.workspaces?.find((ws) => ws.id === props.activeWorkspaceId);
   return w?.name ?? props.workspaceName ?? '';
 });
+
+/** Swarm cards are live progress indicators: keep the bottom stack only while
+    at least one member is still queued, working, or suspended. Once every
+    member has finished (completed or failed), the card is no longer useful as
+    a persistent footer and is removed from the stack. */
+const activeSwarms = computed<SwarmGroup[]>(() => {
+  return (
+    props.swarms?.filter((group) =>
+      group.members.some((member) => member.phase !== 'completed' && member.phase !== 'failed'),
+    ) ?? []
+  );
+});
+
 function pickWorkspace(id: string): void {
   wsPickOpen.value = false;
   if (id !== props.activeWorkspaceId) emit('selectWorkspace', id);
@@ -1075,8 +1088,8 @@ onUnmounted(() => {
                 @open-compaction="emit('openCompaction', $event)"
                 @edit-message="emit('editMessage', $event)"
               />
-              <div v-if="(swarms?.length ?? 0) > 0" class="swarm-stack">
-                <SwarmCard v-for="groupItem in swarms" :key="groupItem.id" :group="groupItem" />
+              <div v-if="activeSwarms.length > 0" class="swarm-stack">
+                <SwarmCard v-for="groupItem in activeSwarms" :key="groupItem.id" :group="groupItem" />
               </div>
             </div>
             <TasksPane
@@ -1261,8 +1274,8 @@ onUnmounted(() => {
             @open-compaction="emit('openCompaction', $event)"
             @edit-message="emit('editMessage', $event)"
           />
-          <div v-if="(swarms?.length ?? 0) > 0" class="swarm-stack">
-            <SwarmCard v-for="group in swarms" :key="group.id" :group="group" />
+          <div v-if="activeSwarms.length > 0" class="swarm-stack">
+            <SwarmCard v-for="group in activeSwarms" :key="group.id" :group="group" />
           </div>
         </template>
       </div>
