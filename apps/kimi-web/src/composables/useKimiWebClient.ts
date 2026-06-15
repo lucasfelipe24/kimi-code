@@ -1666,6 +1666,129 @@ const turns = computed<ChatTurn[]>(() => {
   );
 });
 
+// ---------------------------------------------------------------------------
+// Side chat ("BTW") — a CHILD session shown in the right-side panel. The daemon
+// forks the parent into the child (so it inherits the parent's context), so we
+// only DISPLAY messages created after the child opens — keeping the side chat a
+// clean Q&A rather than a copy of the whole parent transcript.
+// ---------------------------------------------------------------------------
+const sideChatTarget = ref<{ parentId: string; childId: string; baseline: number } | null>(null);
+
+const sideChatSessionId = computed<string | null>(() => sideChatTarget.value?.childId ?? null);
+const sideChatVisible = computed<boolean>(() => sideChatTarget.value !== null);
+
+const sideChatSending = computed<boolean>(() => {
+  const id = sideChatTarget.value?.childId;
+  return id ? Boolean(rawState.sendingBySession[id]) : false;
+});
+
+const sideChatRunning = computed<boolean>(() => {
+  const id = sideChatTarget.value?.childId;
+  if (!id) return false;
+  if (rawState.sendingBySession[id]) return true;
+  return rawState.sessions.find((x) => x.id === id)?.status === 'running';
+});
+
+const sideChatTurns = computed<ChatTurn[]>(() => {
+  const target = sideChatTarget.value;
+  if (!target) return [];
+  // Only show messages exchanged in the side chat — the fork's inherited parent
+  // history sits before `baseline` and stays hidden (the model still has it).
+  const messages = (rawState.messagesBySession[target.childId] ?? []).slice(target.baseline);
+  return messagesToTurns(
+    messages,
+    [],
+    (fileId) => getKimiWebApi().getFileUrl(fileId),
+    sideChatRunning.value,
+    [],
+  );
+});
+
+/** Open (creating if needed) the side chat for the active session; optionally send a first prompt. */
+async function openSideChat(initialPrompt?: string): Promise<void> {
+  const parent = rawState.activeSessionId;
+  if (!parent) return;
+  // Reuse the existing side chat only if it belongs to the current parent.
+  if (sideChatTarget.value?.parentId !== parent) {
+    let child: AppSession;
+    try {
+      child = await getKimiWebApi().createChildSession(parent, { title: 'Side chat' });
+    } catch (err) {
+      pushOperationFailure('openSideChat', err, { sessionId: parent });
+      return;
+    }
+    // Load + subscribe to the child so its replies stream in. The snapshot also
+    // seeds the inherited fork history; record its length as a baseline so the
+    // panel only displays the messages exchanged here.
+    await syncSessionFromSnapshot(child.id);
+    const baseline = (rawState.messagesBySession[child.id] ?? []).length;
+    sideChatTarget.value = { parentId: parent, childId: child.id, baseline };
+  }
+  if (initialPrompt && initialPrompt.trim()) {
+    await sendSideChatPrompt(initialPrompt.trim());
+  }
+}
+
+function closeSideChat(): void {
+  sideChatTarget.value = null;
+}
+
+/** Send a plain prompt to the side-chat child (no plan/swarm/goal modes). */
+async function sendSideChatPrompt(text: string): Promise<void> {
+  const target = sideChatTarget.value;
+  const trimmed = text.trim();
+  if (!target || !trimmed) return;
+  const sid = target.childId;
+  rawState.sendingBySession = { ...rawState.sendingBySession, [sid]: true };
+  const tempId = nextOptimisticMsgId();
+  const optimisticMsg: AppMessage = {
+    id: tempId,
+    sessionId: sid,
+    role: 'user',
+    content: [{ type: 'text', text: trimmed }],
+    createdAt: new Date().toISOString(),
+    metadata: { 'kimiWeb.optimisticUserMessage': true },
+  };
+  rawState.messagesBySession = {
+    ...rawState.messagesBySession,
+    [sid]: [...(rawState.messagesBySession[sid] ?? []), optimisticMsg],
+  };
+  try {
+    const child = rawState.sessions.find((s) => s.id === sid);
+    const model =
+      (child?.model && child.model.length > 0 ? child.model : rawState.defaultModel) ?? undefined;
+    const result = await getKimiWebApi().submitPrompt(sid, {
+      content: [{ type: 'text', text: trimmed }],
+      model,
+      thinking: rawState.thinking,
+      permissionMode: rawState.permission,
+    });
+    rawState.promptIdBySession = { ...rawState.promptIdBySession, [sid]: result.promptId };
+    const msgs = rawState.messagesBySession[sid] ?? [];
+    const idx = msgs.findIndex((m) => m.id === tempId);
+    if (idx !== -1) {
+      const updated = [...msgs];
+      updated[idx] = { ...updated[idx]!, promptId: updated[idx]!.promptId ?? result.promptId };
+      rawState.messagesBySession = { ...rawState.messagesBySession, [sid]: updated };
+    }
+  } catch (err) {
+    pushOperationFailure('sendSideChatPrompt', err, { sessionId: sid });
+    const msgs = rawState.messagesBySession[sid] ?? [];
+    rawState.messagesBySession = { ...rawState.messagesBySession, [sid]: msgs.filter((m) => m.id !== tempId) };
+    rawState.sendingBySession = { ...rawState.sendingBySession, [sid]: false };
+  }
+}
+
+// Switching the main session closes a side chat that belonged to the old parent.
+watch(
+  () => rawState.activeSessionId,
+  (sid) => {
+    if (sideChatTarget.value && sideChatTarget.value.parentId !== sid) {
+      sideChatTarget.value = null;
+    }
+  },
+);
+
 // A 1-second clock that only ticks while a task is running, so a running task's
 // elapsed-time label keeps counting up. toUiTask reads Date.now() once per
 // evaluation; without this the `tasks` computed only re-ran when tasksBySession
@@ -2024,19 +2147,26 @@ const visibleWorkspace = computed<WorkspaceView | null>(() => {
 /**
  * All sessions for the sidebar (grouped by workspace via workspaceGroups).
  */
-const sessionsForView = computed<Session[]>(() =>
-  rawState.sessions.map((s) => ({
-    id: s.id,
-    title: s.title,
-    time: formatTime(s.updatedAt, s.status),
-    status: toUiSessionStatus(s.status),
-  })),
-);
+const sessionsForView = computed<Session[]>(() => {
+  void sessionTimeClock.value;
+  // Child ("side chat") sessions never appear in the main list — they live in
+  // the side-chat panel only.
+  return rawState.sessions
+    .filter((s) => !s.parentSessionId)
+    .map((s) => ({
+      id: s.id,
+      title: s.title,
+      time: formatTime(s.updatedAt, s.status),
+      status: toUiSessionStatus(s.status),
+    }));
+});
 
 /** Per-workspace groups for the 'all workspaces' scope. */
 const workspaceGroups = computed<WorkspaceGroup[]>(() => {
+  void sessionTimeClock.value;
   const byId = new Map<string, Session[]>();
   for (const s of rawState.sessions) {
+    if (s.parentSessionId) continue; // child sessions stay out of the list
     const wid = workspaceIdForSession(s);
     const view: Session = {
       id: s.id,
@@ -3814,6 +3944,15 @@ export function useKimiWebClient() {
 
     sendPrompt,
     steerPrompt,
+    // Side chat (BTW child session)
+    sideChatVisible,
+    sideChatSessionId,
+    sideChatTurns,
+    sideChatRunning,
+    sideChatSending,
+    openSideChat,
+    closeSideChat,
+    sendSideChatPrompt,
     uploadImage,
     abortCurrentPrompt,
     respondApproval,

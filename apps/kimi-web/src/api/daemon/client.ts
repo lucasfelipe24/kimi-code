@@ -528,6 +528,27 @@ export class DaemonKimiWebApi implements KimiWebApi {
     return toAppSession(data);
   }
 
+  // POST /sessions/{id}/children — create a child ("side chat") session. The
+  // daemon forks the parent (so the child inherits its context) and tags it with
+  // parent_session_id + child_session_kind.
+  async createChildSession(sessionId: string, input?: { title?: string }): Promise<AppSession> {
+    const body: Record<string, unknown> = {};
+    if (input?.title !== undefined) body['title'] = input.title;
+    const data = await this.http.post<WireSession>(
+      `/sessions/${encodeURIComponent(sessionId)}/children`,
+      body,
+    );
+    return toAppSession(data);
+  }
+
+  // GET /sessions/{id}/children — list a session's child sessions.
+  async listChildSessions(sessionId: string): Promise<AppSession[]> {
+    const data = await this.http.get<WirePage<WireSession>>(
+      `/sessions/${encodeURIComponent(sessionId)}/children`,
+    );
+    return data.items.map(toAppSession);
+  }
+
   // -------------------------------------------------------------------------
   // Approval / Question
   // -------------------------------------------------------------------------

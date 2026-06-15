@@ -102,6 +102,10 @@ export function toAppSession(wire: WireSession): AppSession {
     messageCount: wire.message_count,
     lastSeq: wire.last_seq,
     workspaceId: wire.workspace_id,
+    parentSessionId:
+      typeof wire.metadata['parent_session_id'] === 'string'
+        ? wire.metadata['parent_session_id']
+        : undefined,
   };
 }
 
@@ -226,7 +230,7 @@ function toWireMessageContent(app: AppMessageContent): WireMessageContent {
       } else {
         wireSrc = { kind: 'url', url: src.url };
       }
-      return { type: 'image', source: wireSrc };
+      return { type: app.type, source: wireSrc };
     }
     case 'file':
       return {

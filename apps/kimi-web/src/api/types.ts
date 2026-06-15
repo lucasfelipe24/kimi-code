@@ -77,6 +77,11 @@ export interface AppSession {
    * undefined and the composable maps sessions to workspaces by cwd === root.
    */
   workspaceId?: string;
+  /**
+   * Set on a child ("side chat") session — the id of the parent it was forked
+   * from. Used to keep child sessions out of the main session list.
+   */
+  parentSessionId?: string;
 }
 
 /**
@@ -559,6 +564,10 @@ export interface KimiWebApi {
   compactSession(sessionId: string, instruction?: string): Promise<void>;
   undoSession(sessionId: string, count?: number): Promise<void>;
   forkSession(sessionId: string, input?: { title?: string }): Promise<AppSession>;
+  /** Create a child ("side chat") session under a parent — POST /sessions/{id}/children. */
+  createChildSession(sessionId: string, input?: { title?: string }): Promise<AppSession>;
+  /** List a session's child sessions — GET /sessions/{id}/children. */
+  listChildSessions(sessionId: string): Promise<AppSession[]>;
   respondApproval(sessionId: string, approvalId: string, response: ApprovalResponse): Promise<{ resolved: true; resolvedAt: string }>;
   respondQuestion(sessionId: string, questionId: string, response: QuestionResponse): Promise<{ resolved: true; resolvedAt: string }>;
   dismissQuestion(sessionId: string, questionId: string): Promise<{ dismissed: true; dismissedAt: string }>;
