@@ -741,7 +741,7 @@ function blinkOnce(): void {
 
 .gh-name {
   font-size: var(--ui-font-size);
-  font-weight: 400;
+  font-weight: 600;
   color: var(--ink);
   flex: 1;
   min-width: 0;
