@@ -57,4 +57,21 @@ describe('default agent profiles', () => {
       }),
     ).toThrow(/Embedded agent profile source missing: profile\/default\/missing\.md/);
   });
+
+  it('omits the Skills section for subagent profiles that lack the Skill tool', () => {
+    // The root agent has the Skill tool, so the Skills section and listing render.
+    const agentPrompt = DEFAULT_AGENT_PROFILES['agent']?.systemPrompt(promptContext) ?? '';
+    expect(agentPrompt).toContain('# Skills');
+    expect(agentPrompt).toContain('- test-skill: does things');
+
+    // Subagents (coder/explore/plan) lack the Skill tool, so neither the section
+    // heading nor the skill listing should appear in their prompt.
+    for (const name of ['coder', 'explore', 'plan']) {
+      const tools = DEFAULT_AGENT_PROFILES[name]?.tools ?? [];
+      expect(tools).not.toContain('Skill');
+      const prompt = DEFAULT_AGENT_PROFILES[name]?.systemPrompt(promptContext) ?? '';
+      expect(prompt).not.toContain('# Skills');
+      expect(prompt).not.toContain('- test-skill: does things');
+    }
+  });
 });
