@@ -312,7 +312,7 @@ describe('FileMentionProvider', () => {
 
     expect(result).not.toBeNull();
     const overlapItems = result!.items.filter(
-      (item) => item.description === join(extraDir, 'src', 'Overlap.ts'),
+      (item) => item.description === join(extraDir, 'src', 'Overlap.ts').replaceAll('\\', '/'),
     );
     expect(overlapItems).toHaveLength(1);
   });

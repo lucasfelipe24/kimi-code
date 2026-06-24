@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import {
   deleteAllKittyImages,
@@ -3076,7 +3076,9 @@ command = "vim"
     driver.handleUserInput('/plugins install ./plugins/kimi-datasource');
 
     await vi.waitFor(() => {
-      expect(session.installPlugin).toHaveBeenCalledWith('/tmp/proj-a/plugins/kimi-datasource');
+      expect(session.installPlugin).toHaveBeenCalledWith(
+        resolve('/tmp/proj-a', './plugins/kimi-datasource'),
+      );
     });
   });
 
