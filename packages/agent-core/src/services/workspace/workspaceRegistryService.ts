@@ -2,7 +2,7 @@
 
 import { promises as fsp } from 'node:fs';
 import os from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { basename as posixBasename } from 'pathe';
 import type { Stats } from 'node:fs';
 
