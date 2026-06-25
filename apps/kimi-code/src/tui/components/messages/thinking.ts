@@ -140,7 +140,25 @@ export class ThinkingComponent implements Component {
     if (isRenderCacheEnabled()) {
       this.renderCache = { width, lines: rendered };
     }
-    return rendered;
+
+    if (this.expanded || contentLines.length <= THINKING_PREVIEW_LINES) {
+      // Compensa a linha "thinking..." do modo live que some ao finalizar.
+      // Mantém altura constante entre live e finalized para não disparar
+      // o clearOnShrink do pi-tui e preservar o scrollback do terminal.
+      rendered.splice(1, 0, '');
+      return rendered;
+    }
+
+    // Leading blank + first PREVIEW_LINES content lines + hint line.
+    const truncated = rendered.slice(0, 1 + THINKING_PREVIEW_LINES);
+    const remaining = contentLines.length - THINKING_PREVIEW_LINES;
+    const hint = `... (${String(remaining)} more lines, ctrl+o to expand)`;
+    const indentWidth = Math.min(MESSAGE_INDENT.length, Math.max(0, width));
+    const hintWidth = Math.max(0, width - indentWidth);
+    truncated.push(
+      ' '.repeat(indentWidth) + currentTheme.dim(truncateToWidth(hint, hintWidth, '…')),
+    );
+    return truncated;
   }
 
   private startSpinner(): void {

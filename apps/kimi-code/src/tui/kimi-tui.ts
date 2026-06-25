@@ -2118,6 +2118,9 @@ export class KimiTUI {
       case 'hidden':
         this.stopActivitySpinner();
         this.syncAgentSwarmActivitySpinner(undefined);
+        // Mantém altura mínima com Spacer para não disparar clearOnShrink
+        // do pi-tui e preservar o scrollback do terminal.
+        this.state.activityContainer.addChild(new Spacer(1));
         this.state.ui.requestRender();
         return;
       case 'waiting': {
@@ -2169,6 +2172,9 @@ export class KimiTUI {
       case 'session': {
         this.stopActivitySpinner();
         this.syncAgentSwarmActivitySpinner(undefined);
+        // Mantém altura mínima com Spacer para não disparar clearOnShrink
+        // do pi-tui e preservar o scrollback do terminal.
+        this.state.activityContainer.addChild(new Spacer(1));
         break;
       }
     }
