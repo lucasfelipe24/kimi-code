@@ -2,9 +2,14 @@
  * `AuthSummaryService` — implementation of `IAuthSummaryService`.
  */
 
+import { join } from 'node:path';
+
+import { FileTokenStorage } from '@moonshot-ai/kimi-code-oauth';
+import type { AuthSummary } from '@moonshot-ai/protocol';
+
 import { Disposable, InstantiationType, registerSingleton } from '../../di';
 import type { KimiConfig } from '../../config';
-import type { AuthSummary } from '@moonshot-ai/protocol';
+import { AuthCodeOAuthManager, OAUTH_PROVIDERS } from '../../oauth';
 import { createManagedAuthFacade, type ServicesAuthFacade } from '../auth/managedAuth';
 import { IEnvironmentService } from '../environment/environment';
 import { ICoreProcessService } from '../coreProcess/coreProcess';
@@ -89,16 +94,25 @@ export class AuthSummaryService
     const hasInlineKey = nonEmpty(providerConfig.apiKey) !== null;
     if (hasInlineKey) return;
 
+    // Auth-code OAuth (third-party Authorization Code + PKCE). These
+    // providers (e.g. openai-oauth) do not require `oauth` in config.toml;
+    // tokens live in `<homeDir>/credentials/<name>.json`. We check this
+    // path first so that a stray `oauth` block (or managed-OAuth config)
+    // never blocks a provider that has a valid auth-code token cached.
+    const hasAuthCodeToken = await this._hasAuthCodeToken(providerName);
+    if (hasAuthCodeToken) return;
+
     if (providerConfig.oauth !== undefined) {
       const hasToken = await this._hasCachedToken(providerName);
       if (hasToken) return;
       throw new AuthTokenMissingError(providerName);
     }
 
-    // No inline key, no oauth ref. Could still be an env-supplied key — for
-    // minimum viable we conservatively gate; env-key callers can set
-    // apiKey="${VAR}" in config to bypass. The acceptance test fixture for
-    // 40111 uses "manual provider with no api_key" which lands here.
+    // No inline key, no oauth ref, no auth-code token. Could still be an
+    // env-supplied key — for minimum viable we conservatively gate; env-key
+    // callers can set apiKey="${VAR}" in config to bypass. The acceptance
+    // test fixture for 40111 uses "manual provider with no api_key" which
+    // lands here.
     throw new AuthTokenMissingError(providerName);
   }
 
@@ -128,6 +142,24 @@ export class AuthSummaryService
       // FileTokenStorage throws if the credential dir or file is unreadable;
       // treat any failure as "no token" so callers don't block on transient
       // filesystem errors.
+      return false;
+    }
+  }
+
+  private async _hasAuthCodeToken(providerName: string): Promise<boolean> {
+    const def = Object.values(OAUTH_PROVIDERS).find(
+      (provider) => provider.providerName === providerName,
+    );
+    if (def === undefined) return false;
+
+    try {
+      const manager = new AuthCodeOAuthManager({
+        config: def.flowConfig,
+        storage: new FileTokenStorage(join(this.env.homeDir, 'credentials')),
+        configDir: this.env.homeDir,
+      });
+      return await manager.hasToken();
+    } catch {
       return false;
     }
   }

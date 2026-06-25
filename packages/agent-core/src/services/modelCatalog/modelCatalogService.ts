@@ -1,12 +1,7 @@
-import { Disposable, InstantiationType, registerSingleton } from '../../di';
-import type { KimiConfig, ModelAlias, ProviderConfig } from '../../config';
-import type {
-  ModelCatalogItem,
-  ProviderCatalogItem,
-  RefreshOAuthProviderModelsResponse,
-  SetDefaultModelResponse,
-} from '@moonshot-ai/protocol';
+import { join } from 'node:path';
+
 import {
+  FileTokenStorage,
   KIMI_CODE_PLATFORM_ID,
   KIMI_CODE_PROVIDER_NAME,
   applyManagedKimiCodeConfig,
@@ -14,6 +9,16 @@ import {
   resolveKimiCodeRuntimeAuth,
   type ManagedKimiConfigShape,
 } from '@moonshot-ai/kimi-code-oauth';
+import type {
+  ModelCatalogItem,
+  ProviderCatalogItem,
+  RefreshOAuthProviderModelsResponse,
+  SetDefaultModelResponse,
+} from '@moonshot-ai/protocol';
+
+import { Disposable, InstantiationType, registerSingleton } from '../../di';
+import type { KimiConfig, ModelAlias, ProviderConfig } from '../../config';
+import { AuthCodeOAuthManager, OAUTH_PROVIDERS } from '../../oauth';
 
 import { createManagedAuthFacade, type ServicesAuthFacade } from '../auth/managedAuth';
 import { ICoreProcessService } from '../coreProcess/coreProcess';
@@ -34,7 +39,7 @@ export class ModelCatalogService
   private _authFacade: ServicesAuthFacade;
 
   constructor(
-    @IEnvironmentService env: IEnvironmentService,
+    @IEnvironmentService private readonly env: IEnvironmentService,
     @ICoreProcessService private readonly core: ICoreProcessService,
   ) {
     super();
@@ -193,13 +198,31 @@ export class ModelCatalogService
     providerId: string,
     provider: ProviderConfig,
   ): Promise<boolean> {
-    if (provider.oauth === undefined) return false;
+    if (provider.oauth === undefined) return this._hasAuthCodeToken(providerId);
     try {
       const token = await this._authFacade.getCachedAccessToken(
         providerId,
         provider.oauth,
       );
       return nonEmpty(token) !== undefined;
+    } catch {
+      return false;
+    }
+  }
+
+  private async _hasAuthCodeToken(providerId: string): Promise<boolean> {
+    const def = Object.values(OAUTH_PROVIDERS).find(
+      (provider) => provider.providerName === providerId,
+    );
+    if (def === undefined) return false;
+
+    try {
+      const manager = new AuthCodeOAuthManager({
+        config: def.flowConfig,
+        storage: new FileTokenStorage(join(this.env.homeDir, 'credentials')),
+        configDir: this.env.homeDir,
+      });
+      return await manager.hasToken();
     } catch {
       return false;
     }

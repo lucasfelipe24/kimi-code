@@ -989,6 +989,8 @@ export class OpenAIResponsesChatProvider implements ChatProvider {
   private _client: OpenAI | undefined;
   private _httpClient: unknown;
   private _clientFactory: ((auth: ProviderRequestAuth) => OpenAI) | undefined;
+  /** Cached per-apiKey client to reuse connection pools. */
+  private _authClientCache: { apiKey: string; client: OpenAI } | undefined;
 
   constructor(options: OpenAIResponsesOptions) {
     const apiKey = options.apiKey ?? process.env['OPENAI_API_KEY'];
@@ -1127,18 +1129,33 @@ export class OpenAIResponsesChatProvider implements ChatProvider {
   }
 
   private _createClient(auth: ProviderRequestAuth | undefined): OpenAI {
-    return resolveAuthBackedClient(
+    // Reuse the cached Auth client when the apiKey hasn't changed,
+    // preserving the internal HTTP connection pool across requests.
+    const apiKey = auth?.apiKey;
+    if (apiKey !== undefined && this._authClientCache?.apiKey === apiKey) {
+      return this._authClientCache.client;
+    }
+
+    const client = resolveAuthBackedClient(
       { cachedClient: this._client, clientFactory: this._clientFactory },
       auth,
       (a) =>
         this._buildClient(requireProviderApiKey('OpenAIResponsesChatProvider', a, this._apiKey), a),
     );
+
+    if (apiKey !== undefined) {
+      this._authClientCache = { apiKey, client };
+    }
+
+    return client;
   }
 
   private _buildClient(apiKey: string, auth?: ProviderRequestAuth): OpenAI {
     const clientOpts: Record<string, unknown> = {
       apiKey,
       baseURL: this._baseUrl,
+      // Disable SDK-level retries – agent-core handles retry with proper backoff
+      maxRetries: 0,
     };
     const defaultHeaders = mergeRequestHeaders(this._defaultHeaders, auth?.headers);
     if (defaultHeaders !== undefined) {

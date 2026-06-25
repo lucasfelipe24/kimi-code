@@ -1,3 +1,7 @@
+import { mkdtemp } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type {
@@ -7,7 +11,7 @@ import type {
   KimiConfigPatch,
   SetKimiConfigPayload,
 } from '../../src';
-import { KIMI_CODE_PROVIDER_NAME } from '@moonshot-ai/kimi-code-oauth';
+import { FileTokenStorage, KIMI_CODE_PROVIDER_NAME } from '@moonshot-ai/kimi-code-oauth';
 
 import {
   type ICoreProcessService,
@@ -217,6 +221,48 @@ describe('ModelCatalogService', () => {
     await expect(svc.setDefaultModel('missing')).rejects.toBeInstanceOf(
       ModelNotFoundError,
     );
+  });
+
+  it('marks auth-code OAuth providers connected when a token is cached', async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), 'kimi-model-catalog-'));
+    const configRef: { current: KimiConfig } = {
+      current: {
+        providers: {
+          'openai-oauth': {
+            type: 'openai_responses',
+            baseUrl: 'https://example.test/v1',
+          },
+        },
+        defaultModel: 'gpt-5.4',
+        models: {
+          'gpt-5.4': {
+            provider: 'openai-oauth',
+            model: 'gpt-5.4',
+            maxContextSize: 272_000,
+          },
+        },
+      },
+    };
+    await new FileTokenStorage(join(homeDir, 'credentials')).save('openai-oauth', {
+      accessToken: 'cached-token',
+      refreshToken: 'refresh-token',
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+      scope: 'openid',
+      tokenType: 'Bearer',
+      expiresIn: 3600,
+    });
+    const { core } = makeCore(configRef);
+    const svc = new ModelCatalogService({
+      _serviceBrand: undefined,
+      homeDir,
+      configPath: join(homeDir, 'config.toml'),
+    }, core);
+
+    await expect(svc.getProvider('openai-oauth')).resolves.toMatchObject({
+      id: 'openai-oauth',
+      has_api_key: false,
+      status: 'connected',
+    });
   });
 
   it('refreshes managed OAuth models and preserves always-thinking defaults', async () => {

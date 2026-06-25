@@ -550,7 +550,7 @@ async function handleOAuthLogin(
       models[defaultAlias] = {
         provider: def.providerName,
         model: def.defaultModel,
-        maxContextSize: 272_000,
+        maxContextSize: 1_050_000,
         capabilities: ['tool_use', 'thinking', 'image_in'],
       };
     }

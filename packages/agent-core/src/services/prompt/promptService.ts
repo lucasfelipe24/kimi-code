@@ -338,7 +338,7 @@ export class PromptService
     // Readiness gate. Throws AuthProvisioningRequired /
     // AuthTokenMissing / AuthModelNotResolved before we mint a prompt_id and
     // hand off to agent-core. Daemon route layer maps to 40110/40111/40113.
-    await this.auth.ensureReady();
+    await this.auth.ensureReady(body.model);
 
     const promptId = `prompt_${ulid()}`;
     const state = this._createPromptState(sid, promptId, body);

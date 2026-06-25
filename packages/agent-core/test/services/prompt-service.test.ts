@@ -603,6 +603,16 @@ describe('PromptService.submit', () => {
     await impl.submit(SID, mkBody());
   });
 
+  it('checks auth readiness for the submitted model override', async () => {
+    const { bridge } = makeBridge();
+    const { bus } = makeBus();
+    const auth = makeAuth();
+    const impl = newSvc(bridge, bus, auth);
+    await impl.submit(SID, mkBody({ model: 'gpt-5.4' }));
+
+    expect(auth.ensureReady).toHaveBeenCalledWith('gpt-5.4');
+  });
+
   it('calls resumeSession before prompt so cross-restart sessions resolve', async () => {
     const { bridge } = makeBridge();
     const { bus } = makeBus();
