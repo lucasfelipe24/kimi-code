@@ -20,6 +20,14 @@ export const FLAG_DEFINITIONS = [
     default: true,
     surface: 'core',
   },
+  {
+    id: 'third_party_oauth',
+    title: 'Third-party OAuth',
+    description: 'Enable OAuth Authorization Code + PKCE login for third-party providers like OpenAI.',
+    env: 'KIMI_CODE_EXPERIMENTAL_THIRD_PARTY_OAUTH',
+    default: false,
+    surface: 'both',
+  },
 ] as const satisfies readonly FlagDefinitionInput[];
 
 /** Literal union of registered flag ids. */

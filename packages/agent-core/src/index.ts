@@ -107,3 +107,23 @@ export { Emitter } from './base/common/event';
 // canonical protocol shapes already exported via `./rpc` (`rpc/sdk-api.ts`),
 // and re-exporting them again would collide (TS2308).
 export * from './services';
+
+// ─── OAuth Authorization Code + PKCE ────────────────────────────────────────
+export {
+  AuthCodeListener,
+  AuthCodeOAuthManager,
+  OAUTH_PROVIDERS,
+  generateCodeChallenge,
+  generateCodeVerifier,
+  generatePKCEParams,
+  generateState,
+} from './oauth';
+export type {
+  AuthCodeFlowConfig,
+  AuthCodeLoginResult,
+  AuthCodeOAuthManagerOptions,
+  OAuthProviderDefinition,
+  PKCEParams,
+} from './oauth';
+// BearerTokenProvider is already exported from session/provider-manager;
+// AuthCodeOAuthManager.tokenProvider() returns this same interface.

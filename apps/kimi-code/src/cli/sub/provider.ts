@@ -16,11 +16,13 @@ import {
   applyCustomRegistryProvider,
   CustomRegistryApiError,
   fetchCustomRegistry,
+  FileTokenStorage,
   type CustomRegistrySource,
   type ManagedKimiConfigShape,
 } from '@moonshot-ai/kimi-code-oauth';
 import {
   applyCatalogProvider,
+  AuthCodeOAuthManager,
   catalogBaseUrl,
   catalogProviderModels,
   CatalogFetchError,
@@ -28,6 +30,7 @@ import {
   DEFAULT_CATALOG_URL,
   fetchCatalog,
   inferWireType,
+  OAUTH_PROVIDERS,
   type Catalog,
   type CatalogProviderEntry,
   type KimiConfig,
@@ -158,8 +161,36 @@ export async function handleProviderRemove(
     deps.stderr.write(`Provider "${providerId}" not found.\n`);
     deps.exit(1);
   }
+
+  // Clean up auth-code OAuth token if applicable
+  await cleanupAuthCodeTokenCli(deps, providerId);
+
   await harness.removeProvider(providerId);
   deps.stdout.write(`Removed provider "${providerId}".\n`);
+}
+
+/** Delete the stored OAuth token for an auth-code provider. */
+async function cleanupAuthCodeTokenCli(
+  deps: ProviderDeps,
+  providerId: string,
+): Promise<void> {
+  const def = OAUTH_PROVIDERS[providerId] ??
+    Object.values(OAUTH_PROVIDERS).find((d) => d.providerName === providerId);
+  if (def === undefined) return;
+
+  const harness = deps.getHarness();
+  const { join } = await import('node:path');
+  const storage = new FileTokenStorage(join(harness.homeDir, 'credentials'));
+  const manager = new AuthCodeOAuthManager({
+    config: def.flowConfig,
+    storage,
+    configDir: harness.homeDir,
+  });
+  try {
+    await manager.logout();
+  } catch {
+    // Token file may not exist — ignore
+  }
 }
 
 export async function handleProviderList(
@@ -406,6 +437,197 @@ async function loadCatalogOrExit(deps: ProviderDeps, url: string): Promise<Catal
   }
 }
 
+async function handleOAuthLogin(
+  deps: ProviderDeps,
+  providerId: string,
+): Promise<void> {
+  const harness = deps.getHarness();
+
+  // Check experimental flag
+  const config = await harness.getConfig();
+  if (config.experimental?.['third_party_oauth'] !== true) {
+    deps.stderr.write(
+      'Third-party OAuth is experimental. Enable it with\n' +
+        '  experimental = { third_party_oauth = true }\n' +
+        'in your config.toml, or set KIMI_CODE_EXPERIMENTAL_THIRD_PARTY_OAUTH=1.\n',
+    );
+    deps.exit(1);
+  }
+
+  const def = OAUTH_PROVIDERS[providerId];
+  if (def === undefined) {
+    deps.stderr.write(
+      `Unknown OAuth provider: "${providerId}". Available: ${Object.keys(OAUTH_PROVIDERS).join(', ')}\n`,
+    );
+    deps.exit(1);
+  }
+
+  deps.stdout.write(`Starting OAuth login for ${def.flowConfig.displayName}...\n`);
+
+  // Resolve homeDir from harness
+  const homeDir = harness.homeDir;
+  const { join } = await import('node:path');
+  const storage = new FileTokenStorage(join(homeDir, 'credentials'));
+  const manager = new AuthCodeOAuthManager({
+    config: def.flowConfig,
+    storage,
+    configDir: homeDir,
+  });
+
+  try {
+    // If provider already exists, clean up old token and model aliases first
+    if (config.providers[def.providerName] !== undefined) {
+      await cleanupAuthCodeTokenCli(deps, providerId);
+      // Remove old model aliases for this provider
+      if (config.models) {
+        for (const [alias, model] of Object.entries(config.models)) {
+          if (model.provider === def.providerName) {
+            delete config.models[alias];
+          }
+        }
+      }
+      await harness.setConfig({
+        providers: {},
+        models: config.models,
+      });
+    }
+
+    const result = await manager.login({
+      onAuthUrl: (url: string) => {
+        deps.stdout.write(`\nOpen this URL in your browser:\n${url}\n\n`);
+      },
+    });
+    deps.stdout.write(
+      `\nLogged in to ${def.flowConfig.displayName}${result.accountId ? ` (account: ${result.accountId})` : ''}.\n`,
+    );
+    deps.stdout.write(`  Provider: ${def.providerName}\n`);
+    deps.stdout.write(`  Default model: ${def.defaultModel}\n`);
+
+    // Fetch available models from the Codex API
+    let codexModels: Array<{ slug: string; display_name: string; context_window: number; input_modalities: string[] }> = [];
+    try {
+      const modelsResp = await fetch(`${def.baseUrl}/models?client_version=1.0.0`, {
+        headers: {
+          'Authorization': `Bearer ${result.token.accessToken}`,
+          'Origin': 'https://chatgpt.com',
+          'Referer': 'https://chatgpt.com/codex',
+          'User-Agent': 'kimi-code',
+        },
+      });
+      if (modelsResp.ok) {
+        const modelsData = await modelsResp.json() as { models: Array<{ slug: string; display_name: string; context_window: number; input_modalities: string[]; visibility: string }> };
+        codexModels = (modelsData.models ?? [])
+          .filter((m) => m.visibility !== 'hide' && m.slug !== 'codex-auto-review')
+          .map((m) => ({
+            slug: m.slug,
+            display_name: m.display_name,
+            context_window: m.context_window,
+            input_modalities: m.input_modalities ?? [],
+          }));
+      }
+    } catch {
+      // Non-critical — use defaults
+    }
+
+    // Build model entries
+    const models: Record<string, { provider: string; model: string; maxContextSize: number; capabilities?: string[]; displayName?: string }> = {};
+    for (const m of codexModels) {
+      const modelAlias = `${def.providerName}/${m.slug}`;
+      const caps: string[] = ['tool_use', 'thinking'];
+      if (m.input_modalities.includes('image')) caps.push('image_in');
+      models[modelAlias] = {
+        provider: def.providerName,
+        model: m.slug,
+        maxContextSize: m.context_window,
+        capabilities: caps,
+        displayName: m.display_name,
+      };
+    }
+
+    // Fallback: at least register the default model
+    const defaultAlias = `${def.providerName}/${def.defaultModel}`;
+    if (!models[defaultAlias]) {
+      models[defaultAlias] = {
+        provider: def.providerName,
+        model: def.defaultModel,
+        maxContextSize: 272_000,
+        capabilities: ['tool_use', 'thinking', 'image_in'],
+      };
+    }
+
+    // Write provider + models config
+    const freshConfig = await harness.getConfig();
+    const providerEntry: Record<string, unknown> = {
+      type: def.wireType,
+      defaultModel: def.defaultModel,
+    };
+    if (def.baseUrl) providerEntry['baseUrl'] = def.baseUrl;
+
+    // Also add custom headers for Codex
+    providerEntry['customHeaders'] = {
+      Origin: 'https://chatgpt.com',
+      Referer: 'https://chatgpt.com/codex',
+    };
+
+    await harness.setConfig({
+      providers: {
+        [def.providerName]: providerEntry,
+      },
+      models,
+      ...(freshConfig.defaultModel === undefined ? { defaultModel: defaultAlias } : {}),
+    });
+
+    deps.stdout.write(`  Models: ${Object.keys(models).length} registered\n`);
+  } catch (error) {
+    deps.stderr.write(`OAuth login failed: ${errorMessage(error)}\n`);
+    deps.exit(1);
+  }
+}
+
+async function handleOAuthLogout(
+  deps: ProviderDeps,
+  providerId: string,
+): Promise<void> {
+  const harness = deps.getHarness();
+  await harness.ensureConfigFile();
+
+  const config = await harness.getConfig();
+  const def = OAUTH_PROVIDERS[providerId] ??
+    Object.values(OAUTH_PROVIDERS).find((d) => d.providerName === providerId);
+  if (def === undefined) {
+    // Try to find by providerId directly (might be the providerName)
+    const byProviderName = Object.values(OAUTH_PROVIDERS).find(
+      (d) => d.providerName === providerId,
+    );
+    if (byProviderName === undefined) {
+      deps.stderr.write(
+        `Unknown OAuth provider: "${providerId}". Available: ${Object.keys(OAUTH_PROVIDERS).join(', ')}\n`,
+      );
+      deps.exit(1);
+    }
+    await doLogout(deps, byProviderName, harness);
+  } else {
+    await doLogout(deps, def, harness);
+  }
+}
+
+async function doLogout(
+  deps: ProviderDeps,
+  def: typeof OAUTH_PROVIDERS[string],
+  harness: KimiHarness,
+): Promise<void> {
+  // Delete the token file
+  await cleanupAuthCodeTokenCli(deps, def.id).catch(() => {});
+
+  // Remove provider from config using the standard harness method
+  const config = await harness.getConfig();
+  if (config.providers[def.providerName] !== undefined) {
+    await harness.removeProvider(def.providerName);
+  }
+
+  deps.stdout.write(`Logged out of ${def.flowConfig.displayName}.\n`);
+}
+
 export function registerProviderCommand(parent: Command, deps?: Partial<ProviderDeps>): void {
   const provider = parent
     .command('provider')
@@ -497,6 +719,22 @@ export function registerProviderCommand(parent: Command, deps?: Partial<Provider
         );
       },
     );
+
+  provider
+    .command('oauth-login <providerId>')
+    .description('Log in to a third-party OAuth provider (experimental).')
+    .action(async (providerId: string) => {
+      const resolved = resolveDeps(deps);
+      await runAction(resolved, () => handleOAuthLogin(resolved, providerId));
+    });
+
+  provider
+    .command('oauth-logout <providerId>')
+    .description('Log out of a third-party OAuth provider.')
+    .action(async (providerId: string) => {
+      const resolved = resolveDeps(deps);
+      await runAction(resolved, () => handleOAuthLogout(resolved, providerId));
+    });
 }
 
 function resolveDeps(overrides: Partial<ProviderDeps> = {}): ProviderDeps {

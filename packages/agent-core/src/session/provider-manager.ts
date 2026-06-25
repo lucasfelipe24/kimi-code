@@ -3,6 +3,9 @@ import type { ProviderConfig as KosongProviderConfig, ModelCapability, ProviderR
 import { APIStatusError, getModelCapability, UNKNOWN_CAPABILITY } from '@moonshot-ai/kosong';
 import type { KimiConfig, ModelAlias, OAuthRef, ProviderConfig } from '../config';
 import { ErrorCodes, isKimiError, KimiError } from '../errors';
+import { AuthCodeOAuthManager, OAUTH_PROVIDERS } from '../oauth';
+import { FileTokenStorage } from '@moonshot-ai/kimi-code-oauth';
+import { join } from 'node:path';
 
 export interface BearerTokenProvider {
   getAccessToken(options?: { readonly force?: boolean }): Promise<string>;
@@ -26,6 +29,13 @@ interface ProviderManagerOptions {
   readonly config: KimiConfig | (() => KimiConfig);
   readonly kimiRequestHeaders?: Record<string, string>;
   readonly resolveOAuthTokenProvider?: OAuthTokenProviderResolver;
+  /**
+   * Home directory for resolving auth-code OAuth provider tokens.
+   * When provided, providers without `oauth` config that match a known
+   * auth-code provider (e.g. OpenAI) will be handled automatically via
+   * AuthCodeOAuthManager + FileTokenStorage.
+   */
+  readonly homeDir?: string;
   readonly promptCacheKey?: string;
 }
 
@@ -131,7 +141,12 @@ export class ProviderManager implements ModelProvider {
   ): AuthorizedRequest | undefined {
     const { providerName } = this.resolveProviderConfig(model);
     const providerConfig = this.config.providers[providerName];
-    if (providerConfig?.oauth === undefined) return undefined;
+    if (providerConfig?.oauth === undefined) {
+      // Check auth-code OAuth providers (no oauth config needed)
+      const authCodeAuth = this.resolveAuthCodeAuth(providerName, options?.log);
+      if (authCodeAuth !== undefined) return authCodeAuth;
+      return undefined;
+    }
 
     if (providerApiKey(providerConfig) !== undefined) {
       // oauth + apiKey on the same provider makes request auth ambiguous:
@@ -189,6 +204,77 @@ export class ProviderManager implements ModelProvider {
               {
                 cause: error,
                 details: { statusCode: error.statusCode, requestId: error.requestId },
+              },
+            );
+          }
+          auth = await fetchAuth(true);
+        }
+      }
+    };
+  }
+
+  /**
+   * Resolve auth for Authorization Code + PKCE OAuth providers (e.g. OpenAI).
+   * These providers do NOT have `oauth` in their config; the auth-code
+   * framework handles token lifecycle independently via FileTokenStorage.
+   */
+  private resolveAuthCodeAuth(
+    providerName: string,
+    log?: Logger,
+  ): AuthorizedRequest | undefined {
+    const def = Object.values(OAUTH_PROVIDERS).find(
+      (d) => d.providerName === providerName,
+    );
+    if (def === undefined) return undefined;
+
+    const homeDir = this.options.homeDir;
+    if (homeDir === undefined) return undefined;
+
+    const storage = new FileTokenStorage(join(homeDir, 'credentials'));
+    const manager = new AuthCodeOAuthManager({
+      config: def.flowConfig,
+      storage,
+      configDir: homeDir,
+    });
+
+    const loginRequired = (cause?: unknown): KimiError =>
+      new KimiError(
+        ErrorCodes.AUTH_LOGIN_REQUIRED,
+        `OAuth provider "${providerName}" requires login. Run "kimi provider oauth-login ${def.id}" first.`,
+        cause === undefined ? undefined : { cause },
+      );
+
+    const fetchAuth = async (force: boolean): Promise<ProviderRequestAuth> => {
+      let apiKey: string;
+      try {
+        apiKey = await manager.ensureFresh(force ? { force: true } : undefined);
+      } catch (error) {
+        if (!isKimiError(error) || error.code !== ErrorCodes.AUTH_LOGIN_REQUIRED) {
+          log?.warn('auth-code oauth token fetch failed', { providerName, error });
+        }
+        throw error;
+      }
+      if (apiKey.trim().length === 0) throw loginRequired();
+      return { apiKey };
+    };
+
+    return async (request) => {
+      let auth = await fetchAuth(false);
+      for (let refreshed = false; ; refreshed = true) {
+        try {
+          return await request(auth);
+        } catch (error) {
+          if (!(error instanceof APIStatusError) || error.statusCode !== 401) throw error;
+          if (refreshed) {
+            throw new KimiError(
+              ErrorCodes.AUTH_LOGIN_REQUIRED,
+              `OAuth provider "${providerName}" credentials were rejected. Run "kimi provider oauth-login ${def.id}" to re-login.`,
+              {
+                cause: error,
+                details: {
+                  statusCode: error.statusCode,
+                  requestId: error.requestId,
+                },
               },
             );
           }

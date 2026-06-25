@@ -6,14 +6,18 @@ import {
 } from '@moonshot-ai/kimi-code-oauth';
 import {
   applyCatalogProvider,
+  AuthCodeOAuthManager,
   catalogBaseUrl,
   catalogProviderModels,
   CatalogFetchError,
   DEFAULT_CATALOG_URL,
   fetchCatalog,
   inferWireType,
+  OAUTH_PROVIDERS,
   type Catalog,
 } from '@moonshot-ai/kimi-code-sdk';
+import { FileTokenStorage } from '@moonshot-ai/kimi-code-oauth';
+import { join } from 'node:path';
 
 import { ChoicePickerComponent } from '../components/dialogs/choice-picker';
 import {
@@ -88,6 +92,9 @@ async function handleProviderDelete(host: SlashCommandHost, providerId: string):
     return;
   }
 
+  // Clean up auth-code OAuth token if applicable
+  await cleanupAuthCodeToken(host, providerId);
+
   const activeProvider =
     host.state.appState.availableModels[host.state.appState.model]?.provider;
   const config = await host.harness.removeProvider(providerId);
@@ -102,6 +109,30 @@ async function handleProviderDelete(host: SlashCommandHost, providerId: string):
   }
 }
 
+/** Delete the stored OAuth token for an auth-code provider. */
+async function cleanupAuthCodeToken(
+  host: SlashCommandHost,
+  providerId: string,
+): Promise<void> {
+  const def = OAUTH_PROVIDERS[providerId] ??
+    Object.values(OAUTH_PROVIDERS).find((d) => d.providerName === providerId);
+  if (def === undefined) return;
+
+  const storage = new FileTokenStorage(
+    join(host.harness.homeDir, 'credentials'),
+  );
+  const manager = new AuthCodeOAuthManager({
+    config: def.flowConfig,
+    storage,
+    configDir: host.harness.homeDir,
+  });
+  try {
+    await manager.logout();
+  } catch {
+    // Token file may not exist — ignore
+  }
+}
+
 async function handleProviderAdd(host: SlashCommandHost): Promise<void> {
   const source = await promptProviderAddSource(host);
   if (source === undefined) {
@@ -111,6 +142,10 @@ async function handleProviderAdd(host: SlashCommandHost): Promise<void> {
 
   if (source === 'known') {
     await handleCatalogProviderAdd(host);
+    return;
+  }
+  if (source === 'oauth') {
+    await handleOAuthProviderAdd(host);
     return;
   }
   const handled = await handleCustomRegistryAddViaDialog(host);
@@ -125,19 +160,156 @@ function reopenProviderManager(host: SlashCommandHost): void {
   host.mountEditorReplacement(component);
 }
 
+async function handleOAuthProviderAdd(host: SlashCommandHost): Promise<void> {
+  const config = await host.harness.getConfig();
+  if (config.experimental?.['third_party_oauth'] !== true) {
+    host.showError(
+      'Third-party OAuth is experimental. Set experimental.third_party_oauth = true in config.toml.',
+    );
+    return;
+  }
+
+  const providers = Object.values(OAUTH_PROVIDERS);
+  if (providers.length === 0) {
+    host.showError('No OAuth providers available.');
+    return;
+  }
+
+  const picker = new ChoicePickerComponent({
+    title: 'Select OAuth provider',
+    options: providers.map((p) => ({
+      value: p.id,
+      label: p.flowConfig.displayName,
+    })),
+    onSelect: (providerId) => {
+      host.restoreEditor();
+      void runOAuthLogin(host, providerId).catch((error: unknown) => {
+        host.showError(`OAuth login failed: ${formatErrorMessage(error)}`);
+      });
+    },
+    onCancel: () => {
+      host.restoreEditor();
+    },
+  });
+  host.mountEditorReplacement(picker);
+}
+
+async function runOAuthLogin(
+  host: SlashCommandHost,
+  providerId: string,
+): Promise<void> {
+  const def = OAUTH_PROVIDERS[providerId];
+  if (def === undefined) {
+    host.showError(`Unknown OAuth provider: ${providerId}`);
+    return;
+  }
+
+  const spinner = host.showLoginProgressSpinner(`Opening browser for ${providerId} login...`);
+  const homeDir = host.harness.homeDir;
+  const storage = new FileTokenStorage(join(homeDir, 'credentials'));
+  const manager = new AuthCodeOAuthManager({
+    config: def.flowConfig,
+    storage,
+    configDir: homeDir,
+  });
+
+  try {
+    const result = await manager.login();
+    spinner.stop({ ok: true, label: `Logged in to ${providerId}.` });
+
+    // Fetch available models from the Codex API
+    let codexModels: Array<{ slug: string; display_name: string; context_window: number; input_modalities: string[] }> = [];
+    try {
+      if (def.baseUrl) {
+        const modelsResp = await fetch(`${def.baseUrl}/models?client_version=1.0.0`, {
+          headers: {
+            'Authorization': `Bearer ${result.token.accessToken}`,
+            'Origin': 'https://chatgpt.com',
+            'Referer': 'https://chatgpt.com/codex',
+            'User-Agent': 'kimi-code',
+          },
+        });
+        if (modelsResp.ok) {
+          const modelsData = await modelsResp.json() as { models: Array<{ slug: string; display_name: string; context_window: number; input_modalities: string[]; visibility: string }> };
+          codexModels = (modelsData.models ?? [])
+            .filter((m) => m.visibility !== 'hide' && m.slug !== 'codex-auto-review')
+            .map((m) => ({
+              slug: m.slug,
+              display_name: m.display_name,
+              context_window: m.context_window,
+              input_modalities: m.input_modalities ?? [],
+            }));
+        }
+      }
+    } catch {
+      // Non-critical
+    }
+
+    // Build model entries
+    const models: Record<string, { provider: string; model: string; maxContextSize: number; capabilities?: string[]; displayName?: string }> = {};
+    for (const m of codexModels) {
+      const modelAlias = `${def.providerName}/${m.slug}`;
+      const caps: string[] = ['tool_use', 'thinking'];
+      if (m.input_modalities.includes('image')) caps.push('image_in');
+      models[modelAlias] = {
+        provider: def.providerName,
+        model: m.slug,
+        maxContextSize: m.context_window,
+        capabilities: caps,
+        displayName: m.display_name,
+      };
+    }
+
+    // Fallback default model
+    const defaultAlias = `${def.providerName}/${def.defaultModel}`;
+    if (!models[defaultAlias]) {
+      models[defaultAlias] = {
+        provider: def.providerName,
+        model: def.defaultModel,
+        maxContextSize: 272_000,
+        capabilities: ['tool_use', 'thinking', 'image_in'],
+      };
+    }
+
+    const config = await host.harness.getConfig();
+    const providerEntry: Record<string, unknown> = {
+      type: def.wireType,
+      defaultModel: def.defaultModel,
+    };
+    if (def.baseUrl) providerEntry['baseUrl'] = def.baseUrl;
+    providerEntry['customHeaders'] = {
+      Origin: 'https://chatgpt.com',
+      Referer: 'https://chatgpt.com/codex',
+    };
+
+    await host.harness.setConfig({
+      providers: { [def.providerName]: providerEntry },
+      models,
+      ...(config.defaultModel === undefined ? { defaultModel: defaultAlias } : {}),
+    });
+
+    await host.authFlow.refreshConfigAfterLogin();
+    host.showStatus(`OAuth login successful. Provider: ${providerId} (${Object.keys(models).length} models)`, 'success');
+  } catch (error) {
+    spinner.stop({ ok: false, label: 'OAuth login failed.' });
+    throw error;
+  }
+}
+
 function promptProviderAddSource(
   host: SlashCommandHost,
-): Promise<'known' | 'custom' | undefined> {
+): Promise<'known' | 'custom' | 'oauth' | undefined> {
   return new Promise((resolve) => {
     const picker = new ChoicePickerComponent({
       title: 'Add provider',
       options: [
         { value: 'known', label: 'Known third-party provider' },
         { value: 'custom', label: 'Custom registry (api.json)' },
+        { value: 'oauth', label: 'OAuth login (OpenAI, etc.)' },
       ],
       onSelect: (value) => {
         host.restoreEditor();
-        resolve(value === 'known' || value === 'custom' ? value : undefined);
+        resolve(value === 'known' || value === 'custom' || value === 'oauth' ? value : undefined);
       },
       onCancel: () => {
         host.restoreEditor();

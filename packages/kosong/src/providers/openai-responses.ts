@@ -1112,6 +1112,8 @@ export class OpenAIResponsesChatProvider implements ChatProvider {
   }
 
   withMaxCompletionTokens(maxCompletionTokens: number): OpenAIResponsesChatProvider {
+    // The ChatGPT Codex backend does not support max_output_tokens
+    if (this._baseUrl?.includes('chatgpt.com')) return this;
     return this.withGenerationKwargs({ max_output_tokens: maxCompletionTokens });
   }
 
