@@ -169,6 +169,7 @@ function buildTemplateVars(
     HAS_AGENT: effectiveTools.includes('Agent') ? 'yes' : '',
     HAS_TASKLIST: effectiveTools.includes('TaskList') ? 'yes' : '',
     HAS_TODOLIST: effectiveTools.includes('TodoList') ? 'yes' : '',
+    HAS_ENTERPLANMODE: effectiveTools.includes('EnterPlanMode') ? 'yes' : '',
     KIMI_ADDITIONAL_DIRS_INFO: context.additionalDirsInfo ?? '',
     ROLE_ADDITIONAL:
       context.roleAdditional ?? promptVars['ROLE_ADDITIONAL'] ?? promptVars['roleAdditional'] ?? '',

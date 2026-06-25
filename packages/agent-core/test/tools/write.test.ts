@@ -29,6 +29,10 @@ describe('WriteTool', () => {
     // ...but the plan-mode plan file is a `.md` the model is told to Write, so the
     // ban must carve it out (plan/index.ts writes plans/<id>.md via Write).
     expect(tool.description.toLowerCase()).toContain('plan-mode plan file');
+    // The guard targets UNSOLICITED docs, not every .md file, so an artifact a task or
+    // project instruction requires (e.g. a repo-mandated changeset) is not caught either.
+    expect(tool.description.toLowerCase()).toContain('unsolicited');
+    expect(tool.description.toLowerCase()).toContain('instruction requires it');
     expect(tool.parameters).toMatchObject({
       type: 'object',
       properties: {

@@ -123,4 +123,22 @@ describe('default agent profiles', () => {
       }) ?? '';
     expect(withoutAgent).not.toContain('Launch multiple explore agents concurrently');
   });
+
+  it('gates the plan-mode suggestion on EnterPlanMode availability, not just TodoList', () => {
+    // The TodoList guidance bullet ends by steering toward EnterPlanMode. EnterPlanMode
+    // registers unconditionally, but a custom profile can keep TodoList while dropping
+    // EnterPlanMode/ExitPlanMode. In that case only the plan-mode half-sentence must drop —
+    // otherwise the model is steered toward a tool it cannot call — while the TodoList half
+    // (gated on HAS_TODOLIST) keeps rendering.
+    const declared = DEFAULT_AGENT_PROFILES['agent']?.systemPrompt(promptContext) ?? '';
+    expect(declared).toContain('prefer entering plan mode first'); // both present → renders
+
+    const withoutPlanMode =
+      DEFAULT_AGENT_PROFILES['agent']?.systemPrompt({
+        ...promptContext,
+        availableTools: ['Bash', 'Read', 'Grep', 'Glob', 'Write', 'Edit', 'TodoList'],
+      }) ?? '';
+    expect(withoutPlanMode).toContain('maintain a `TodoList`'); // TodoList half still renders
+    expect(withoutPlanMode).not.toContain('prefer entering plan mode first'); // plan-mode half gated out
+  });
 });
