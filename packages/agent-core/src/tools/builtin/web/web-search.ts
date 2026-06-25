@@ -141,6 +141,9 @@ function classifySearchError(error: unknown): string {
   if (name === 'TimeoutError' || lower.includes('timed out') || lower.includes('timeout')) {
     return `Search timed out: ${message}`;
   }
+  if (lower.includes('rate limit')) {
+    return `Search rate-limited: ${message}`;
+  }
   if (lower.includes('401') || lower.includes('unauthorized') || lower.includes('auth')) {
     return `Search failed (authentication): ${message}`;
   }

@@ -270,6 +270,25 @@ describe('WebSearchTool', () => {
     expect(tool.description.toLowerCase()).toMatch(/internet|search the web/);
     expect(tool.description.toLowerCase()).toContain('search');
   });
+
+  it('classifies rate-limit errors', async () => {
+    const provider: WebSearchProvider = {
+      search: vi.fn().mockRejectedValue(
+        new Error('LangSearch rate limited (HTTP 429) on attempt 3'),
+      ),
+    };
+    const tool = new WebSearchTool(provider);
+    const result = await executeTool(tool, {
+      turnId: 't1',
+      toolCallId: 'c-rate',
+      args: { query: 'fail' },
+      signal,
+    });
+    expect(result.isError).toBe(true);
+    const content = toolContentString(result);
+    expect(content).toContain('Search rate-limited:');
+    expect(content).toContain('HTTP 429');
+  });
 });
 
 describe('MoonshotWebSearchProvider', () => {

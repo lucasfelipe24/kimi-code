@@ -12,6 +12,7 @@ import {
   type ExperimentalConfig,
   type HookDefConfig,
   type KimiConfig,
+  type LangSearchServiceConfig,
   type LoopControl,
   type ModelAlias,
   type MoonshotServiceConfig,
@@ -607,6 +608,11 @@ function servicesToToml(services: ServicesConfig, rawServices: unknown): Record<
   } else {
     delete out['moonshot_fetch'];
   }
+  if (services.langsearch !== undefined) {
+    out['langsearch'] = langsearchServiceToToml(services.langsearch);
+  } else {
+    delete out['langsearch'];
+  }
   return out;
 }
 
@@ -620,6 +626,14 @@ function serviceToToml(service: MoonshotServiceConfig): Record<string, unknown> 
     } else {
       setDefined(out, camelToSnake(key), value);
     }
+  }
+  return out;
+}
+
+function langsearchServiceToToml(service: LangSearchServiceConfig): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(service)) {
+    setDefined(out, camelToSnake(key), value);
   }
   return out;
 }

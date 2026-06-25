@@ -7,6 +7,8 @@ import { PluginManager } from '#/plugin';
 import { LocalFetchURLProvider } from '#/tools/providers/local-fetch-url';
 import { MoonshotFetchURLProvider } from '#/tools/providers/moonshot-fetch-url';
 import { MoonshotWebSearchProvider } from '#/tools/providers/moonshot-web-search';
+import { LangSearchWebSearchProvider } from '#/tools/providers/langsearch-web-search';
+import { LangSearchReranker } from '#/tools/providers/langsearch-rerank';
 import type { PromisableMethods } from '#/utils/types';
 import { getCoreVersion } from '#/version';
 import { resolveThinkingLevel } from '../agent/config/thinking';
@@ -115,6 +117,7 @@ import type { SessionWarning } from '@moonshot-ai/protocol';
 import { proxyWithExtraPayload } from './types';
 import { KaosShellNotFoundError, LocalKaos, type Kaos } from '@moonshot-ai/kaos';
 import type { ToolServices } from '../tools/support/services';
+import type { WebSearchProvider } from '../tools/builtin/web/web-search';
 
 const KIMI_CODE_PROVIDER_NAME = 'managed:kimi-code';
 const KIMI_CODE_BASE_URL_ENV = 'KIMI_CODE_BASE_URL';
@@ -1067,6 +1070,29 @@ async function createRuntimeConfig(input: {
   const localFetcher = new LocalFetchURLProvider();
   const searchService = input.config.services?.moonshotSearch;
   const fetchService = input.config.services?.moonshotFetch;
+  const langsearchConfig = input.config.services?.langsearch;
+
+  // ── Web searcher (LangSearch → LangSearch env → Moonshot → none) ──────
+  let webSearcher: WebSearchProvider | undefined;
+
+  const langsearchApiKey =
+    langsearchConfig?.apiKey !== undefined && langsearchConfig.apiKey.length > 0
+      ? langsearchConfig.apiKey
+      : (process.env['KIMI_LANGSEARCH_API_KEY'] ?? '').trim();
+
+  if (langsearchApiKey.length > 0) {
+    const reranker = new LangSearchReranker({ apiKey: langsearchApiKey });
+    webSearcher = new LangSearchWebSearchProvider({
+      apiKey: langsearchApiKey,
+      reranker,
+    });
+  } else if (searchService?.baseUrl !== undefined) {
+    webSearcher = new MoonshotWebSearchProvider({
+      baseUrl: searchService.baseUrl,
+      defaultHeaders: input.kimiRequestHeaders,
+      ...serviceCredentials(searchService, input.resolveOAuthTokenProvider),
+    });
+  }
 
   return {
     urlFetcher:
@@ -1078,14 +1104,7 @@ async function createRuntimeConfig(input: {
             defaultHeaders: input.kimiRequestHeaders,
             ...serviceCredentials(fetchService, input.resolveOAuthTokenProvider),
           }),
-    webSearcher:
-      searchService?.baseUrl === undefined
-        ? undefined
-        : new MoonshotWebSearchProvider({
-            baseUrl: searchService.baseUrl,
-            defaultHeaders: input.kimiRequestHeaders,
-            ...serviceCredentials(searchService, input.resolveOAuthTokenProvider),
-          }),
+    webSearcher,
   };
 }
 
