@@ -29,7 +29,13 @@ export interface WebSearchResult {
 export interface WebSearchProvider {
   search(
     query: string,
-    options?: { limit?: number; includeContent?: boolean; toolCallId?: string },
+    options?: {
+      limit?: number;
+      includeContent?: boolean;
+      toolCallId?: string;
+      allowedDomains?: string[];
+      blockedDomains?: string[];
+    },
   ): Promise<WebSearchResult[]>;
 }
 
@@ -54,6 +60,10 @@ export const WebSearchInputSchema = z.object({
       'Whether to include the content of the web pages in the results. It can consume a large amount of tokens when this is set to true. You should avoid enabling this when `limit` is set to a large value.',
     )
     .optional(),
+  allowed_domains: z.array(z.string()).optional()
+    .describe('Only include search results from these domains'),
+  blocked_domains: z.array(z.string()).optional()
+    .describe('Never include search results from these domains'),
 });
 
 export type WebSearchInput = z.Infer<typeof WebSearchInputSchema>;
@@ -67,6 +77,13 @@ export class WebSearchTool implements BuiltinTool<WebSearchInput> {
   constructor(private readonly provider: WebSearchProvider) {}
 
   resolveExecution(args: WebSearchInput): ToolExecution {
+    if (args.allowed_domains?.length && args.blocked_domains?.length) {
+      return {
+        isError: true,
+        output: 'Error: Cannot specify both allowed_domains and blocked_domains in the same request',
+      };
+    }
+
     const preview = args.query.length > 40 ? `${args.query.slice(0, 40)}…` : args.query;
     return {
       accesses: ToolAccesses.none(),
@@ -82,15 +99,38 @@ export class WebSearchTool implements BuiltinTool<WebSearchInput> {
     args: WebSearchInput,
     {
     toolCallId,
+    onUpdate,
     }: ExecutableToolContext,
   ): Promise<ExecutableToolResult> {
+    const MAX_SEARCHES = 8;
+    let searchCount = 0;
+
     try {
-      const opts: { limit?: number; includeContent?: boolean; toolCallId?: string } = {
+      if (searchCount >= MAX_SEARCHES) {
+        return {
+          isError: true,
+          output: 'Error: Maximum number of searches per call exceeded',
+        };
+      }
+      searchCount += 1;
+
+      const opts: {
+        limit?: number;
+        includeContent?: boolean;
+        toolCallId?: string;
+        allowedDomains?: string[];
+        blockedDomains?: string[];
+      } = {
         toolCallId,
       };
       if (args.limit !== undefined) opts.limit = args.limit;
       if (args.include_content !== undefined) opts.includeContent = args.include_content;
+      if (args.allowed_domains?.length) opts.allowedDomains = args.allowed_domains;
+      if (args.blocked_domains?.length) opts.blockedDomains = args.blocked_domains;
+
+      onUpdate?.({ kind: 'custom', customKind: 'searching', customData: { query: args.query } });
       const results = await this.provider.search(args.query, opts);
+      onUpdate?.({ kind: 'custom', customKind: 'done', customData: { count: results.length } });
       const builder = new ToolResultBuilder({ maxLineLength: null });
 
       if (results.length === 0) {

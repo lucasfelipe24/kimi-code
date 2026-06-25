@@ -12,8 +12,10 @@ import type { BuiltinTool } from '../../../agent/tool';
 import { ToolAccesses } from '../../../loop/tool-access';
 import type { ExecutableToolContext, ExecutableToolResult, ToolExecution } from '../../../loop/types';
 import { toInputJsonSchema } from '../../support/input-schema';
+import type { FetchCache } from '../../support/fetch-cache';
 import { literalRulePattern, matchesGlobRuleSubject } from '../../support/rule-match';
 import { ToolResultBuilder } from '../../support/result-builder';
+import { isPreapprovedUrl } from './preapproved-hosts';
 import DESCRIPTION from './fetch-url.md?raw';
 
 // ── Provider interface (host-injected) ───────────────────────────────
@@ -58,6 +60,8 @@ export class HttpFetchError extends Error {
 
 export const FetchURLInputSchema = z.object({
   url: z.string().describe('The URL to fetch content from.'),
+  prompt: z.string().optional()
+    .describe('Optional prompt describing what information to extract from the page.'),
 });
 
 export type FetchURLInput = z.Infer<typeof FetchURLInputSchema>;
@@ -68,14 +72,17 @@ export class FetchURLTool implements BuiltinTool<FetchURLInput> {
   readonly name = 'FetchURL' as const;
   readonly description: string = DESCRIPTION;
   readonly parameters: Record<string, unknown> = toInputJsonSchema(FetchURLInputSchema);
-  constructor(private readonly fetcher: UrlFetcher) {}
+  constructor(
+    private readonly fetcher: UrlFetcher,
+    private readonly cache?: FetchCache,
+  ) {}
 
   resolveExecution(args: FetchURLInput): ToolExecution {
     const preview = args.url.length > 50 ? `${args.url.slice(0, 50)}…` : args.url;
     return {
       accesses: ToolAccesses.none(),
       description: `Fetching: ${preview}`,
-      display: { kind: 'url_fetch', url: args.url },
+      display: { kind: 'url_fetch' as const, url: args.url },
       approvalRule: literalRulePattern(this.name, args.url),
       matchesRule: (ruleArgs) => matchesGlobRuleSubject(ruleArgs, args.url),
       execute: (ctx) => this.execution(args, ctx),
@@ -88,6 +95,16 @@ export class FetchURLTool implements BuiltinTool<FetchURLInput> {
     toolCallId,
     }: ExecutableToolContext,
   ): Promise<ExecutableToolResult> {
+    // Check cache when no prompt is specified.
+    if (!args.prompt) {
+      const cached = this.cache?.get(args.url);
+      if (cached) {
+        const builder = new ToolResultBuilder({ maxLineLength: null });
+        builder.write(cached.content);
+        return builder.ok('Returned from cache.');
+      }
+    }
+
     try {
       const { content, kind } = await this.fetcher.fetch(args.url, { toolCallId });
 
@@ -98,17 +115,32 @@ export class FetchURLTool implements BuiltinTool<FetchURLInput> {
         };
       }
 
+      // Cache the result.
+      this.cache?.set(args.url, {
+        content,
+        contentType: '',
+        bytes: Buffer.byteLength(content, 'utf8'),
+        code: 200,
+        codeText: 'OK',
+        cachedAt: Date.now(),
+      });
+
+      // Apply prompt-based truncation for large content.
+      let finalContent = content;
+      if (args.prompt && content.length > 10_000) {
+        const truncated = content.slice(0, 50_000);
+        finalContent = `Extract information relevant to: ${args.prompt}\n\nContent:\n${truncated}`;
+      }
+
       const builder = new ToolResultBuilder({ maxLineLength: null });
-      // Tell the LLM whether it received the whole body or only the extracted
-      // article text, so it can judge how complete the content is. This note
-      // must ride in `output`: the result's `message` field is dropped from the
-      // transcript, so `output` is the only place the model can read it. Put it
-      // at the front so it survives any downstream truncation of the body.
+      // Tell the LLM whether it received the whole body or only the
+      // extracted article text, so it can judge how complete the
+      // content is.
       const note =
         kind === 'passthrough'
           ? 'The returned content is the full response body, returned verbatim.'
           : 'The returned content is the main text extracted from the page.';
-      builder.write(`${note}\n\n${content}`);
+      builder.write(`${note}\n\n${finalContent}`);
       return builder.ok();
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);

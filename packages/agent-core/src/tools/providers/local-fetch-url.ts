@@ -14,10 +14,16 @@
  *      before throwing a "meaningful content" error.
  */
 
+import { randomBytes } from 'node:crypto';
+import { writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { Readability } from '@mozilla/readability';
 import { parseHTML as rawParseHTML } from 'linkedom';
 
 import { HttpFetchError, type UrlFetcher, type UrlFetchResult } from '../builtin';
+import { CrossOriginRedirectError } from '../support/fetch-errors';
 
 // Readability's .d.ts references the global `Document` type, but this
 // package compiles with `lib: ES2023` (no DOM). Extracting the
@@ -38,8 +44,8 @@ interface DomParseResult {
 const parseHTML = rawParseHTML as unknown as (html: string) => DomParseResult;
 
 const DEFAULT_USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
-  '(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+  'KimiCode-User/1.0 (+https://kimi.com/support) ' +
+  'Mozilla/5.0 (compatible; Windows NT 10.0; Win64; x64)';
 
 const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
 
@@ -128,6 +134,71 @@ function assertSafeFetchTarget(url: string, allowPrivate: boolean): void {
   }
 }
 
+const BINARY_TYPES = [
+  'application/pdf',
+  'application/octet-stream',
+  'application/zip',
+  'application/gzip',
+  'application/x-tar',
+];
+
+function isBinaryContentType(ct: string): boolean {
+  const base = ct.split(';')[0]!.trim().toLowerCase();
+  return (
+    BINARY_TYPES.includes(base) ||
+    base.startsWith('image/') ||
+    base.startsWith('audio/') ||
+    base.startsWith('video/')
+  );
+}
+
+function isPermittedRedirect(originalUrl: string, redirectUrl: string): boolean {
+  try {
+    const orig = new URL(originalUrl);
+    const redir = new URL(redirectUrl);
+    if (redir.protocol !== orig.protocol) return false;
+    if (redir.port !== orig.port) return false;
+    const stripWww = (h: string) => h.replace(/^www\./, '');
+    return stripWww(orig.hostname) === stripWww(redir.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function mimeToExtension(mimeType: string): string {
+  const base = mimeType.split(';')[0]!.trim().toLowerCase();
+  const MIME_MAP: Record<string, string> = {
+    'application/pdf': '.pdf',
+    'application/octet-stream': '.bin',
+    'application/zip': '.zip',
+    'application/gzip': '.gz',
+    'application/x-tar': '.tar',
+    'image/png': '.png',
+    'image/jpeg': '.jpg',
+    'image/gif': '.gif',
+    'image/webp': '.webp',
+    'image/bmp': '.bmp',
+    'image/tiff': '.tiff',
+    'image/x-icon': '.ico',
+    'image/svg+xml': '.svg',
+    'audio/mpeg': '.mp3',
+    'audio/wav': '.wav',
+    'audio/ogg': '.oga',
+    'audio/flac': '.flac',
+    'audio/aac': '.aac',
+    'audio/mp4': '.m4a',
+    'video/mp4': '.mp4',
+    'video/mpeg': '.mpeg',
+    'video/x-matroska': '.mkv',
+    'video/x-msvideo': '.avi',
+    'video/quicktime': '.mov',
+    'video/ogg': '.ogv',
+    'video/x-ms-wmv': '.wmv',
+    'video/webm': '.webm',
+  };
+  return MIME_MAP[base] ?? '';
+}
+
 export class LocalFetchURLProvider implements UrlFetcher {
   private readonly userAgent: string;
   private readonly fetchImpl: typeof fetch;
@@ -144,10 +215,18 @@ export class LocalFetchURLProvider implements UrlFetcher {
   async fetch(url: string, _options?: { toolCallId?: string }): Promise<UrlFetchResult> {
     assertSafeFetchTarget(url, this.allowPrivateAddresses);
 
-    const response = await this.fetchImpl(url, {
-      method: 'GET',
-      headers: { 'User-Agent': this.userAgent },
-    });
+    let response: Response;
+    try {
+      response = await this.fetchWithRedirects(url, 0);
+    } catch (error) {
+      if (error instanceof CrossOriginRedirectError) {
+        return {
+          content: `Redirected to different origin: ${error.redirectUrl}. Unable to follow cross-origin redirects.`,
+          kind: 'passthrough',
+        };
+      }
+      throw error;
+    }
 
     if (response.status >= 400) {
       // Drain the unused body so undici can release the socket back to
@@ -172,6 +251,33 @@ export class LocalFetchURLProvider implements UrlFetcher {
       }
     }
 
+    const contentType = (response.headers.get('content-type') ?? '').toLowerCase();
+
+    // Detect and handle binary content before reading as text.
+    if (isBinaryContentType(contentType)) {
+      const arrayBuf = await response.arrayBuffer();
+      const actualBytes = arrayBuf.byteLength;
+      if (actualBytes > this.maxBytes) {
+        throw new Error(
+          `Response body too large: ${String(actualBytes)} bytes exceeds maxBytes (${String(this.maxBytes)}).`,
+        );
+      }
+      const ext = mimeToExtension(contentType);
+      const hex = randomBytes(4).toString('hex');
+      const tmpFile = join(tmpdir(), `kimi-fetch-${hex}${ext}`);
+      await writeFile(tmpFile, new Uint8Array(arrayBuf));
+      const sizeStr =
+        actualBytes < 1024
+          ? `${String(actualBytes)} B`
+          : actualBytes < 1024 * 1024
+            ? `${(actualBytes / 1024).toFixed(1)} KB`
+            : `${(actualBytes / (1024 * 1024)).toFixed(1)} MB`;
+      return {
+        content: `Binary content detected (${contentType.split(';')[0]?.trim() ?? contentType}, ${sizeStr}). Saved to: ${tmpFile}`,
+        kind: 'passthrough',
+      };
+    }
+
     const body = await response.text();
 
     // Servers may omit content-length — measure again defensively.
@@ -182,12 +288,40 @@ export class LocalFetchURLProvider implements UrlFetcher {
       );
     }
 
-    const contentType = (response.headers.get('content-type') ?? '').toLowerCase();
     if (contentType.startsWith('text/plain') || contentType.startsWith('text/markdown')) {
       return { content: body, kind: 'passthrough' };
     }
 
     return { content: this.extractMainContent(body), kind: 'extracted' };
+  }
+
+  private async fetchWithRedirects(url: string, depth: number): Promise<Response> {
+    if (depth > 10) {
+      throw new Error(`Too many redirects while fetching: ${url}`);
+    }
+
+    const response = await this.fetchImpl(url, {
+      method: 'GET',
+      headers: { 'User-Agent': this.userAgent },
+      redirect: 'manual',
+    });
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location');
+      if (location !== null) {
+        const redirectUrl = new URL(location, url).href;
+        if (!isPermittedRedirect(url, redirectUrl)) {
+          throw new CrossOriginRedirectError(url, redirectUrl, response.status);
+        }
+        // Drain the redirect response body before following.
+        await response.body?.cancel().catch(() => {
+          /* already closed */
+        });
+        return this.fetchWithRedirects(redirectUrl, depth + 1);
+      }
+    }
+
+    return response;
   }
 
   private extractMainContent(html: string): string {

@@ -289,6 +289,86 @@ describe('WebSearchTool', () => {
     expect(content).toContain('Search rate-limited:');
     expect(content).toContain('HTTP 429');
   });
+
+  it('accepts allowed_domains and blocked_domains as optional fields', async () => {
+    const provider = fakeProvider([
+      { title: 'Result', url: 'https://example.com', snippet: 'Snippet' },
+    ]);
+    const tool = new WebSearchTool(provider);
+    const execution = tool.resolveExecution({ query: 'test', allowed_domains: ['example.com'] });
+    expect(execution.isError).toBeFalsy();
+    if (execution.isError) throw new Error('expected runnable execution');
+    const ctx = {
+      turnId: 't1',
+      toolCallId: 'tc-domains',
+      onUpdate: vi.fn(),
+      signal,
+      metadata: {} as any,
+      onForegroundTaskStart: vi.fn(),
+    };
+    const result = await execution.execute(ctx);
+    expect(result.isError).toBe(false);
+  });
+
+  it('returns error when both allowed_domains and blocked_domains are specified', () => {
+    const tool = new WebSearchTool(fakeProvider());
+    const execution = tool.resolveExecution({
+      query: 'test',
+      allowed_domains: ['a.com'],
+      blocked_domains: ['b.com'],
+    });
+    expect(execution.isError).toBe(true);
+    expect((execution as { output: string }).output).toContain('Cannot specify both');
+  });
+
+  it('passes allowedDomains to provider', async () => {
+    const provider = fakeProvider([]);
+    const tool = new WebSearchTool(provider);
+    await executeTool(tool, {
+      turnId: 't1',
+      toolCallId: 'c-allowed',
+      args: { query: 'test', allowed_domains: ['python.org'] },
+      signal,
+    });
+    expect(provider.search).toHaveBeenCalledWith('test', expect.objectContaining({
+      allowedDomains: ['python.org'],
+    }));
+  });
+
+  it('passes blockedDomains to provider', async () => {
+    const provider = fakeProvider([]);
+    const tool = new WebSearchTool(provider);
+    await executeTool(tool, {
+      turnId: 't1',
+      toolCallId: 'c-blocked',
+      args: { query: 'test', blocked_domains: ['spam.com'] },
+      signal,
+    });
+    expect(provider.search).toHaveBeenCalledWith('test', expect.objectContaining({
+      blockedDomains: ['spam.com'],
+    }));
+  });
+
+  it('emits progress events via onUpdate', async () => {
+    const provider = fakeProvider([
+      { title: 'Result', url: 'https://example.com', snippet: 'Snippet' },
+    ]);
+    const tool = new WebSearchTool(provider);
+    const onUpdate = vi.fn();
+    const execution = tool.resolveExecution({ query: 'test' });
+    expect(execution.isError).toBeFalsy();
+    if (execution.isError) throw new Error('expected runnable execution');
+    const ctx = {
+      turnId: 't1',
+      toolCallId: 'tc-progress',
+      onUpdate,
+      signal,
+      metadata: {} as any,
+      onForegroundTaskStart: vi.fn(),
+    };
+    await execution.execute(ctx);
+    expect(onUpdate).toHaveBeenCalled();
+  });
 });
 
 describe('MoonshotWebSearchProvider', () => {

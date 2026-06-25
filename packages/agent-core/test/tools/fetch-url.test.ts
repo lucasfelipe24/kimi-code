@@ -13,6 +13,7 @@ import {
   type UrlFetcher,
 } from '../../src/tools/builtin/web/fetch-url';
 import { MoonshotFetchURLProvider } from '../../src/tools/providers/moonshot-fetch-url';
+import { FetchCache } from '../../src/tools/support/fetch-cache';
 import { toolContentString } from './fixtures/fake-kaos';
 import { executeTool } from './fixtures/execute-tool';
 
@@ -273,6 +274,91 @@ describe('FetchURLTool', () => {
     // ...and the passthrough mode is signalled in the model-visible output
     // (py wording was "full content"; main #238 uses "full response body").
     expect(out).toContain('full response body');
+  });
+
+  it('accepts an optional prompt parameter', async () => {
+    const tool = new FetchURLTool(fakeFetcher('Prices: $10, $20, $30'));
+    const result = await executeTool(tool, {
+      turnId: 't1',
+      toolCallId: 'c-prompt',
+      args: { url: 'https://example.com', prompt: 'extract prices' },
+      signal,
+    });
+    expect(result.isError).toBe(false);
+    expect(toolContentString(result)).toContain('Prices');
+  });
+
+  it('returns cached content without calling fetcher on cache hit', async () => {
+    const cache = new FetchCache();
+    cache.set('https://example.com', {
+      content: 'cached content',
+      contentType: 'text/html',
+      bytes: 14,
+      code: 200,
+      codeText: 'OK',
+      cachedAt: Date.now(),
+    });
+    const fetcher = fakeFetcher('fresh content');
+    const tool = new FetchURLTool(fetcher, cache);
+    const result = await executeTool(tool, {
+      turnId: 't1',
+      toolCallId: 'c-cache-hit',
+      args: { url: 'https://example.com' },
+      signal,
+    });
+    expect(result.isError).toBe(false);
+    expect(fetcher.fetch).not.toHaveBeenCalled();
+    expect(toolContentString(result)).toBe('cached content');
+  });
+
+  it('calls fetcher and caches result on cache miss', async () => {
+    const cache = new FetchCache();
+    const fetcher = fakeFetcher('fresh content');
+    const tool = new FetchURLTool(fetcher, cache);
+    const result = await executeTool(tool, {
+      turnId: 't1',
+      toolCallId: 'c-cache-miss',
+      args: { url: 'https://example.com' },
+      signal,
+    });
+    expect(result.isError).toBe(false);
+    expect(fetcher.fetch).toHaveBeenCalled();
+    expect(cache.get('https://example.com')?.content).toBe('fresh content');
+  });
+
+  it('calls fetcher when prompt is provided even on cache hit', async () => {
+    const cache = new FetchCache();
+    cache.set('https://example.com', {
+      content: 'cached content',
+      contentType: 'text/html',
+      bytes: 14,
+      code: 200,
+      codeText: 'OK',
+      cachedAt: Date.now(),
+    });
+    const fetcher = fakeFetcher('fresh content with prices');
+    const tool = new FetchURLTool(fetcher, cache);
+    const result = await executeTool(tool, {
+      turnId: 't1',
+      toolCallId: 'c-cache-bypass',
+      args: { url: 'https://example.com', prompt: 'extract prices' },
+      signal,
+    });
+    expect(result.isError).toBe(false);
+    expect(fetcher.fetch).toHaveBeenCalled();
+  });
+
+  it('truncates content when prompt is provided and content is large', async () => {
+    const content = 'x'.repeat(15_000);
+    const tool = new FetchURLTool(fakeFetcher(content));
+    const result = await executeTool(tool, {
+      turnId: 't1',
+      toolCallId: 'c-truncate-prompt',
+      args: { url: 'https://example.com/large', prompt: 'extract information' },
+      signal,
+    });
+    expect(result.isError).toBe(false);
+    expect(toolContentString(result)).toContain('Extract information relevant to');
   });
 });
 

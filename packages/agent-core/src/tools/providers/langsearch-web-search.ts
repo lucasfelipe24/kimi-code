@@ -65,6 +65,35 @@ interface LangSearchWebPageValue {
   dateLastCrawled?: string | null;
 }
 
+function filterByDomain(
+  results: WebSearchResult[],
+  allowed?: string[],
+  blocked?: string[],
+): WebSearchResult[] {
+  if (!allowed?.length && !blocked?.length) return results;
+
+  return results.filter((r) => {
+    let hostname: string;
+    try {
+      hostname = new URL(r.url).hostname.replace(/^www\./, '');
+    } catch {
+      return false;
+    }
+
+    if (allowed?.length) {
+      const normalizedAllowed = allowed.map((d) => d.replace(/^www\./, ''));
+      if (!normalizedAllowed.includes(hostname)) return false;
+    }
+
+    if (blocked?.length) {
+      const normalizedBlocked = blocked.map((d) => d.replace(/^www\./, ''));
+      if (normalizedBlocked.includes(hostname)) return false;
+    }
+
+    return true;
+  });
+}
+
 export class LangSearchWebSearchProvider implements WebSearchProvider {
   private readonly apiKey: string;
   private readonly baseUrl: string;
@@ -80,7 +109,7 @@ export class LangSearchWebSearchProvider implements WebSearchProvider {
 
   async search(
     query: string,
-    options?: { limit?: number; includeContent?: boolean; toolCallId?: string },
+    options?: { limit?: number; includeContent?: boolean; toolCallId?: string; allowedDomains?: string[]; blockedDomains?: string[] },
   ): Promise<WebSearchResult[]> {
     const body = {
       query,
@@ -137,6 +166,8 @@ export class LangSearchWebSearchProvider implements WebSearchProvider {
       }
       return out;
     });
+
+    results = filterByDomain(results, options?.allowedDomains, options?.blockedDomains);
 
     // ── Semantic rerank (automatic when reranker is configured) ──
     if (this.reranker !== undefined && results.length > 1) {

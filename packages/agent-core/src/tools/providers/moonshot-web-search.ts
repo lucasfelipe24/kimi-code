@@ -36,6 +36,35 @@ interface MoonshotSearchResponse {
   search_results?: MoonshotSearchResult[];
 }
 
+function filterByDomain(
+  results: WebSearchResult[],
+  allowed?: string[],
+  blocked?: string[],
+): WebSearchResult[] {
+  if (!allowed?.length && !blocked?.length) return results;
+
+  return results.filter((r) => {
+    let hostname: string;
+    try {
+      hostname = new URL(r.url).hostname.replace(/^www\./, '');
+    } catch {
+      return false;
+    }
+
+    if (allowed?.length) {
+      const normalizedAllowed = allowed.map((d) => d.replace(/^www\./, ''));
+      if (!normalizedAllowed.includes(hostname)) return false;
+    }
+
+    if (blocked?.length) {
+      const normalizedBlocked = blocked.map((d) => d.replace(/^www\./, ''));
+      if (normalizedBlocked.includes(hostname)) return false;
+    }
+
+    return true;
+  });
+}
+
 export class MoonshotWebSearchProvider implements WebSearchProvider {
   private readonly tokenProvider: BearerTokenProvider | undefined;
   private readonly apiKey: string | undefined;
@@ -55,7 +84,7 @@ export class MoonshotWebSearchProvider implements WebSearchProvider {
 
   async search(
     query: string,
-    options?: { limit?: number; includeContent?: boolean; toolCallId?: string },
+    options?: { limit?: number; includeContent?: boolean; toolCallId?: string; allowedDomains?: string[]; blockedDomains?: string[] },
   ): Promise<WebSearchResult[]> {
     const body = {
       text_query: query,
@@ -85,7 +114,7 @@ export class MoonshotWebSearchProvider implements WebSearchProvider {
     const json = (await response.json()) as MoonshotSearchResponse;
     const raw = Array.isArray(json.search_results) ? json.search_results : [];
 
-    return raw.map((r): WebSearchResult => {
+    const results = raw.map((r): WebSearchResult => {
       const out: WebSearchResult = {
         title: r.title ?? '',
         url: r.url ?? '',
@@ -95,6 +124,8 @@ export class MoonshotWebSearchProvider implements WebSearchProvider {
       if (typeof r.content === 'string' && r.content.length > 0) out.content = r.content;
       return out;
     });
+
+    return filterByDomain(results, options?.allowedDomains, options?.blockedDomains);
   }
 
   private async post(bodyJson: string, toolCallId: string | undefined): Promise<Response> {
