@@ -385,6 +385,20 @@ function copyAssistantRun(index: number): void {
   }).catch(() => {/* ignore */});
 }
 
+function copyUserMessage(turn: ChatTurn): void {
+  const text = turn.text;
+  if (!text.trim()) return;
+  void copyTextToClipboard(text).then((ok) => {
+    if (!ok) return;
+    copiedTurn.value = turn.id;
+    if (copiedTimer !== null) clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => {
+      copiedTimer = null;
+      copiedTurn.value = null;
+    }, 1400);
+  }).catch(() => {/* ignore */});
+}
+
 function isStreamingRenderBlock(turn: ChatTurn, block: { sourceIndex: number }): boolean {
   if (turn.id !== streamingTurnId.value) return false;
   return block.sourceIndex === turnBlocks(turn).length - 1;
@@ -643,6 +657,16 @@ function isStreamingRenderBlock(turn: ChatTurn, block: { sourceIndex: number }):
 
             <!-- Per-message copy button (always visible, only when turn is complete) -->
             <button v-if="turn.id !== streamingTurnId && isAssistantRunEnd(ti) && assistantRunFinalText(ti).trim().length > 0" class="cpbtn" @click="copyAssistantRun(ti)" tabindex="-1">
+              <svg v-if="copiedTurn !== turn.id" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="3" width="9" height="9" rx="1.5"/>
+                <path d="M6 1h7a1 1 0 0 1 1 1v7"/>
+              </svg>
+              <svg v-else viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="3,8 6.5,11.5 13,5"/>
+              </svg>
+              <span class="cpbtn-text">{{ t('filePreview.copy') }}</span>
+            </button>
+            <button v-if="turn.role === 'user' && turn.id !== streamingTurnId && turn.text.trim().length > 0" class="cpbtn" @click="copyUserMessage(turn)" tabindex="-1">
               <svg v-if="copiedTurn !== turn.id" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <rect x="3" y="3" width="9" height="9" rx="1.5"/>
                 <path d="M6 1h7a1 1 0 0 1 1 1v7"/>
