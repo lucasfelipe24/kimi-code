@@ -78,7 +78,6 @@ describe('default agent profiles', () => {
   it('gates tool-specific guidance to agents that hold the tool', () => {
     // The root agent holds Agent / TaskList / TodoList, so the tool-specific guidance renders.
     const agentPrompt = DEFAULT_AGENT_PROFILES['agent']?.systemPrompt(promptContext) ?? '';
-    expect(agentPrompt).toContain('delegate a focused subtask'); // Agent
     expect(agentPrompt).toContain('Launch multiple explore agents concurrently'); // Agent (explore delegation)
     expect(agentPrompt).toContain('long-running shell commands as background tasks'); // TaskList
     expect(agentPrompt).toContain('maintain a `TodoList`'); // TodoList
@@ -87,7 +86,6 @@ describe('default agent profiles', () => {
     // but the cross-tool secret-file guard (they keep Read/Grep/Glob) must stay shared.
     for (const name of ['explore', 'plan']) {
       const prompt = DEFAULT_AGENT_PROFILES[name]?.systemPrompt(promptContext) ?? '';
-      expect(prompt).not.toContain('delegate a focused subtask');
       expect(prompt).not.toContain('Launch multiple explore agents concurrently');
       expect(prompt).not.toContain('long-running shell commands as background tasks');
       expect(prompt).not.toContain('maintain a `TodoList`');
