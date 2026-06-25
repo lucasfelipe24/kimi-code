@@ -3109,7 +3109,9 @@ command = "vim"
     confirm.handleInput('\r');
 
     await vi.waitFor(() => {
-      expect(session.installPlugin).toHaveBeenCalledWith('/tmp/proj-a/plugins/kimi-datasource');
+      expect(session.installPlugin).toHaveBeenCalledWith(
+        resolve('/tmp/proj-a', './plugins/kimi-datasource'),
+      );
     });
   });
 

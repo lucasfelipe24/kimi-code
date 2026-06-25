@@ -40,8 +40,8 @@ afterEach(async () => {
   // On Windows the git/gh child processes spawned during a test can outlive
   // `server.close()` by a tick and keep the temp workspace as their cwd,
   // which makes rmSync fail with EPERM. Retry briefly to ride out the lock.
-  rmSync(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  rmSync(bridgeHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  rmSync(tmpDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  rmSync(bridgeHome, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 });
 
 async function bootDaemon(): Promise<RunningServer> {
@@ -122,7 +122,8 @@ function initRepo(): void {
   git(['commit', '-m', 'seed', '--no-gpg-sign']);
 }
 
-describe('POST /api/v1/sessions/{sid}/fs:git_status (W11.2)', () => {
+// oxlint-disable-next-line eslint-plugin-jest(valid-describe-callback)
+describe('POST /api/v1/sessions/{sid}/fs:git_status (W11.2)', { timeout: process.platform === 'win32' ? 20_000 : 5_000 }, () => {
   it('clean repo: empty entries, branch populated', async () => {
     initRepo();
 
