@@ -114,6 +114,9 @@ describe('SkillTool metadata and schema', () => {
     // A skill loaded earlier surfaces a <kimi-skill-loaded> block; the description
     // must steer the model to follow it rather than re-invoking the tool.
     expect(tool.description).toContain('kimi-skill-loaded');
+    // The recursion depth cap is never seeded in production (currentDepth is
+    // always 0), so the description must not advertise it as a hard limit.
+    expect(tool.description).not.toMatch(/recursive depth|capped at/i);
   });
 });
 

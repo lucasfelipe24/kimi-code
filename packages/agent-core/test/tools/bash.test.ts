@@ -390,6 +390,8 @@ describe('BashTool', () => {
     // cwd param — the description must steer toward it rather than cross-call cd.
     expect(tool.description).toContain('cwd');
     expect(tool.description).toContain('absolute paths');
+    // The failure trailer is non-zero-exit-specific; timeout/interrupt differ.
+    expect(tool.description).toContain('exits non-zero');
   });
 
   it('runs through execWithEnv, injects cwd, noninteractive env, and closes stdin', async () => {

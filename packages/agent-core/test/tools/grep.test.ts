@@ -233,6 +233,8 @@ describe('GrepTool', () => {
         properties: Record<string, { description?: string }>;
       };
       expect(params.properties['output_mode']?.description).toContain('count_matches');
+      // count_matches emits per-file `path:count`, not a single total (grep.ts).
+      expect(params.properties['output_mode']?.description).toContain('per-file');
     });
 
     it('documents that files_with_matches is ordered most-recently-modified first', () => {

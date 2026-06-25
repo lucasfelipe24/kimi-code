@@ -57,6 +57,8 @@ describe('TodoListTool', () => {
     // Plan-mode planning goes to the plan file, not the TodoList — the description
     // must not present TodoList as the plan-mode mechanism.
     expect(tool.description).toContain('plan file');
+    // Query mode triggers on `args.todos === undefined`, not on zero args.
+    expect(tool.description).toContain('no `todos` argument');
     expect(TodoListInputSchema.safeParse({}).success).toBe(true);
     expect(
       TodoListInputSchema.safeParse({ todos: [{ title: 'x', status: 'wip' }] }).success,

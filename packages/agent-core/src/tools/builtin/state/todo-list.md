@@ -20,7 +20,7 @@ Use this tool to maintain a structured TODO list as you work through a multi-ste
 
 **How to use:**
 - Call with `todos: [...]` to replace the full list. Statuses: pending / in_progress / done.
-- Call with no arguments to retrieve the current list without changing it.
+- Call with no `todos` argument to retrieve the current list without changing it.
 - Call with `todos: []` to clear the list.
 - Keep titles short and actionable (e.g. "Read session-control.ts", "Add planMode flag to TurnManager").
 - Update statuses as you make progress.

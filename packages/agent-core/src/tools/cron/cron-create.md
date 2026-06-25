@@ -81,7 +81,7 @@ A session holds at most 50 live cron tasks; creating one beyond that is rejected
 
 ## Returned fields
 
-`id` (8-hex), `humanSchedule` (English summary), `recurring`,
+`id` (8-hex), `cron` (the normalized expression), `humanSchedule` (English summary), `recurring`,
 `nextFireAt` (local ISO timestamp with numeric offset, or null). `id` is needed by `CronDelete`.
 
 ## Tell the user how to cancel or modify

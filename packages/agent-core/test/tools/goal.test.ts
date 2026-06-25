@@ -97,6 +97,12 @@ describe('CreateGoalTool', () => {
     // agent/goal/index.ts throws "A goal already exists; use replace..." without replace:true.
     expect(description).toContain('already exists');
     expect(description).toContain('replace');
+    // The replace param blocks on any persisted goal, including `blocked` (index.ts).
+    const replaceDesc =
+      ((new CreateGoalTool(fakeAgent()).parameters as {
+        properties: Record<string, { description?: string }>;
+      }).properties['replace']?.description) ?? '';
+    expect(replaceDesc).toContain('blocked');
   });
 });
 
@@ -150,6 +156,8 @@ describe('SetGoalBudgetTool', () => {
     // set-goal-budget.ts rejects time budgets < 1s or > 24h (MIN/MAX_REASONABLE_TIME_BUDGET_MS).
     expect(description).toContain('1 second');
     expect(description).toContain('24 hours');
+    // turn/token budgets are floored (Math.max(1, round)), not rejected at <1.
+    expect(description).toContain('rounded up');
   });
 
   it('advertises an object parameter schema for OpenAI-compatible providers', () => {
@@ -244,6 +252,9 @@ describe('UpdateGoalTool', () => {
     const description = new UpdateGoalTool(fakeAgent()).description.toLowerCase();
     // codex spec.rs:80 wording (without the 3-turn machinery kimi lacks).
     expect(description).toContain('hard, slow');
+    // UpdateGoal also injects the completion/blocked outcome prompt, so it does
+    // more than "only record the status".
+    expect(description).not.toContain('only records the status');
   });
 
   // Terminal paths append follow-up reminders, so the agent needs a context

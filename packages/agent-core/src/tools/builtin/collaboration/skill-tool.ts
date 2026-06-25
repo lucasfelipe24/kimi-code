@@ -76,9 +76,7 @@ export interface SkillToolOptions {
 
 export class SkillTool implements BuiltinTool<SkillToolInput> {
   readonly name = 'Skill';
-  readonly description: string = renderPrompt(skillDescriptionTemplate, {
-    MAX_SKILL_QUERY_DEPTH,
-  });
+  readonly description: string = renderPrompt(skillDescriptionTemplate, {});
   readonly parameters: Record<string, unknown> = toInputJsonSchema(SkillToolInputSchema);
 
   constructor(

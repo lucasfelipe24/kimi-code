@@ -37,6 +37,11 @@ describe('FetchURLTool', () => {
     const description = tool.description.toLowerCase();
     expect(description).toContain('extracted');
     expect(description).toContain('verbatim');
+    // SSRF/size are provider-internal (the Moonshot primary path enforces neither);
+    // the description must state the universal http/https contract, not impl details.
+    expect(description).toContain('http');
+    expect(description).not.toContain('local fetcher');
+    expect(description).not.toContain('10 mib');
   });
 
   it('parameters are generated from the current input schema', () => {

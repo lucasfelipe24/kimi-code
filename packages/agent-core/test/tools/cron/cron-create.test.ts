@@ -132,6 +132,8 @@ describe('CronCreateTool', () => {
     // The 8 KiB prompt cap lives in the param describe.
     const params = tool.parameters as { properties: Record<string, { description?: string }> };
     expect(params.properties['prompt']?.description).toContain('8 KiB');
+    // Returned fields include `cron` (CronCreateOutput.cron), which formatOutput emits.
+    expect(tool.description).toContain('the normalized expression');
   });
 
   it('schedules a recurring task and emits cron_scheduled', async () => {
