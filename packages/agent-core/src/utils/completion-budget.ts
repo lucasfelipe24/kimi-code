@@ -10,6 +10,7 @@ export interface CompletionBudgetConfig {
 
 const MIN_FLOOR = 1;
 const DEFAULT_UNKNOWN_CONTEXT_FALLBACK = 32000;
+const MAX_COMPLETION_CAP = 400_000;
 
 /**
  * Resolve configured completion budget. Env values are explicit hard caps;
@@ -61,7 +62,7 @@ export function computeCompletionBudgetCap(args: {
   // thinking before the model produces a summary.
   const cap =
     args.budget.hardCap ??
-    (maxCtx > 0 ? maxCtx : args.budget.fallback ?? DEFAULT_UNKNOWN_CONTEXT_FALLBACK);
+    (maxCtx > 0 ? Math.min(maxCtx, MAX_COMPLETION_CAP) : args.budget.fallback ?? DEFAULT_UNKNOWN_CONTEXT_FALLBACK);
   return Math.max(MIN_FLOOR, cap);
 }
 

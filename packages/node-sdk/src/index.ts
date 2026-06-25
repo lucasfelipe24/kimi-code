@@ -69,6 +69,10 @@ export { installGlobalProxyDispatcher } from '@moonshot-ai/agent-core';
 
 // Experimental feature flags — types only. Resolved values come from
 // `KimiHarness.getExperimentalFeatures()` over RPC, not from a re-exported runtime value.
+
+// Third-party OAuth (Authorization Code + PKCE)
+export { AuthCodeOAuthManager, OAUTH_PROVIDERS } from '@moonshot-ai/agent-core';
+
 export type {
   ExperimentalFeatureState,
   ExperimentalFlagMap,
