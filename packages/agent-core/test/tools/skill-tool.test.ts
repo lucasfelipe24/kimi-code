@@ -102,6 +102,19 @@ describe('SkillTool metadata and schema', () => {
     expect(SkillToolInputSchema.safeParse({}).success).toBe(false);
     expect(MAX_SKILL_QUERY_DEPTH).toBe(3);
   });
+
+  it('documents the skill and args parameters and the already-loaded guard', () => {
+    const tool = skillTool(registry());
+    const params = tool.parameters as {
+      properties: { skill: { description?: string }; args: { description?: string } };
+    };
+
+    expect(params.properties.skill.description ?? '').toMatch(/skill listing/i);
+    expect(params.properties.args.description ?? '').toMatch(/argument/i);
+    // A skill loaded earlier surfaces a <kimi-skill-loaded> block; the description
+    // must steer the model to follow it rather than re-invoking the tool.
+    expect(tool.description).toContain('kimi-skill-loaded');
+  });
 });
 
 describe('SkillTool execution', () => {

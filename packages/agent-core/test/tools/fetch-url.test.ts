@@ -32,6 +32,13 @@ describe('FetchURLTool', () => {
     expect(tool.description.length).toBeGreaterThan(0);
   });
 
+  it('documents both fetch modes (extracted main text vs verbatim passthrough)', () => {
+    const tool = new FetchURLTool(fakeFetcher());
+    const description = tool.description.toLowerCase();
+    expect(description).toContain('extracted');
+    expect(description).toContain('verbatim');
+  });
+
   it('parameters are generated from the current input schema', () => {
     const tool = new FetchURLTool(fakeFetcher());
     expect(FetchURLInputSchema.safeParse({ url: 'https://example.com' }).success).toBe(true);
