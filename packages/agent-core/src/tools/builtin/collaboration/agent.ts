@@ -69,7 +69,9 @@ export const AgentToolInputSchema = z.preprocess(
     resume: z
       .string()
       .optional()
-      .describe('Optional agent ID to resume instead of creating a new instance'),
+      .describe(
+        'Optional agent ID to resume instead of creating a new instance. When set, do not also pass subagent_type — the resumed agent keeps its own type, and supplying both is rejected.',
+      ),
     run_in_background: z
       .boolean()
       .optional()

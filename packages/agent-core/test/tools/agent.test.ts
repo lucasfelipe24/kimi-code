@@ -100,6 +100,18 @@ describe('AgentTool', () => {
     expect(properties['run_in_background']?.description).toContain('false');
   });
 
+  it('documents that resume excludes subagent_type', () => {
+    const host = mockSubagentHost({ spawn: vi.fn() });
+    const tool = agentTool(host);
+    const properties = (
+      tool.parameters as { properties: Record<string, { description?: string }> }
+    ).properties;
+
+    // Passing both resume and subagent_type is rejected at runtime (agent.ts execution()),
+    // so the resume param must steer the model away from it.
+    expect((properties['resume']?.description ?? '').toLowerCase()).toContain('subagent_type');
+  });
+
   it('does not expose a timeout parameter in the JSON schema', () => {
     const host = mockSubagentHost({ spawn: vi.fn() });
     const tool = agentTool(host);
