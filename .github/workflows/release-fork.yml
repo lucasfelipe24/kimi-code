@@ -1,0 +1,137 @@
+name: Release Fork
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  # ── Build native binaries for all platforms ─────────────────────────
+  native-artifacts:
+    name: Native (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: linux-x64
+          - os: ubuntu-24.04-arm
+            target: linux-arm64
+          - os: macos-15-intel
+            target: darwin-x64
+          - os: macos-15
+            target: darwin-arm64
+          - os: windows-2025-vs2026
+            target: win32-x64
+          - os: windows-11-arm
+            target: win32-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Kimi web assets
+        run: |
+          pnpm --filter @moonshot-ai/kimi-web run build
+          node apps/kimi-code/scripts/copy-web-assets.mjs
+
+      - name: Build native executable
+        run: pnpm --filter @moonshot-ai/kimi-code run build:native:sea
+
+      - name: Package native artifact
+        run: pnpm --filter @moonshot-ai/kimi-code run package:native
+
+      - name: Upload native artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-${{ matrix.target }}
+          retention-days: 7
+          path: |
+            apps/kimi-code/dist-native/artifacts/kimi-code-${{ matrix.target }}.zip
+            apps/kimi-code/dist-native/artifacts/kimi-code-${{ matrix.target }}.zip.sha256
+          if-no-files-found: error
+
+  # ── Create GitHub Release and upload everything ─────────────────────
+  publish-release:
+    name: Publish Release
+    needs: native-artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download native artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: native-*
+          path: dist-native-release
+          merge-multiple: true
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Produce manifest.json
+        run: node apps/kimi-code/scripts/native/produce-manifest.mjs dist-native-release "${{ steps.version.outputs.tag }}"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          gh release create "${{ github.ref_name }}" \
+            --title "v${VERSION}" \
+            --notes "Release v${VERSION}" \
+            dist-native-release/* \
+            install.sh \
+            install.ps1
+
+      - name: Update CDN metadata
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "${VERSION}" > cdn/latest
+          cat > cdn/latest.json << JSONEOF
+          {
+            "version": "${VERSION}",
+            "publishedAt": "${NOW}",
+            "rollout": []
+          }
+          JSONEOF
+
+      - name: Commit CDN update
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add cdn/latest cdn/latest.json
+          if git diff --staged --quiet; then
+            echo "No CDN changes to commit"
+          else
+            git commit -m "cdn: bump to v${{ steps.version.outputs.version }} [skip ci]"
+            git push origin main
+          fi
