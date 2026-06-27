@@ -49,19 +49,19 @@ export const FEEDBACK_VERSION_PREFIX = 'kimi-code-';
 // Telemetry event name; keep stable for dashboard queries.
 export const FEEDBACK_TELEMETRY_EVENT = 'feedback_submitted';
 
-// CDN source of truth: version metadata (latest, latest.json) served from the repo
-// via raw.githubusercontent.com. Native install scripts and binaries are served from
-// GitHub Releases for proper content-type handling.
-export const KIMI_CODE_CDN_BASE = 'https://raw.githubusercontent.com/lucasfelipe24/kimi-code/refs/heads/main/cdn';
-export const KIMI_CODE_CDN_LATEST_URL = `${KIMI_CODE_CDN_BASE}/latest`;
+// CDN source of truth: all version metadata and install scripts are served from
+// GitHub Releases. Files (latest, latest.json, install.sh, install.ps1, binaries)
+// are uploaded by the release-fork workflow on every tag push.
+export const GITHUB_RELEASES_BASE = 'https://github.com/lucasfelipe24/kimi-code/releases/latest/download';
+export const KIMI_CODE_CDN_BASE = GITHUB_RELEASES_BASE;
+export const KIMI_CODE_CDN_LATEST_URL = `${GITHUB_RELEASES_BASE}/latest`;
 // Rollout manifest consumed by update checks; the plain-text `/latest` above
 // stays unchanged forever — already-shipped clients hard-fail on non-semver
 // bodies, and the CDN install scripts read it for fresh installs.
-export const KIMI_CODE_CDN_LATEST_JSON_URL = `${KIMI_CODE_CDN_BASE}/latest.json`;
+export const KIMI_CODE_CDN_LATEST_JSON_URL = `${GITHUB_RELEASES_BASE}/latest.json`;
 export const KIMI_CODE_TIPS_BANNER_URL = 'https://cdn.kimi.com/kimi-code-tips/tips.json';
-export const KIMI_CODE_PLUGIN_MARKETPLACE_URL = `${KIMI_CODE_CDN_BASE}/plugins/marketplace.json`;
+export const KIMI_CODE_PLUGIN_MARKETPLACE_URL = `${GITHUB_RELEASES_BASE}/plugins/marketplace.json`;
 export const KIMI_CODE_PLUGIN_MARKETPLACE_URL_ENV = 'KIMI_CODE_PLUGIN_MARKETPLACE_URL';
-export const GITHUB_RELEASES_BASE = 'https://github.com/lucasfelipe24/kimi-code/releases/latest/download';
 export const KIMI_CODE_INSTALL_SH_URL = `${GITHUB_RELEASES_BASE}/install.sh`;
 export const KIMI_CODE_INSTALL_PS1_URL = `${GITHUB_RELEASES_BASE}/install.ps1`;
 
