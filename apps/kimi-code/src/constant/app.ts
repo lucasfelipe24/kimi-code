@@ -15,7 +15,7 @@ export const WEB_UI_MODE = 'web';
 export const CLI_SHUTDOWN_TIMEOUT_MS = 3000;
 
 // Published npm package name; this can differ from the executable command.
-export const NPM_PACKAGE_NAME = '@moonshot-ai/kimi-code';
+export const NPM_PACKAGE_NAME = '@lucasfelipe24/kimi-code';
 
 // App-owned data paths. SDK/core runtime config is intentionally not routed here.
 export const KIMI_CODE_HOME_ENV = 'KIMI_CODE_HOME';
@@ -40,7 +40,7 @@ export const DEFAULT_OAUTH_PROVIDER_NAME = 'managed:kimi-code';
 // auto-propagates instead of silently breaking the startup recovery path.
 export const OAUTH_LOGIN_REQUIRED_CODE = ErrorCodes.AUTH_LOGIN_REQUIRED;
 
-export const FEEDBACK_ISSUE_URL = 'https://github.com/MoonshotAI/kimi-code/issues';
+export const FEEDBACK_ISSUE_URL = 'https://github.com/lucasfelipe24/kimi-code/issues';
 
 // Sent in the feedback `version` field so the backend can distinguish this
 // TypeScript client from clients that send a bare version.
@@ -49,8 +49,10 @@ export const FEEDBACK_VERSION_PREFIX = 'kimi-code-';
 // Telemetry event name; keep stable for dashboard queries.
 export const FEEDBACK_TELEMETRY_EVENT = 'feedback_submitted';
 
-// CDN source of truth: all version checks and native install scripts pull from here.
-export const KIMI_CODE_CDN_BASE = 'https://code.kimi.com/kimi-code';
+// CDN source of truth: version metadata (latest, latest.json) served from the repo
+// via raw.githubusercontent.com. Native install scripts and binaries are served from
+// GitHub Releases for proper content-type handling.
+export const KIMI_CODE_CDN_BASE = 'https://raw.githubusercontent.com/lucasfelipe24/kimi-code/refs/heads/main/cdn';
 export const KIMI_CODE_CDN_LATEST_URL = `${KIMI_CODE_CDN_BASE}/latest`;
 // Rollout manifest consumed by update checks; the plain-text `/latest` above
 // stays unchanged forever — already-shipped clients hard-fail on non-semver
@@ -59,8 +61,9 @@ export const KIMI_CODE_CDN_LATEST_JSON_URL = `${KIMI_CODE_CDN_BASE}/latest.json`
 export const KIMI_CODE_TIPS_BANNER_URL = 'https://cdn.kimi.com/kimi-code-tips/tips.json';
 export const KIMI_CODE_PLUGIN_MARKETPLACE_URL = `${KIMI_CODE_CDN_BASE}/plugins/marketplace.json`;
 export const KIMI_CODE_PLUGIN_MARKETPLACE_URL_ENV = 'KIMI_CODE_PLUGIN_MARKETPLACE_URL';
-export const KIMI_CODE_INSTALL_SH_URL = `${KIMI_CODE_CDN_BASE}/install.sh`;
-export const KIMI_CODE_INSTALL_PS1_URL = `${KIMI_CODE_CDN_BASE}/install.ps1`;
+export const GITHUB_RELEASES_BASE = 'https://github.com/lucasfelipe24/kimi-code/releases/latest/download';
+export const KIMI_CODE_INSTALL_SH_URL = `${GITHUB_RELEASES_BASE}/install.sh`;
+export const KIMI_CODE_INSTALL_PS1_URL = `${GITHUB_RELEASES_BASE}/install.ps1`;
 
 // Native install commands, split by platform. Use these for prompt copy and spawn calls only; do not assemble the strings elsewhere.
 export const NATIVE_INSTALL_COMMAND_UNIX = `curl -fsSL ${KIMI_CODE_INSTALL_SH_URL} | bash`;
