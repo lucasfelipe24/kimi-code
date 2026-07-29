@@ -135,7 +135,7 @@ describe('builtin deep-research', () => {
     await fs.rm(tmp, { recursive: true, force: true });
   });
 
-  it('is discoverable from the builtin root with 5 phases', async () => {
+  it('is discoverable from the embedded builtins with 5 phases', async () => {
     const { workflows, skipped } = await discoverWorkflows({
       workDir: tmp,
       osHome: tmp,

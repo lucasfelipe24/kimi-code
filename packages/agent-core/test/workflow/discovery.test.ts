@@ -77,7 +77,6 @@ describe('resolveWorkflowRoots', () => {
       workDir,
       osHome: homeDir,
       extraDirs: ['team-workflows'],
-      includeBuiltin: false,
     });
 
     expect(roots.map((root) => root.path)).toEqual([
@@ -90,26 +89,17 @@ describe('resolveWorkflowRoots', () => {
     expect(roots.map((root) => root.source)).toEqual(['project', 'project', 'user', 'user', 'extra']);
   });
 
-  it('tolerates missing project/user directories and appends the builtin root last', async () => {
+  it('tolerates missing project/user/extra directories', async () => {
     const { workDir, homeDir } = await makeWorkspace();
     const roots = await resolveWorkflowRoots({ workDir, osHome: homeDir });
-    // No project/user/extra dirs exist; only the in-repo builtin dir remains.
-    expect(roots.map((root) => root.source)).toEqual(['builtin']);
-    expect(roots[0]?.path.endsWith('src/workflow/builtin')).toBe(true);
-
-    const withoutBuiltin = await resolveWorkflowRoots({
-      workDir,
-      osHome: homeDir,
-      includeBuiltin: false,
-    });
-    expect(withoutBuiltin).toEqual([]);
+    expect(roots).toEqual([]);
   });
 
   it('honors an explicit kimiHome over the osHome default', async () => {
     const { workDir } = await makeWorkspace();
     const kimiHome = await makeTempDir('wf-brand-');
     await mkdir(path.join(kimiHome, 'workflows'), { recursive: true });
-    const roots = await resolveWorkflowRoots({ workDir, kimiHome, includeBuiltin: false });
+    const roots = await resolveWorkflowRoots({ workDir, kimiHome });
     expect(roots).toEqual([
       { path: await realpath(path.join(kimiHome, 'workflows')), source: 'user' },
     ]);
@@ -196,6 +186,32 @@ describe('discoverWorkflows', () => {
 
     expect(workflows).toEqual([]);
     expect(skipped[0]?.reason).toContain('too large');
+  });
+
+  it('merges the embedded builtin workflows by default, losing to file-based roots by name', async () => {
+    const { repoDir, workDir, homeDir } = await makeWorkspace();
+
+    const defaults = await discoverWorkflows({ workDir, osHome: homeDir });
+    const builtin = defaults.workflows.find((w) => w.meta.name === 'deep-research');
+    expect(builtin?.source).toBe('builtin');
+    expect(builtin?.script).toContain(`name: 'deep-research'`);
+    expect(defaults.skipped).toEqual([]);
+
+    // A file-based root wins over the embedded builtin on a name collision.
+    await writeWorkflow(
+      path.join(repoDir, '.kimi-code', 'workflows'),
+      'deep-research.js',
+      workflowScript('deep-research', `log('project');`),
+    );
+    const overridden = await discoverWorkflows({ workDir, osHome: homeDir });
+    const winner = overridden.workflows.find((w) => w.meta.name === 'deep-research');
+    expect(winner?.source).toBe('project');
+    expect(winner?.script).toContain(`log('project')`);
+
+    // includeBuiltin: false drops the embedded set.
+    const without = await discoverWorkflows({ workDir, osHome: homeDir, includeBuiltin: false });
+    expect(without.workflows.map((w) => w.meta.name)).toEqual(['deep-research']);
+    expect(without.workflows[0]?.source).toBe('project');
   });
 });
 

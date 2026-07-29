@@ -1,11 +1,15 @@
 /**
  * Workflow file discovery — a simplified version of the skill scanner
  * (`../skill/scanner.ts`): resolve `workflows/` roots across project / user /
- * extra / builtin scopes, then scan each root's direct `*.js` files.
+ * extra scopes, then scan each root's direct `*.js` files. The builtin scope
+ * is not a filesystem root: builtin scripts are embedded as raw-string
+ * imports (`./builtinWorkflows`) so they survive bundling, and merge last on
+ * names no file-based root claimed.
  */
 import { promises as fs } from 'node:fs';
 import path from 'pathe';
 
+import { builtinWorkflows } from './builtinWorkflows';
 import { extractWorkflowMeta } from './script';
 import {
   DEFAULT_WORKFLOW_LIMITS,
@@ -25,16 +29,12 @@ const PROJECT_GENERIC_DIR = '.agents/workflows';
 const USER_BRAND_DIR = 'workflows';
 const USER_GENERIC_DIR = '.agents/workflows';
 
-/** `src/workflow/builtin/` — populated by future slices (e.g. deep-research). */
-const BUILTIN_WORKFLOWS_DIR = path.join(path.dirname(import.meta.filename.replaceAll('\\', '/')), 'builtin');
-
 export interface ResolveWorkflowRootsOptions {
   workDir: string;
   /** Brand data dir (`KIMI_CODE_HOME`, defaults to `<osHome>/.kimi-code`). */
   kimiHome?: string;
   osHome?: string;
   extraDirs?: string[];
-  includeBuiltin?: boolean;
 }
 
 export async function resolveWorkflowRoots(
@@ -56,14 +56,13 @@ export async function resolveWorkflowRoots(
   for (const dir of options.extraDirs ?? []) {
     await pushExistingRoot(roots, resolveConfiguredDir(dir, projectRoot, osHome), 'extra');
   }
-  if (options.includeBuiltin ?? true) {
-    await pushExistingRoot(roots, BUILTIN_WORKFLOWS_DIR, 'builtin');
-  }
   return roots;
 }
 
 export interface DiscoverWorkflowsOptions extends ResolveWorkflowRootsOptions {
   maxScriptBytes?: number;
+  /** Merge the embedded builtin workflows (default true). */
+  includeBuiltin?: boolean;
 }
 
 export interface DiscoverWorkflowsResult {
@@ -109,7 +108,7 @@ export async function discoverWorkflows(
           });
           continue;
         }
-        // First root wins on name collisions (project > user > extra > builtin).
+        // First root wins on name collisions (project > user > extra).
         if (!byName.has(meta.name)) {
           byName.set(meta.name, { meta, script, path: filePath, source: root.source });
         }
@@ -118,6 +117,15 @@ export async function discoverWorkflows(
           path: filePath,
           reason: error instanceof Error ? error.message : String(error),
         });
+      }
+    }
+  }
+
+  // Embedded builtins merge last: file-based roots always win by name.
+  if (options.includeBuiltin ?? true) {
+    for (const builtin of builtinWorkflows()) {
+      if (!byName.has(builtin.meta.name)) {
+        byName.set(builtin.meta.name, builtin);
       }
     }
   }

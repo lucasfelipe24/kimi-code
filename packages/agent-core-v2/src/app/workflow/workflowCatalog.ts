@@ -3,9 +3,9 @@
  *
  * The process-wide catalog of discovered Dynamic Workflows: resolves the
  * `workflows/` roots (project brand → project generic → user brand → user
- * generic → extra → builtin), scans them through the engine-agnostic
- * discovery, and keeps the first-wins merged listing plus the skipped-file
- * diagnostics. Project roots resolve from the bootstrap `cwd` (the same
+ * generic → extra), scans them through the engine-agnostic discovery, and
+ * keeps the first-wins merged listing — with the embedded builtin workflows
+ * merged last — plus the skipped-file diagnostics. Project roots resolve from the bootstrap `cwd` (the same
  * single-workspace assumption v1's per-session registry made for the CLI);
  * per-session workspace catalogs are future work. Bound at App scope.
  */

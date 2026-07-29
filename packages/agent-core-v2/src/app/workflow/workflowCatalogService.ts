@@ -5,7 +5,8 @@
  * through the engine-agnostic discovery over the resolved roots: project
  * brand / generic under the bootstrap `cwd` project root, user brand under
  * `homeDir`, user generic under `osHomeDir`, the `[workflows]`
- * `extraWorkflowDirs`, and the packaged builtin root. Reads its limits and
+ * `extraWorkflowDirs`, plus the embedded builtin workflows (raw-string
+ * imports, so they are present in bundled builds too). Reads its limits and
  * extra roots from the `workflows` config section through `config`, addresses
  * the filesystem through `bootstrap` facts, and logs through `log`. Bound at
  * App scope.
