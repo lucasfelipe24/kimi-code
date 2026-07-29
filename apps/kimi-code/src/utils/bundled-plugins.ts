@@ -21,6 +21,9 @@ export async function resolveBundledPluginDir(pluginId: string): Promise<string 
     resolve(sourceDir, '../../../plugins/official', pluginId),
     // Dev without a build: this file lives at src/utils/.
     resolve(sourceDir, '../../../../plugins/official', pluginId),
+    // Native (SEA) personal build: the executable stays in the repo at
+    // apps/kimi-code/dist-native/bin/<platform>/, five levels below the root.
+    resolve(sourceDir, '../../../../../plugins/official', pluginId),
   ];
   for (const dir of candidates) {
     const manifest = await stat(join(dir, 'kimi.plugin.json')).catch(() => undefined);
