@@ -1,12 +1,10 @@
 name: Nix Build
 
+# DISABLED in this fork (kept for study): original triggers were
+# `on: pull_request` (main) and `on: push` (main). Re-enable by
+# restoring those triggers.
 on:
-  pull_request:
-    branches:
-      - main
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 permissions:
   contents: read

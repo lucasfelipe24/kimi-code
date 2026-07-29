@@ -1,9 +1,9 @@
 name: Release
 
+# DISABLED in this fork (kept for study): original trigger was
+# `on: push: branches: [main]`. Re-enable by restoring that trigger.
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 

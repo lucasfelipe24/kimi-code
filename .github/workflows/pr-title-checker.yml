@@ -1,8 +1,9 @@
 name: PR Title Checker
 
+# DISABLED in this fork (kept for study): original trigger was
+# `on: pull_request` (opened/edited/labeled).
 on:
-  pull_request:
-    types: [opened, edited, labeled]
+  workflow_dispatch:
 
 jobs:
   check:

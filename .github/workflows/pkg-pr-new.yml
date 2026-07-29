@@ -1,8 +1,10 @@
 name: pkg.pr.new
 
+# DISABLED in this fork (kept for study): original trigger was
+# `on: pull_request` (opened/synchronize/reopened/ready_for_review).
+# The job is additionally gated to the MoonshotAI owner below.
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
 
 permissions:
   contents: read

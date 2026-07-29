@@ -1,0 +1,137 @@
+name: Release Native (Fork)
+
+# Simplified release pipeline for personal forks: builds the native SEA
+# binaries for Linux and Windows and publishes them as raw assets on a
+# GitHub Release, together with a manifest.json consumed by install.sh /
+# install.ps1 at the repository root.
+#
+# Usage:
+#   git tag v0.1.0 && git push origin v0.1.0
+# or trigger manually from the Actions tab with a tag name.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    name: Build native (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: linux-x64
+            bin: kimi
+            asset: kimi-linux-x64
+          - os: windows-latest
+            target: win32-x64
+            bin: kimi.exe
+            asset: kimi-win32-x64.exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Kimi web assets
+        # The SEA blob embeds apps/kimi-code/dist-web; build the web app
+        # and stage its assets before producing the native executable.
+        run: |
+          pnpm --filter @moonshot-ai/kimi-web run build
+          node apps/kimi-code/scripts/copy-web-assets.mjs
+
+      - name: Build native executable
+        run: pnpm --filter @moonshot-ai/kimi-code run build:native:sea
+
+      - name: Smoke test native executable
+        run: pnpm --filter @moonshot-ai/kimi-code run test:native:smoke
+
+      - name: Stage release asset
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/release-assets"
+          src="apps/kimi-code/dist-native/bin/${{ matrix.target }}/${{ matrix.bin }}"
+          cp "$src" "$RUNNER_TEMP/release-assets/${{ matrix.asset }}"
+
+      - name: Upload release asset
+        uses: actions/upload-artifact@v7
+        with:
+          name: kimi-bin-${{ matrix.target }}
+          retention-days: 1
+          path: ${{ runner.temp }}/release-assets/${{ matrix.asset }}
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v7
+        with:
+          pattern: kimi-bin-*
+          path: dist-assets
+          merge-multiple: true
+
+      - name: Checksums and manifest
+        working-directory: dist-assets
+        run: |
+          set -euo pipefail
+          sha256sum kimi-linux-x64 > kimi-linux-x64.sha256
+          sha256sum kimi-win32-x64.exe > kimi-win32-x64.exe.sha256
+          node <<'EOF'
+          const { readFileSync, writeFileSync } = require('fs');
+          const tag = process.env.RELEASE_TAG;
+          const version = tag.replace(/^v/, '');
+          const platforms = {};
+          for (const [target, file] of [
+            ['linux-x64', 'kimi-linux-x64'],
+            ['win32-x64', 'kimi-win32-x64.exe'],
+          ]) {
+            const checksum = readFileSync(`${file}.sha256`, 'utf8').trim().split(/\s+/)[0];
+            platforms[target] = { filename: file, checksum };
+          }
+          writeFileSync('manifest.json', `${JSON.stringify({ version, tag, platforms }, null, 2)}\n`);
+          EOF
+          cat manifest.json
+
+      - name: Create or update release
+        working-directory: dist-assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          assets="kimi-linux-x64 kimi-linux-x64.sha256 kimi-win32-x64.exe kimi-win32-x64.exe.sha256 manifest.json"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" $assets --clobber
+          else
+            gh release create "$RELEASE_TAG" $assets \
+              --target "${{ github.sha }}" \
+              --title "$RELEASE_TAG" \
+              --generate-notes
+          fi
