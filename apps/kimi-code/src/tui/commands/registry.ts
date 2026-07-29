@@ -332,7 +332,12 @@ export const BUILTIN_SLASH_COMMANDS = [
     priority: 80,
     argumentHint: '[list|run|runs|show|cancel|save|reload|on|off] …',
     completeArgs: workflowArgumentCompletions,
-    availability: 'always',
+    // on / off mutate the live agent mode mid-turn (like /swarm), so they are
+    // idle-only; read-only subcommands and background runs stay available.
+    availability: (args) => {
+      const subcommand = args.trim().split(/\s+/, 1)[0];
+      return subcommand === 'on' || subcommand === 'off' ? 'idle-only' : 'always';
+    },
     experimentalFlag: 'dynamic-workflows',
   },
   {

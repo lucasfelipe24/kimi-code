@@ -5,7 +5,7 @@ import {
   slashBusyMessage,
   slashCommandBusyReason,
 } from '#/tui/commands/index';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 function resolve(
   input: string,
@@ -287,6 +287,42 @@ describe('goal command resolution', () => {
       kind: 'builtin',
       name: 'goal',
     });
+  });
+});
+
+describe('workflow command resolution', () => {
+  beforeEach(() => {
+    setExperimentalFeatures([{ id: 'dynamic-workflows', enabled: true }]);
+  });
+  afterEach(() => {
+    setExperimentalFeatures([]);
+  });
+
+  it('blocks workflow mode toggles while streaming and compacting', () => {
+    expect(resolve('/workflow on', { isStreaming: true })).toEqual({
+      kind: 'blocked',
+      commandName: 'workflow',
+      reason: 'streaming',
+    });
+    expect(resolve('/workflow off', { isCompacting: true })).toEqual({
+      kind: 'blocked',
+      commandName: 'workflow',
+      reason: 'compacting',
+    });
+    expect(resolve('/workflows on', { isStreaming: true })).toEqual({
+      kind: 'blocked',
+      commandName: 'workflows',
+      reason: 'streaming',
+    });
+  });
+
+  it('allows read-only and background workflow subcommands while streaming', () => {
+    for (const input of ['/workflow', '/workflow list', '/workflow runs', '/workflow run demo-flow']) {
+      expect(resolve(input, { isStreaming: true })).toMatchObject({
+        kind: 'builtin',
+        name: 'workflow',
+      });
+    }
   });
 });
 
