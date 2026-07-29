@@ -124,13 +124,15 @@ jobs:
         working-directory: dist-assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -e
           assets="kimi-linux-x64 kimi-linux-x64.sha256 kimi-win32-x64.exe kimi-win32-x64.exe.sha256 manifest.json"
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" $assets --clobber
+          if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" $assets --repo "$GH_REPO" --clobber
           else
             gh release create "$RELEASE_TAG" $assets \
+              --repo "$GH_REPO" \
               --target "${{ github.sha }}" \
               --title "$RELEASE_TAG" \
               --generate-notes
