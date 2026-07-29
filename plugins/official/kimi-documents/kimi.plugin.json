@@ -1,0 +1,32 @@
+{
+  "$schema": "https://catalog.msh.team/schemas/kimi.plugin.schema.json",
+  "name": "kimi-documents",
+  "version": "0.1.0",
+  "description": "Create, edit, validate, and render office documents: PDF (HTML/Paged.js, LaTeX, or processing existing PDFs), XLSX (openpyxl/pandas with native validation and pivot CLI), DOCX (md2docx, OpenXML creation, WIR editing), and PPT presentations via the .pptd YAML DSL with native check/screenshot CLI.",
+  "keywords": [
+    "pdf",
+    "docx",
+    "xlsx",
+    "pptx",
+    "pptd",
+    "slides",
+    "documents",
+    "spreadsheet",
+    "word",
+    "presentation",
+    "report"
+  ],
+  "author": "Moonshot AI",
+  "homepage": "https://kimi.com/",
+  "license": "UNLICENSED",
+  "skills": "./skills/",
+  "skillInstructions": "Use the kimi-documents skills for any office-document task. Route by file type: the pdf skill for creating PDFs (HTML+Paged.js by default, LaTeX only when explicitly requested) and for processing existing PDFs (extract, merge, split, forms); the xlsx skill for creating or analyzing spreadsheets with openpyxl/pandas plus the bundled native Xlsx CLI for validation, recheck, pivot, and inspection; the docx skill for Word documents — md2docx for Markdown-to-Word, C#+OpenXML for from-scratch creation, WIR engine for editing existing .docx whose formatting matters; the slides skill for presentations — author decks in the .pptd YAML DSL, validate with the bundled kimi-slides CLI (check) and render previews (screenshot), or convert an existing .pptx into .pptd for editing. Before running document commands, run the plugin's scripts/setup.sh --json and follow its reported status; install Python dependencies only inside a virtual environment. Native binaries are bundled for linux-x64 only — on other platforms use the pure-Python routes and tell the user about the limitation.",
+  "interface": {
+    "displayName": "Kimi Documents",
+    "shortDescription": "Create and edit PDF, XLSX, DOCX, and PPT presentations",
+    "longDescription": "Office document toolkit: PDF creation via HTML+Paged.js or LaTeX and PDF processing; XLSX creation with openpyxl/pandas plus native validation, pivot, and recalculation; DOCX creation, editing, and Markdown conversion; presentation authoring in the .pptd YAML DSL with native validation and screenshot rendering. Native binaries are bundled for linux-x64.",
+    "developerName": "Moonshot AI",
+    "websiteURL": "https://kimi.com/",
+    "category": "PRODUCTIVITY"
+  }
+}

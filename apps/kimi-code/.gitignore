@@ -9,3 +9,6 @@ src/generated/vis-web-asset.ts
 
 # Copied from packages/pi-tui/native at build time by scripts/copy-native-assets.mjs
 native/
+
+# Copied from plugins/official at build time by scripts/copy-plugins-assets.mjs
+dist-plugins/

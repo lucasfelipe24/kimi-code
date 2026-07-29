@@ -29,6 +29,15 @@
       "source": "./official/audio_generation"
     },
     {
+      "id": "kimi-documents",
+      "tier": "official",
+      "displayName": "Kimi Documents",
+      "version": "0.1.0",
+      "description": "Create and edit PDF, XLSX, DOCX, and PPT presentations (.pptd DSL), with bundled native validators and renderers.",
+      "keywords": ["pdf", "docx", "xlsx", "pptx", "slides", "documents"],
+      "source": "./official/kimi-documents"
+    },
+    {
       "id": "superpowers",
       "tier": "curated",
       "displayName": "Superpowers",

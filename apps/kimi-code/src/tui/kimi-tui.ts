@@ -104,6 +104,7 @@ import { AuthFlowController } from './controllers/auth-flow';
 import { BtwPanelController } from './controllers/btw-panel';
 import { ClipboardImageHintController } from './controllers/clipboard-image-hint';
 import { EditorKeyboardController } from './controllers/editor-keyboard';
+import { PluginAutoInstaller } from './controllers/plugin-auto-installer';
 import { SessionEventHandler } from './controllers/session-event-handler';
 import { SessionReplayRenderer } from './controllers/session-replay';
 import { StreamingUIController } from './controllers/streaming-ui';
@@ -343,6 +344,9 @@ export class KimiTUI {
   readonly sessionReplay: SessionReplayRenderer;
   readonly tasksBrowserController: TasksBrowserController;
   readonly editorKeyboard: EditorKeyboardController;
+
+  /** Auto-installs official plugins bundled inside the CLI package (once per app run). */
+  private pluginAutoInstaller: PluginAutoInstaller | undefined;
 
   /** Timer that auto-clears the one-shot "moved to background" footer hint. */
   private detachHintClearTimer: ReturnType<typeof setTimeout> | undefined;
@@ -714,6 +718,11 @@ export class KimiTUI {
     }
     void this.refreshSkillCommands(this.session);
     void this.refreshPluginCommands(this.session);
+    this.pluginAutoInstaller ??= new PluginAutoInstaller({
+      getSession: () => this.session,
+      warn: (message) => this.showStatus(message, 'warning'),
+    });
+    void this.pluginAutoInstaller.ensureInstalled();
   }
 
   private async showSessionWarnings(session: Session): Promise<void> {
