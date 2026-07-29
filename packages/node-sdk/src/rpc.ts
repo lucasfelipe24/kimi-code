@@ -457,6 +457,11 @@ export abstract class SDKRpcClientBase {
     });
   }
 
+  async applyPersistedSecondaryModel(input: SessionIdRpcInput): Promise<void> {
+    const rpc = await this.getRpc();
+    return rpc.applyPersistedSecondaryModel({ sessionId: input.sessionId });
+  }
+
   async setPermission(input: SetSessionPermissionRpcInput): Promise<void> {
     const rpc = await this.getRpc();
     return rpc.setPermission({
