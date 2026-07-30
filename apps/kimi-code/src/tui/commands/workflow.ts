@@ -265,6 +265,7 @@ async function toggleWorkflowMode(
   try {
     await client.setWorkflowMode(enabled, 'command');
     host.setAppState({ workflowMode: enabled });
+    host.state.workflowModeEntry = 'manual';
     host.state.transcriptContainer.addChild(
       new ModeMarkerComponent(enabled ? 'active' : 'inactive', workflowMarkerLabel(enabled)),
     );

@@ -192,6 +192,7 @@ function makeSession(overrides: Record<string, unknown> = {}) {
     setPermission: vi.fn(async () => {}),
     setPlanMode: vi.fn(async () => {}),
     setSwarmMode: vi.fn(async () => {}),
+    setWorkflowMode: vi.fn(async () => {}),
     onEvent: vi.fn(() => vi.fn()),
     listMcpServers: vi.fn(async () => []),
     listSkills: vi.fn(async () => []),
@@ -3232,6 +3233,39 @@ command = "vim"
     expect(countOccurrences(transcript, 'Swarm activated')).toBe(0);
     expect(countOccurrences(transcript, 'Swarm deactivated')).toBe(0);
     expect(countOccurrences(transcript, 'Swarm ended')).toBe(0);
+  });
+
+  it('renders workflow mode markers from agent-triggered status updates, not /workflow commands', async () => {
+    const { driver } = await makeDriver();
+
+    driver.sessionEventHandler.handleEvent(
+      {
+        type: 'agent.status.updated',
+        agentId: 'main',
+        sessionId: 'ses-1',
+        workflowMode: true,
+      } as Event,
+      vi.fn(),
+    );
+
+    expect(driver.state.appState.workflowMode).toBe(true);
+    expect(stripSgr(renderTranscript(driver))).toContain('Dynamic Workflow activated');
+
+    driver.sessionEventHandler.handleEvent(
+      {
+        type: 'agent.status.updated',
+        agentId: 'main',
+        sessionId: 'ses-1',
+        workflowMode: false,
+      } as Event,
+      vi.fn(),
+    );
+
+    expect(driver.state.appState.workflowMode).toBe(false);
+    const transcript = stripSgr(renderTranscript(driver));
+    expect(transcript).toContain('Dynamic Workflow deactivated');
+    expect(countOccurrences(transcript, 'Dynamic Workflow activated')).toBe(1);
+    expect(countOccurrences(transcript, 'Dynamic Workflow deactivated')).toBe(1);
   });
 
   it('renders an ended marker when a one-shot /swarm task exits', async () => {

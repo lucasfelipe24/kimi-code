@@ -41,10 +41,26 @@ import {
   type SwarmModeMarkerState,
 } from '../components/messages/swarm-markers';
 import {
+  ModeMarkerComponent,
+  type ModeMarkerState,
+} from '../components/messages/mode-markers';
+import {
   OAUTH_LOGIN_REQUIRED_CODE,
   OAUTH_LOGIN_REQUIRED_STARTUP_NOTICE,
 } from '../constant/kimi-tui';
 import { buildGoalCompletionMessage } from '../utils/goal-completion';
+
+function workflowMarkerLabel(state: ModeMarkerState): string {
+  switch (state) {
+    case 'active':
+      return 'Dynamic Workflow activated';
+    case 'inactive':
+      return 'Dynamic Workflow deactivated';
+    case 'ended':
+      return 'Dynamic Workflow ended';
+  }
+}
+
 import {
   argsRecord,
   formatErrorPayload,
@@ -678,12 +694,17 @@ export class SessionEventHandler {
       event.swarmMode === false &&
       this.host.state.appState.swarmMode &&
       this.host.state.swarmModeEntry === 'task';
+    const shouldRenderWorkflowMode =
+      event.workflowMode !== undefined &&
+      event.workflowMode !== this.host.state.appState.workflowMode &&
+      this.host.state.workflowModeEntry !== 'manual';
     const patch: Partial<AppState> = {};
     if (event.contextUsage !== undefined) patch.contextUsage = event.contextUsage;
     if (event.contextTokens !== undefined) patch.contextTokens = event.contextTokens;
     if (event.maxContextTokens !== undefined) patch.maxContextTokens = event.maxContextTokens;
     if (event.planMode !== undefined) patch.planMode = event.planMode;
     if (event.swarmMode !== undefined) patch.swarmMode = event.swarmMode;
+    if (event.workflowMode !== undefined) patch.workflowMode = event.workflowMode;
     if (event.permission !== undefined) {
       patch.permissionMode = event.permission;
     }
@@ -696,6 +717,19 @@ export class SessionEventHandler {
         this.renderSwarmModeMarker('ended');
       }
     }
+    if (event.workflowMode !== undefined) {
+      this.host.state.workflowModeEntry = event.workflowMode ? 'agent' : undefined;
+      if (shouldRenderWorkflowMode) {
+        this.renderWorkflowModeMarker(event.workflowMode ? 'active' : 'inactive');
+      }
+    }
+  }
+
+  private renderWorkflowModeMarker(state: ModeMarkerState): void {
+    this.host.state.transcriptContainer.addChild(
+      new ModeMarkerComponent(state, workflowMarkerLabel(state)),
+    );
+    this.host.state.ui.requestRender();
   }
 
   private renderSwarmModeMarker(state: SwarmModeMarkerState): void {

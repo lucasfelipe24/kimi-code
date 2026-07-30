@@ -60,6 +60,7 @@ export interface TUIState {
    */
   queuedMessageDispatchPending: boolean;
   swarmModeEntry: 'manual' | 'task' | undefined;
+  workflowModeEntry: 'manual' | 'agent' | undefined;
 }
 
 export function createTUIState(options: KimiTUIOptions): TUIState {
@@ -112,5 +113,6 @@ export function createTUIState(options: KimiTUIOptions): TUIState {
     queuedMessages: [],
     queuedMessageDispatchPending: false,
     swarmModeEntry: undefined,
+    workflowModeEntry: undefined,
   };
 }
