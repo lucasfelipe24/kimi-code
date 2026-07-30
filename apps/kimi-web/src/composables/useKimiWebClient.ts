@@ -460,9 +460,18 @@ const turnTimingSnapshot = computed<{ elapsedText: string; paused: boolean } | n
   void turnTimingClock.value; // touch for reactivity
   if (!turnTiming.isActive()) return null;
   const elapsedMs = turnTiming.activeElapsedMs();
-  const sec = Math.max(0, Math.floor(elapsedMs / 1000));
-  return { elapsedText: `${sec}s`, paused: turnTiming.isPaused() };
+  return { elapsedText: formatTurnDuration(elapsedMs), paused: turnTiming.isPaused() };
 });
+
+function formatTurnDuration(ms: number): string {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes < 60) return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${(minutes % 60).toString().padStart(2, '0')}m`;
+}
 
 function applyTurnOutcome(sid: string, outcome: TurnOutcome, activeDurationMs: number): void {
   const msgs = rawState.messagesBySession[sid] ?? [];

@@ -51,7 +51,8 @@ export const AgentToolInputSchema = z.preprocess(
     const hasSubagentType =
       typeof normalized['subagent_type'] === 'string' && normalized['subagent_type'].length > 0;
     if (!hasSubagentType && !hasResumeId) {
-      normalized['subagent_type'] = 'coder';
+      // No default — the model must choose explicitly.
+      delete normalized['subagent_type'];
     } else if (!hasSubagentType) {
       delete normalized['subagent_type'];
     }
@@ -64,7 +65,7 @@ export const AgentToolInputSchema = z.preprocess(
       .string()
       .optional()
       .describe(
-        'One of the available agent types (see "Available agent types" in this tool description). Defaults to "coder" when omitted.',
+        'One of the available agent types (see "Available agent types" in this tool description). Scan the list first and prefer a type whose `whenToUse` matches the task; only fall back to `coder` when no specialized type fits.',
       ),
     model: z
       .enum(['primary', 'secondary'])
@@ -395,7 +396,17 @@ function buildSubagentDescriptions(
   showModelPreferences: boolean,
 ): string {
   if (subagents === undefined) return '';
-  return Object.entries(subagents)
+
+  const BUILTIN_NAMES = new Set(['coder', 'explore', 'plan']);
+  const entries = Object.entries(subagents);
+  // Custom (non-builtin) agents first, then built-in ones.
+  entries.sort(([a], [b]) => {
+    const aBuiltin = BUILTIN_NAMES.has(a) ? 1 : 0;
+    const bBuiltin = BUILTIN_NAMES.has(b) ? 1 : 0;
+    return aBuiltin - bBuiltin;
+  });
+
+  return entries
     .map(([name, subagent]) => {
       const details = [subagent.description, subagent.whenToUse].filter(
         (part): part is string => part !== undefined && part.length > 0,

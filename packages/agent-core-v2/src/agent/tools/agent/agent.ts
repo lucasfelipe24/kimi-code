@@ -29,7 +29,8 @@ export const SubagentToolInputSchema = z.preprocess(
     const hasSubagentType =
       typeof normalized['subagent_type'] === 'string' && normalized['subagent_type'].length > 0;
     if (!hasSubagentType && !hasResumeId) {
-      normalized['subagent_type'] = DEFAULT_PROFILE_NAME;
+      // No default — the model must choose explicitly.
+      delete normalized['subagent_type'];
     } else if (!hasSubagentType) {
       delete normalized['subagent_type'];
     }
@@ -42,7 +43,7 @@ export const SubagentToolInputSchema = z.preprocess(
       .string()
       .optional()
       .describe(
-        'One of the available agent types (see "Available agent types" in this tool description). Defaults to "coder" when omitted.',
+        'One of the available agent types (see "Available agent types" in this tool description). Scan the list first and prefer a type whose `whenToUse` matches the task; only fall back to `coder` when no specialized type fits.',
       ),
     resume: z
       .string()

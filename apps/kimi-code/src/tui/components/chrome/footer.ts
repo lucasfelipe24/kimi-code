@@ -33,7 +33,7 @@ import {
   usagePercentFromRatio,
 } from '#/utils/usage/usage-format';
 
-const DEFAULT_STATUS_LINE_ITEMS = ['mode', 'goal', 'model', 'tasks', 'cwd', 'git'] as const;
+const DEFAULT_STATUS_LINE_ITEMS = ['mode', 'goal', 'timing', 'model', 'tasks', 'cwd', 'git'] as const;
 
 const MAX_CWD_SEGMENTS = 3;
 const GOAL_TIMER_INTERVAL_MS = 1_000;
@@ -364,6 +364,7 @@ export class FooterComponent implements Component {
     const slots: Record<string, string[]> = {
       mode: [],
       goal: [],
+      timing: [],
       model: [],
       tasks: [],
       cwd: [],
@@ -387,6 +388,13 @@ export class FooterComponent implements Component {
 
     const goalBadge = formatGoalBadge(state.goal, colors, this.goalWallClockMs(state.goal));
     if (goalBadge !== null) slots['goal'] = [goalBadge];
+
+    // Turn-timing badge — shows elapsed active time while a turn is running.
+    if (state.turnTimingLabel !== null) {
+      slots['timing'] = [
+        chalk.hex(colors.textMuted)(`[${state.turnTimingLabel}]`),
+      ];
+    }
 
     const model = modelDisplayName(state);
     if (model) {

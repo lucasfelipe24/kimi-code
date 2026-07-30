@@ -383,7 +383,15 @@ export class SessionAgentProfileCatalog {
       for (const winner of fileWinners) fileRecord[winner.definition.name] = winner.profile;
       merged.set(DEFAULT_AGENT_PROFILE_NAME, {
         ...defaultProfile,
-        subagents: { ...defaultProfile.subagents, ...fileRecord },
+        subagents: {
+          ...fileRecord,
+          // Built-in entries not overridden by a file profile come after.
+          ...Object.fromEntries(
+            Object.entries(defaultProfile.subagents ?? {}).filter(
+              ([key]) => !fileRecord[key],
+            ),
+          ),
+        },
       });
     }
 

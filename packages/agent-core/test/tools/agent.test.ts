@@ -200,14 +200,14 @@ describe('AgentTool', () => {
         prompt: 'Investigate',
         description: 'Find cause',
       }).subagent_type,
-    ).toBe('coder');
+    ).toBeUndefined();
     expect(
       AgentToolInputSchema.parse({
         prompt: 'Investigate',
         description: 'Find cause',
         subagent_type: '',
       }).subagent_type,
-    ).toBe('coder');
+    ).toBeUndefined();
     expect(
       AgentToolInputSchema.parse({
         prompt: 'Continue',

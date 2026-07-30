@@ -40,6 +40,7 @@ const baseState: AppState = {
   availableModels: {},
   availableProviders: {},
   mcpServersSummary: null,
+  turnTimingLabel: null,
 };
 
 const payload: StatusLinePayload = {

@@ -59,6 +59,7 @@ const appState: AppState = {
   availableModels: {},
   availableProviders: {},
   mcpServersSummary: null,
+  turnTimingLabel: null,
 };
 
 describe('FooterComponent', () => {

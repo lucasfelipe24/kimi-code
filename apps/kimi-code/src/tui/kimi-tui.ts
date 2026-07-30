@@ -243,6 +243,7 @@ function createInitialAppState(input: KimiTUIStartupInput): AppState {
     goal: null,
     mcpServersSummary: null,
     banner: undefined,
+    turnTimingLabel: null,
   };
 }
 
@@ -329,7 +330,7 @@ export class KimiTUI {
   private startupNotice: string | undefined;
   private lastActivityMode: string | undefined;
   private turnTimingInterval: ReturnType<typeof setInterval> | undefined;
-  private timingSpinner: MoonLoader | null = null;
+  /** @deprecated No longer used — thinking mode now keeps the moon spinner. */
   private thinkingTimingText: Text | null = null;
   private currentLoadingTip: { kind: LoadingTipKind; tip: string | undefined } | undefined =
     undefined;
@@ -864,8 +865,6 @@ export class KimiTUI {
     this.btwPanelController.clear();
     this.stopActivitySpinner();
     this.stopTurnTimingClock();
-    this.timingSpinner = null;
-    this.thinkingTimingText = null;
     this.streamingUI.disposeActiveCompactionBlock();
     this.streamingUI.resetToolUi();
     this.disposeTranscriptChildren();
@@ -1731,8 +1730,6 @@ export class KimiTUI {
     this.streamingUI.resetToolUi();
     this.sessionEventHandler.resetRuntimeState();
     this.stopTurnTimingClock();
-    this.timingSpinner = null;
-    this.thinkingTimingText = null;
     this.tasksBrowserController.close();
     this.btwPanelController.clear();
     this.state.footer.setBackgroundCounts({ bashTasks: 0, agentTasks: 0, workflowTasks: 0 });
@@ -2457,14 +2454,9 @@ export class KimiTUI {
     this.lastActivityMode = activityModeKey;
     this.state.activityContainer.clear();
 
-    // Clear stale references; re-created as needed below.
-    this.thinkingTimingText = null;
-
     // Manage the turn-timing clock: run it during non-idle phases.
     if (effectiveMode === 'idle' || effectiveMode === 'session' || effectiveMode === 'hidden') {
       this.stopTurnTimingClock();
-      this.timingSpinner = null;
-      this.thinkingTimingText = null;
     } else {
       this.startTurnTimingClock();
     }
@@ -2477,7 +2469,6 @@ export class KimiTUI {
         return;
       case 'waiting': {
         const spinner = this.ensureActivitySpinner('moon');
-        this.timingSpinner = spinner;
         this.syncAgentSwarmActivitySpinner(placeSpinnerInAgentSwarm ? spinner : undefined);
         if (placeSpinnerInAgentSwarm) break;
         this.state.activityContainer.addChild(
@@ -2490,22 +2481,24 @@ export class KimiTUI {
         break;
       }
       case 'thinking': {
-        this.stopActivitySpinner();
+        // Keep the moon spinner visible instead of replacing it with a plain
+        // text element — stopping the spinner on every thinking entry made the
+        // moon disappear and reappear on each thinking-to-tool/composing cycle.
         this.syncAgentSwarmActivitySpinner(undefined);
-        const timingText = this.sessionEventHandler.getTurnElapsedText();
-        if (timingText !== null) {
-          this.thinkingTimingText = new Text(`  ${timingText}`, 0, 0);
-          this.state.activityContainer.addChild(this.thinkingTimingText);
-        } else {
-          this.thinkingTimingText = null;
-        }
+        const spinner = this.ensureActivitySpinner('moon');
+        this.state.activityContainer.addChild(
+          new ActivityPaneComponent({
+            mode: 'thinking',
+            spinner,
+            tip: this.currentLoadingTip?.tip,
+          }),
+        );
         break;
       }
       case 'composing': {
         const spinner = this.ensureActivitySpinner('braille', 'working...', (s) =>
           currentTheme.fg('primary', s),
         );
-        this.timingSpinner = spinner;
         this.syncAgentSwarmActivitySpinner(undefined);
         this.state.activityContainer.addChild(
           new ActivityPaneComponent({
@@ -2518,7 +2511,6 @@ export class KimiTUI {
       }
       case 'tool': {
         const spinner = this.ensureActivitySpinner('moon');
-        this.timingSpinner = spinner;
         this.syncAgentSwarmActivitySpinner(placeSpinnerInAgentSwarm ? spinner : undefined);
         if (placeSpinnerInAgentSwarm) break;
         this.state.activityContainer.addChild(
@@ -2836,13 +2828,15 @@ export class KimiTUI {
     if (this.turnTimingInterval !== undefined) return;
     this.turnTimingInterval = setInterval(() => {
       const text = this.sessionEventHandler.getTurnElapsedText();
+      if (text === null) {
+        // Turn ended — clear the footer badge.
+        this.setAppState({ turnTimingLabel: null });
+        this.stopTurnTimingClock();
+        return;
+      }
       const paused = this.sessionEventHandler.getIsPaused();
-      if (this.timingSpinner && text !== null) {
-        this.timingSpinner.setLabel(paused ? `Paused · waiting · ${text}` : `running · ${text}`);
-      }
-      if (this.thinkingTimingText) {
-        this.thinkingTimingText.setText(text !== null ? `  running · ${text}` : '');
-      }
+      const label = paused ? `waiting · ${text}` : `running · ${text}`;
+      this.setAppState({ turnTimingLabel: label });
       this.state.ui.requestRender();
     }, 1000);
   }
@@ -2851,6 +2845,11 @@ export class KimiTUI {
     if (this.turnTimingInterval !== undefined) {
       clearInterval(this.turnTimingInterval);
       this.turnTimingInterval = undefined;
+    }
+    // Clear the footer badge when the clock stops externally (shutdown,
+    // session switch, idle mode transition).
+    if (this.state.appState.turnTimingLabel !== null) {
+      this.state.appState.turnTimingLabel = null;
     }
   }
 

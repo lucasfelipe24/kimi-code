@@ -384,8 +384,8 @@ describe('SessionAgentProfileCatalog', () => {
     const c = catalog({ workDir, brandHomeDir: brandHome, osHomeDir: osHome });
     await c.ready;
     const expectedNames = [
-      ...Object.keys(DEFAULT_AGENT_PROFILES['agent']!.subagents ?? {}),
       'reviewer',
+      ...Object.keys(DEFAULT_AGENT_PROFILES['agent']!.subagents ?? {}),
     ];
     expect(Object.keys(c.delegatableSubagents('agent'))).toEqual(expectedNames);
     expect(c.delegatableSubagents('agent')).not.toHaveProperty('agent');

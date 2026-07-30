@@ -64,6 +64,8 @@ export interface AppState {
   mcpServersSummary: string | null;
   /** Optional banner shown below the welcome panel; null means no banner to render. */
   banner?: BannerState | null;
+  /** Live turn-timing label for the footer badge; null when no turn is active. */
+  turnTimingLabel: string | null;
 }
 
 export interface ToolCallBlockData {

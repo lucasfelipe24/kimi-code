@@ -470,7 +470,13 @@ function buildProfileDescriptions(
   ) => boolean,
   showModelPreferences: boolean,
 ): string {
-  return profiles
+  const BUILTIN_NAMES = new Set(['coder', 'explore', 'plan']);
+  const sorted = [...profiles].sort((a, b) => {
+    const aBuiltin = BUILTIN_NAMES.has(a.name) ? 1 : 0;
+    const bBuiltin = BUILTIN_NAMES.has(b.name) ? 1 : 0;
+    return aBuiltin - bBuiltin;
+  });
+  return sorted
     .map((profile) => {
       const details = [profile.description, profile.whenToUse].filter(
         (part): part is string => part !== undefined && part.length > 0,

@@ -205,6 +205,7 @@ function turnOutcomeText(turn: ChatTurn): string {
   }
 }
 function formatDurationInt(sec: number): string {
+  if (sec < 1) return '<1s';
   if (sec < 60) return `${sec}s`;
   const m = Math.floor(sec / 60);
   const s = sec % 60;

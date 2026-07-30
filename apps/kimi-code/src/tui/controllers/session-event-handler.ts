@@ -80,7 +80,7 @@ import type { ColorToken } from '#/tui/theme';
 import { errorReportHintLine } from '../constant/feedback';
 import { formatStepDebugTiming } from '#/utils/usage/debug-timing';
 import { nextTranscriptId } from '../utils/transcript-id';
-import { TurnTiming } from '../utils/turn-timing';
+import { TurnTiming, formatTurnDuration } from '../utils/turn-timing';
 import type { BtwPanelController } from './btw-panel';
 import { isPluginMcpToolName, PluginUpdateNotifier } from './plugin-update-notifier';
 import type { StreamingUIController } from './streaming-ui';
@@ -215,8 +215,7 @@ export class SessionEventHandler {
 
   getTurnElapsedText(): string | null {
     if (!this.turnTiming.isActive()) return null;
-    const sec = Math.floor(this.turnTiming.activeElapsedMs() / 1000);
-    return `${sec}s`;
+    return formatTurnDuration(this.turnTiming.activeElapsedMs());
   }
 
   getIsPaused(): boolean { return this.turnTiming.paused; }
@@ -425,8 +424,7 @@ export class SessionEventHandler {
     // Turn timing: record the active duration and append a status entry.
     const timingResult = this.turnTiming.finish();
     if (timingResult !== null) {
-      const sec = Math.max(0, Math.floor(timingResult.activeDurationMs / 1000));
-      const durationStr = sec <= 1 ? '1s' : `${sec}s`;
+      const durationStr = formatTurnDuration(timingResult.activeDurationMs);
       let text: string;
       switch (event.reason) {
         case 'completed':
