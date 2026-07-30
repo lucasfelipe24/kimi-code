@@ -2446,7 +2446,7 @@ export class KimiTUI {
 
     if (
       activityModeKey === this.lastActivityMode &&
-      (effectiveMode === 'waiting' || effectiveMode === 'thinking' || effectiveMode === 'tool')
+      (effectiveMode === 'waiting' || effectiveMode === 'thinking' || effectiveMode === 'tool' || effectiveMode === 'composing')
     ) {
       if (placeSpinnerInAgentSwarm) {
         this.syncAgentSwarmActivitySpinner(this.state.activitySpinner?.instance);
@@ -2838,10 +2838,10 @@ export class KimiTUI {
       const text = this.sessionEventHandler.getTurnElapsedText();
       const paused = this.sessionEventHandler.getIsPaused();
       if (this.timingSpinner && text !== null) {
-        this.timingSpinner.setLabel(paused ? `Paused · waiting · ${text}` : text);
+        this.timingSpinner.setLabel(paused ? `Paused · waiting · ${text}` : `running · ${text}`);
       }
       if (this.thinkingTimingText) {
-        this.thinkingTimingText.setText(text !== null ? `  ${text}` : '');
+        this.thinkingTimingText.setText(text !== null ? `  running · ${text}` : '');
       }
       this.state.ui.requestRender();
     }, 1000);

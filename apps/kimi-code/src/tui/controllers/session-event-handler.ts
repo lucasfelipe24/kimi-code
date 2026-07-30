@@ -581,10 +581,15 @@ export class SessionEventHandler {
     // token arrives. Keep the moon up until actual thinking text shows up.
     if (event.delta.trim().length === 0 && !streamingUI.hasThinkingDraft()) return;
     streamingUI.appendThinkingDelta(event.delta);
-    this.host.patchLivePane({ mode: 'idle' });
+    // Update streamingPhase FIRST so that when updateActivityPane runs it
+    // sees the correct phase. Calling patchLivePane before setAppState would
+    // trigger an intermediate 'idle' render that kills the moon spinner, stops
+    // the timing clock, and clears the timing reference — causing the timing
+    // display to blink out and back in.
     if (state.appState.streamingPhase !== 'thinking') {
       this.host.setAppState({ streamingPhase: 'thinking', streamingStartTime: Date.now() });
     }
+    this.host.patchLivePane({ mode: 'idle' });
     streamingUI.scheduleFlush();
   }
 
@@ -600,14 +605,18 @@ export class SessionEventHandler {
     }
     streamingUI.appendAssistantDelta(event.delta);
 
+    // Update streamingPhase FIRST so the activity pane transitions directly
+    // from waiting/tool to composing, without an intermediate idle state that
+    // would kill the spinner and the timing display (same reasoning as the
+    // thinking-delta handler above).
+    if (state.appState.streamingPhase !== 'composing') {
+      this.host.setAppState({ streamingPhase: 'composing', streamingStartTime: Date.now() });
+    }
     this.host.patchLivePane({
       mode: 'idle',
       pendingApproval: null,
       pendingQuestion: null,
     });
-    if (state.appState.streamingPhase !== 'composing') {
-      this.host.setAppState({ streamingPhase: 'composing', streamingStartTime: Date.now() });
-    }
     streamingUI.scheduleFlush();
   }
 

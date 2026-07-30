@@ -16,7 +16,6 @@ import {
 } from '@moonshot-ai/kimi-code-sdk';
 
 import { createKimiCodeUserAgent } from '#/cli/version';
-import { fetchCatalogOrBuiltIn } from '#/utils/catalog-fetch';
 import { ChoicePickerComponent } from '../components/dialogs/choice-picker';
 import {
   CustomRegistryImportDialogComponent,
