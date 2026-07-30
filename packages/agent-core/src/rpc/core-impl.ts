@@ -369,12 +369,14 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
         );
       }
     };
+    await this.pluginsReady;
     const agentCatalog = new SessionAgentProfileCatalog({
       workDir,
       brandHomeDir: this.homeDir,
       osHomeDir: this.userHomeDir,
       extraDirs: config.extraAgentDirs,
       explicitFiles: options.agentFiles,
+      pluginRoots: this.plugins.pluginAgentRoots(),
       warn: (message, error) => {
         agentCatalogWarnings.push({ message, error });
       },
@@ -439,6 +441,7 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
       telemetry: sessionTelemetry,
       pluginSessionStarts,
       pluginCommands,
+      pluginSystemPrompts: this.plugins.enabledSystemPrompts(),
       appVersion: this.appVersion,
       additionalDirs,
       drainAgentTasksOnStop: options.drainAgentTasksOnStop,
@@ -520,6 +523,7 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
       kaos?: Kaos;
       persistenceKaos?: Kaos;
       forcePluginSessionStartReminder?: boolean;
+      refreshPluginAgents?: boolean;
     },
   ): Promise<ResumeSessionResult> {
     const summary = await this.sessionStore.get(input.sessionId);
@@ -589,6 +593,9 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
       agents: {
         userHomeDir: this.userHomeDir,
         extraDirs: config.extraAgentDirs,
+        pluginRoots:
+          overrides.refreshPluginAgents === true ? this.plugins.pluginAgentRoots() : undefined,
+        refreshPluginAgents: overrides.refreshPluginAgents,
       },
       mcpConfig,
       experimentalFlags: this.experimentalFlags,
@@ -597,6 +604,7 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
       initializeMainAgent: false,
       pluginSessionStarts,
       pluginCommands,
+      pluginSystemPrompts: this.plugins.enabledSystemPrompts(),
       appVersion: this.appVersion,
       additionalDirs,
     });
@@ -606,6 +614,9 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
       warning = resumeResult.warning;
       await session.assertMainProfileSelection(input.agentProfile);
       await this.refreshSessionRuntimeConfig(session, config);
+      if (overrides.refreshPluginAgents === true) {
+        await session.writeMetadata();
+      }
     } catch (error) {
       await session.close().catch(() => {});
       withTelemetryContext(this.telemetry, { sessionId: summary.id }).track('session_load_failed', {
@@ -649,7 +660,10 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
     }
     return this.resumeSessionWithOverrides(
       { sessionId: summary.id },
-      { forcePluginSessionStartReminder: input.forcePluginSessionStartReminder },
+      {
+        forcePluginSessionStartReminder: input.forcePluginSessionStartReminder,
+        refreshPluginAgents: true,
+      },
     );
   }
 
@@ -1289,10 +1303,10 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
   }
 
   async reloadPlugins(_: EmptyPayload): Promise<ReloadPluginsResult> {
+    let summary: ReloadPluginsResult;
     try {
-      const summary = await this.plugins.reload();
+      summary = await this.plugins.reload();
       this.pluginsLoadError = undefined;
-      return summary;
     } catch (error) {
       this.pluginsLoadError = error instanceof Error ? error : new Error(String(error));
       throw new KimiError(
@@ -1301,6 +1315,14 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
         { cause: error, details: { kimiHomeDir: this.homeDir } },
       );
     }
+    // Live sessions pick up the reloaded plugin system-prompt contributions
+    // here — the same point where plugin skills take effect. Install / enable
+    // / disable / remove without a reload leave live prompts unchanged.
+    const pluginSystemPrompts = this.plugins.enabledSystemPrompts();
+    for (const session of this.sessions.values()) {
+      await session.setPluginSystemPrompts(pluginSystemPrompts);
+    }
+    return summary;
   }
 
   async getPluginInfo({ id }: GetPluginInfoPayload): Promise<PluginInfo> {

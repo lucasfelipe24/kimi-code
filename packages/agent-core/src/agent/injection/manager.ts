@@ -11,7 +11,7 @@ import { ToolsDiffInjector } from './tools-diff';
 import { WorkflowModeInjector } from './workflow-mode';
 
 const ACTIVE_BACKGROUND_TASK_GUIDANCE =
-  'The conversation was compacted, so the earlier messages that started these background tasks are gone — but the tasks are still running from before. Do not start duplicates. Use TaskOutput to fetch a task’s result, TaskList to list them, and TaskStop to cancel one.';
+  'The conversation was compacted, so the earlier messages that started these background tasks are gone — but the tasks are still running from before. Do not start duplicates. Use TaskList to list them, TaskOutput for a non-blocking status/output snapshot, and TaskStop to cancel one — completion arrives via automatic notification.';
 
 export class InjectionManager {
   private readonly injectors: DynamicInjector[];
