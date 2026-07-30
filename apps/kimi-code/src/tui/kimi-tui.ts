@@ -20,6 +20,7 @@ import {
   type Focusable,
   getCapabilities,
   Spacer,
+  Text,
 } from '@moonshot-ai/pi-tui';
 import { resolve } from 'pathe';
 
@@ -327,6 +328,9 @@ export class KimiTUI {
   private readonly migrateOnly: boolean;
   private startupNotice: string | undefined;
   private lastActivityMode: string | undefined;
+  private turnTimingInterval: ReturnType<typeof setInterval> | undefined;
+  private timingSpinner: MoonLoader | null = null;
+  private thinkingTimingText: Text | null = null;
   private currentLoadingTip: { kind: LoadingTipKind; tip: string | undefined } | undefined =
     undefined;
   private lastHistoryContent: string | undefined;
@@ -859,6 +863,9 @@ export class KimiTUI {
     this.tasksBrowserController.close();
     this.btwPanelController.clear();
     this.stopActivitySpinner();
+    this.stopTurnTimingClock();
+    this.timingSpinner = null;
+    this.thinkingTimingText = null;
     this.streamingUI.disposeActiveCompactionBlock();
     this.streamingUI.resetToolUi();
     this.disposeTranscriptChildren();
@@ -1291,6 +1298,7 @@ export class KimiTUI {
   }
 
   failSessionRequest(message: string): void {
+    this.sessionEventHandler.turnTimingReset();
     this.setAppState({ streamingPhase: 'idle' });
     this.resetLivePane();
     this.showError(message);
@@ -1722,6 +1730,9 @@ export class KimiTUI {
     this.streamingUI.resetToolCallState();
     this.streamingUI.resetToolUi();
     this.sessionEventHandler.resetRuntimeState();
+    this.stopTurnTimingClock();
+    this.timingSpinner = null;
+    this.thinkingTimingText = null;
     this.tasksBrowserController.close();
     this.btwPanelController.clear();
     this.state.footer.setBackgroundCounts({ bashTasks: 0, agentTasks: 0, workflowTasks: 0 });
@@ -2438,6 +2449,18 @@ export class KimiTUI {
     this.lastActivityMode = activityModeKey;
     this.state.activityContainer.clear();
 
+    // Clear stale references; re-created as needed below.
+    this.thinkingTimingText = null;
+
+    // Manage the turn-timing clock: run it during non-idle phases.
+    if (effectiveMode === 'idle' || effectiveMode === 'session' || effectiveMode === 'hidden') {
+      this.stopTurnTimingClock();
+      this.timingSpinner = null;
+      this.thinkingTimingText = null;
+    } else {
+      this.startTurnTimingClock();
+    }
+
     switch (effectiveMode) {
       case 'hidden':
         this.stopActivitySpinner();
@@ -2446,6 +2469,7 @@ export class KimiTUI {
         return;
       case 'waiting': {
         const spinner = this.ensureActivitySpinner('moon');
+        this.timingSpinner = spinner;
         this.syncAgentSwarmActivitySpinner(placeSpinnerInAgentSwarm ? spinner : undefined);
         if (placeSpinnerInAgentSwarm) break;
         this.state.activityContainer.addChild(
@@ -2460,12 +2484,20 @@ export class KimiTUI {
       case 'thinking': {
         this.stopActivitySpinner();
         this.syncAgentSwarmActivitySpinner(undefined);
+        const timingText = this.sessionEventHandler.getTurnElapsedText();
+        if (timingText !== null) {
+          this.thinkingTimingText = new Text(`  ${timingText}`, 0, 0);
+          this.state.activityContainer.addChild(this.thinkingTimingText);
+        } else {
+          this.thinkingTimingText = null;
+        }
         break;
       }
       case 'composing': {
         const spinner = this.ensureActivitySpinner('braille', 'working...', (s) =>
           currentTheme.fg('primary', s),
         );
+        this.timingSpinner = spinner;
         this.syncAgentSwarmActivitySpinner(undefined);
         this.state.activityContainer.addChild(
           new ActivityPaneComponent({
@@ -2478,6 +2510,7 @@ export class KimiTUI {
       }
       case 'tool': {
         const spinner = this.ensureActivitySpinner('moon');
+        this.timingSpinner = spinner;
         this.syncAgentSwarmActivitySpinner(placeSpinnerInAgentSwarm ? spinner : undefined);
         if (placeSpinnerInAgentSwarm) break;
         this.state.activityContainer.addChild(
@@ -2791,6 +2824,28 @@ export class KimiTUI {
     }
   }
 
+  private startTurnTimingClock(): void {
+    if (this.turnTimingInterval !== undefined) return;
+    this.turnTimingInterval = setInterval(() => {
+      const text = this.sessionEventHandler.getTurnElapsedText();
+      const paused = this.sessionEventHandler.getIsPaused();
+      if (this.timingSpinner && text !== null) {
+        this.timingSpinner.setLabel(paused ? `Paused · waiting · ${text}` : text);
+      }
+      if (this.thinkingTimingText) {
+        this.thinkingTimingText.setText(text !== null ? `  ${text}` : '');
+      }
+      this.state.ui.requestRender();
+    }, 1000);
+  }
+
+  private stopTurnTimingClock(): void {
+    if (this.turnTimingInterval !== undefined) {
+      clearInterval(this.turnTimingInterval);
+      this.turnTimingInterval = undefined;
+    }
+  }
+
   // =========================================================================
   // Dialogs / Selectors
   // =========================================================================
@@ -3019,6 +3074,7 @@ export class KimiTUI {
   }
 
   private showApprovalPanel(payload: ApprovalPanelData): void {
+    this.sessionEventHandler.onHumanWait();
     this.patchLivePane({ pendingApproval: { data: payload } });
     notifyTerminalOnce(this.state, `approval:${payload.id}`, {
       title: 'Kimi Code approval required',
@@ -3046,6 +3102,7 @@ export class KimiTUI {
     if (this.approvalPreview !== undefined) this.closeApprovalPreview();
     this.activeApprovalPanel = undefined;
     this.patchLivePane({ pendingApproval: null });
+    this.sessionEventHandler.onHumanWaitEnd();
     this.restoreEditor();
   }
 
@@ -3086,6 +3143,7 @@ export class KimiTUI {
   }
 
   private showQuestionDialog(payload: QuestionPanelData): void {
+    this.sessionEventHandler.onHumanWait();
     this.patchLivePane({ pendingQuestion: { data: payload } });
     notifyTerminalOnce(this.state, `question:${payload.id}`, {
       title: 'Kimi Code needs your answer',
@@ -3106,6 +3164,7 @@ export class KimiTUI {
 
   private hideQuestionDialog(): void {
     this.patchLivePane({ pendingQuestion: null });
+    this.sessionEventHandler.onHumanWaitEnd();
     this.restoreEditor();
   }
 }

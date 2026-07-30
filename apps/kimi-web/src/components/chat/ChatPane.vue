@@ -15,13 +15,11 @@ import AttachmentChip from './AttachmentChip.vue';
 import MoonSpinner from '../ui/MoonSpinner.vue';
 import Spinner from '../ui/Spinner.vue';
 import Icon from '../ui/Icon.vue';
-import Tooltip from '../ui/Tooltip.vue';
 import { useConfirmDialog } from '../../composables/useConfirmDialog';
 import { copyTextToClipboard } from '../../lib/clipboard';
 import { openFileAttachment } from '../../lib/openFileAttachment';
 import {
   assistantRenderBlocks,
-  formatDuration,
   formatTokens,
   renderBlockKey,
   turnBlocks,
@@ -70,6 +68,9 @@ const props = withDefaults(
     working?: boolean;
     /** Switches the CSS-only working moon to the faster visual cadence. */
     fastMoon?: boolean;
+    /**
+     * Live turn timing snapshot for the sending placeholder. */
+    turnTimingSnapshot?: { elapsedText: string; paused: boolean } | null;
     /**
      * True while the session turns are being fetched (e.g. after switching to
      * a historical session). Shows a lightweight loading placeholder instead of
@@ -191,6 +192,27 @@ const streamingTurnId = computed<string | null>(() => {
 // background agents and BTW side chats never show here — the moon belongs to
 // the main conversation only.
 const showWorking = computed(() => props.working);
+
+function turnOutcomeText(turn: ChatTurn): string {
+  if (turn.durationMs === undefined) return '';
+  const sec = Math.max(0, Math.floor(turn.durationMs / 1000));
+  const duration = formatDurationInt(sec);
+  switch (turn.outcome) {
+    case 'failed': return t('conversation.failedAfter', { duration });
+    case 'blocked': return t('conversation.blockedAfter', { duration });
+    case 'cancelled': return t('conversation.cancelledAfter', { duration });
+    default: return t('conversation.completedIn', { duration });
+  }
+}
+function formatDurationInt(sec: number): string {
+  if (sec < 60) return `${sec}s`;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  if (m < 60) return s > 0 ? `${m}m ${s}s` : `${m}m`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  return rm > 0 ? `${h}h ${rm}m` : `${h}h`;
+}
 
 const emit = defineEmits<{
   openFile: [target: FilePreviewRequest];
@@ -651,9 +673,7 @@ function isStreamingRenderBlock(turn: ChatTurn, block: { sourceIndex: number }):
           <ToolCall v-else-if="blk.kind === 'tool'" :tool="blk.tool" mobile :tool-diff-panel="toolDiffPanel" @open-media="emit('openMedia', $event)" @open-file="emit('openFile', $event)" @open-tool-diff="emit('openToolDiff', $event)" @open-agent="emit('openAgent', $event)" />
         </template>
         <div v-if="turn.id !== streamingTurnId && isAssistantRunEnd(ti) && (assistantRunFinalText(ti).trim().length > 0 || turn.durationMs !== undefined)" class="a-msg-ft">
-          <Tooltip :text="`${turn.durationMs} ms`">
-            <span v-if="turn.durationMs !== undefined" class="a-duration">{{ formatDuration(turn.durationMs) }}</span>
-          </Tooltip>
+          <span class="a-duration">{{ turnOutcomeText(turn) }}</span>
           <button
             v-if="assistantRunFinalText(ti).trim().length > 0"
             class="a-cpbtn"
@@ -678,6 +698,10 @@ function isStreamingRenderBlock(turn: ChatTurn, block: { sourceIndex: number }):
          optimistic submit flag was lost but the main turn is still in flight). -->
     <div v-if="showWorking" class="sending-placeholder">
       <MoonSpinner :fast="fastMoon" />
+      <span v-if="turnTimingSnapshot" class="sending-timing">
+        {{ turnTimingSnapshot.paused ? t('conversation.waitingForUser') : t('conversation.running') }}
+        · {{ turnTimingSnapshot.elapsedText }}
+      </span>
     </div>
 
     <!-- Inline queue — pending user messages shown after the running turn.
@@ -1122,6 +1146,13 @@ function isStreamingRenderBlock(turn: ChatTurn, block: { sourceIndex: number }):
 .sending-placeholder {
   align-self: flex-start;
   padding: 10px 0;
+  display: flex;
+  align-items: center;
+}
+.sending-timing {
+  color: var(--color-text-muted);
+  font-size: var(--ui-font-size-sm);
+  margin-left: 0.5rem;
 }
 
 /* Skill activation card (replaces raw <kimi-skill-loaded> XML) */

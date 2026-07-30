@@ -48,6 +48,7 @@ import {
   SESSIONS_INITIAL_PAGE_SIZE,
   useWorkspaceState,
 } from './client/useWorkspaceState';
+import { TurnTiming } from '../lib/turnTiming';
 
 const appearance = useAppearance();
 const notification = useNotification();
@@ -73,6 +74,7 @@ import type {
   KimiEventConnection,
   KimiEventMeta,
   ThinkingLevel,
+  TurnOutcome,
 } from '../api/types';
 import { createInitialState, reduceAppEvent, type CompactionStatus, type KimiClientState } from '../api/daemon/eventReducer';
 import { isPlaceholderSessionUsage, toAppEvent } from '../api/daemon/mappers';
@@ -433,6 +435,62 @@ const rawState: ExtendedState = reactive({
   sessionsInitialCountByWorkspace: {},
   sessionsFullyLoaded: false,
 });
+
+// ── Turn timing tracking (client-side) ──
+const turnTiming = new TurnTiming();
+let localTurnSeq = 0;
+const turnTimingClock = ref(0);
+let turnTimingInterval: ReturnType<typeof setInterval> | null = null;
+
+function startTurnTimingClock(): void {
+  if (turnTimingInterval) return;
+  turnTimingInterval = setInterval(() => {
+    turnTimingClock.value = turnTimingClock.value + 1;
+  }, 1000);
+}
+
+function stopTurnTimingClock(): void {
+  if (turnTimingInterval) {
+    clearInterval(turnTimingInterval);
+    turnTimingInterval = null;
+  }
+}
+
+const turnTimingSnapshot = computed<{ elapsedText: string; paused: boolean } | null>(() => {
+  void turnTimingClock.value; // touch for reactivity
+  if (!turnTiming.isActive()) return null;
+  const elapsedMs = turnTiming.activeElapsedMs();
+  const sec = Math.max(0, Math.floor(elapsedMs / 1000));
+  return { elapsedText: `${sec}s`, paused: turnTiming.isPaused() };
+});
+
+function applyTurnOutcome(sid: string, outcome: TurnOutcome, activeDurationMs: number): void {
+  const msgs = rawState.messagesBySession[sid] ?? [];
+  let lastAssistantIdx = -1;
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i]!.role === 'assistant') {
+      lastAssistantIdx = i;
+      break;
+    }
+  }
+  if (lastAssistantIdx !== -1) {
+    const updated = [...msgs];
+    updated[lastAssistantIdx] = { ...updated[lastAssistantIdx]!, durationMs: activeDurationMs, outcome };
+    rawState.messagesBySession = { ...rawState.messagesBySession, [sid]: updated };
+  } else {
+    // No assistant message — create a synthetic one to carry the outcome
+    const marker: import('../api/types').AppMessage = {
+      id: `outcome_${sid}_${Date.now()}`,
+      sessionId: sid,
+      role: 'assistant',
+      content: [],
+      createdAt: new Date().toISOString(),
+      durationMs: activeDurationMs,
+      outcome,
+    };
+    rawState.messagesBySession = { ...rawState.messagesBySession, [sid]: [...msgs, marker] };
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Draft mode staging (no active session yet).
@@ -906,11 +964,34 @@ function processEvent(appEvent: AppEvent, meta: KimiEventMeta): void {
   // advanced past it) must not drain a second queued message.
   const prevSeq = rawState.lastSeqBySession[meta.sessionId] ?? 0;
   const wasMainTurnActive = rawState.turnActiveBySession[meta.sessionId] ?? false;
+
+  // ── Turn timing tracking ──
+  if (appEvent.type === 'turnActiveChanged' && appEvent.active && meta.seq > prevSeq) {
+    turnTiming.start(`${appEvent.sessionId}:turn:${++localTurnSeq}`);
+    startTurnTimingClock();
+  }
+
   // meta carries wire-level seq/sessionId so the reducer can advance
   // lastSeqBySession[sessionId] = seq. Compaction completion appends a
   // persistent divider marker in the reducer (TUI parity: the scrollback
   // is kept, only a marker line records the compaction).
   applyEvent(appEvent, meta.sessionId, meta.seq);
+
+  // Turn timing: end human wait when approvals/questions are resolved
+  if (appEvent.type === 'approvalResolved' || appEvent.type === 'approvalExpired') {
+    const remaining = (rawState.approvalsBySession[appEvent.sessionId] ?? []).length;
+    if (remaining === 0) {
+      const qs = (rawState.questionsBySession[appEvent.sessionId] ?? []).length;
+      if (qs === 0) turnTiming.endHumanWait();
+    }
+  }
+  if (appEvent.type === 'questionAnswered' || appEvent.type === 'questionDismissed') {
+    const remaining = (rawState.questionsBySession[appEvent.sessionId] ?? []).length;
+    if (remaining === 0) {
+      const apps = (rawState.approvalsBySession[appEvent.sessionId] ?? []).length;
+      if (apps === 0) turnTiming.endHumanWait();
+    }
+  }
 
   const sideTarget = sideChat.sideChatTargetBySession.value[meta.sessionId];
   if (sideTarget) {
@@ -965,6 +1046,18 @@ function processEvent(appEvent: AppEvent, meta: KimiEventMeta): void {
     meta.seq > prevSeq
   ) {
     const reason = appEvent.reason;
+
+    // Turn timing: finish tracker
+    const result = turnTiming.finish();
+    if (result !== null) {
+      const outcome: TurnOutcome = reason === 'cancelled' ? 'cancelled'
+        : reason === 'failed' ? 'failed'
+        : reason === 'blocked' ? 'blocked'
+        : 'completed';
+      applyTurnOutcome(appEvent.sessionId, outcome, result.activeDurationMs);
+    }
+    stopTurnTimingClock();
+
     // wasMainTurnActive was captured BEFORE the reducer consumed this event
     // (the reducer clears turnActiveBySession on turn end), so it is the only
     // remaining signal that this client witnessed a live turn — pass it down
@@ -1009,11 +1102,13 @@ function processEvent(appEvent: AppEvent, meta: KimiEventMeta): void {
   // question, and not for questions restored from a snapshot) rather than the
   // awaitingQuestion status flip, which can arrive in any order relative to it.
   if (appEvent.type === 'questionRequested') {
+    turnTiming.startHumanWait();
     onQuestionRequested(appEvent.sessionId, appEvent.question);
   }
 
   // The agent needs approval for a tool call — surface it so the user comes back.
   if (appEvent.type === 'approvalRequested') {
+    turnTiming.startHumanWait();
     onApprovalRequested(appEvent.sessionId, appEvent.approval);
   }
 }
@@ -2841,6 +2936,7 @@ export function useKimiWebClient() {
     working,
     isStartingFirstPrompt,
     fastMoon: appearance.fastMoon,
+    turnTimingSnapshot,
 
     // Model + Provider reactive state
     models: modelProvider.models,

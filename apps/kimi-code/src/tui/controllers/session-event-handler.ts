@@ -80,6 +80,7 @@ import type { ColorToken } from '#/tui/theme';
 import { errorReportHintLine } from '../constant/feedback';
 import { formatStepDebugTiming } from '#/utils/usage/debug-timing';
 import { nextTranscriptId } from '../utils/transcript-id';
+import { TurnTiming } from '../utils/turn-timing';
 import type { BtwPanelController } from './btw-panel';
 import { isPluginMcpToolName, PluginUpdateNotifier } from './plugin-update-notifier';
 import type { StreamingUIController } from './streaming-ui';
@@ -170,8 +171,10 @@ export class SessionEventHandler {
   private queuedGoalPromotionPending = false;
   private queuedGoalPromotionInFlight = false;
   private queuedGoalPromotionTimer: ReturnType<typeof setTimeout> | undefined;
+  readonly turnTiming = new TurnTiming();
 
   resetRuntimeState(): void {
+    this.turnTiming.reset();
     this.backgroundTasks.clear();
     this.backgroundTaskTranscriptedTerminal.clear();
     this.subAgentEventHandler.resetRuntimeState();
@@ -202,6 +205,23 @@ export class SessionEventHandler {
   syncAgentSwarmActivitySpinner(spinner: MoonLoader | undefined): void {
     this.subAgentEventHandler.syncAgentSwarmActivitySpinner(spinner);
   }
+
+  // ---------------------------------------------------------------------------
+  // Turn timing
+  // ---------------------------------------------------------------------------
+
+  onHumanWait(): void { this.turnTiming.startHumanWait(); }
+  onHumanWaitEnd(): void { this.turnTiming.endHumanWait(); }
+
+  getTurnElapsedText(): string | null {
+    if (!this.turnTiming.isActive()) return null;
+    const sec = Math.floor(this.turnTiming.activeElapsedMs() / 1000);
+    return `${sec}s`;
+  }
+
+  getIsPaused(): boolean { return this.turnTiming.paused; }
+
+  turnTimingReset(): void { this.turnTiming.reset(); }
 
   startSubscription(): void {
     const { host } = this;
@@ -332,6 +352,7 @@ export class SessionEventHandler {
     }
     this.clearAgentSwarmProgress();
     this.host.streamingUI.resetToolUi();
+    this.turnTiming.start(String(event.turnId));
     this.host.streamingUI.setStep(0);
     this.host.patchLivePane({
       mode: 'waiting',
@@ -400,6 +421,38 @@ export class SessionEventHandler {
     if (todos.length > 0 && todos.every((t) => t.status === 'done')) {
       this.host.streamingUI.setTodoList([]);
     }
+
+    // Turn timing: record the active duration and append a status entry.
+    const timingResult = this.turnTiming.finish();
+    if (timingResult !== null) {
+      const sec = Math.max(0, Math.floor(timingResult.activeDurationMs / 1000));
+      const durationStr = sec <= 1 ? '1s' : `${sec}s`;
+      let text: string;
+      switch (event.reason) {
+        case 'completed':
+          text = `Completed in ${durationStr}`;
+          break;
+        case 'failed':
+          text = `Failed after ${durationStr}`;
+          break;
+        case 'blocked':
+          text = `Blocked after ${durationStr}`;
+          break;
+        case 'cancelled':
+          text = `Cancelled after ${durationStr}`;
+          break;
+        default:
+          text = `Completed in ${durationStr}`;
+      }
+      this.host.appendTranscriptEntry({
+        id: nextTranscriptId(),
+        kind: 'status',
+        turnId: String(event.turnId),
+        renderMode: 'plain',
+        content: text,
+      });
+    }
+
     this.host.streamingUI.resetToolUi();
     this.host.streamingUI.finalizeTurn(sendQueued);
     this.renderPendingModelBlockedFallback();

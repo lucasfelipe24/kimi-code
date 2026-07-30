@@ -5912,4 +5912,205 @@ describe('transcript step and assistant folding', () => {
     const lastAssistant = assistants.at(-1)!;
     expect(stripSgr(lastAssistant.render(120).join('\n'))).toContain(`msg-${cycles - 1}`);
   });
+
+  describe('turn timing', () => {
+    it('records "Completed in 5s" when a turn completes after 5 seconds', async () => {
+      vi.useFakeTimers();
+      try {
+        const { driver } = await makeDriver();
+        const sendQueued = vi.fn();
+
+        driver.sessionEventHandler.handleEvent(
+          { type: 'turn.started', agentId: 'main', sessionId: 'ses-1', turnId: 1 } as Event,
+          sendQueued,
+        );
+
+        vi.advanceTimersByTime(5000);
+
+        driver.sessionEventHandler.handleEvent(
+          {
+            type: 'turn.ended',
+            agentId: 'main',
+            sessionId: 'ses-1',
+            turnId: 1,
+            reason: 'completed',
+          } as Event,
+          sendQueued,
+        );
+
+        const entries = driver.state.transcriptEntries;
+        const timingEntry = entries.find((e) => e.content.includes('Completed in'));
+        expect(timingEntry).toBeDefined();
+        expect(timingEntry!.content).toBe('Completed in 5s');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('records "Cancelled after 3s" when a turn is cancelled after 3 seconds', async () => {
+      vi.useFakeTimers();
+      try {
+        const { driver } = await makeDriver();
+        const sendQueued = vi.fn();
+
+        driver.sessionEventHandler.handleEvent(
+          { type: 'turn.started', agentId: 'main', sessionId: 'ses-1', turnId: 2 } as Event,
+          sendQueued,
+        );
+
+        vi.advanceTimersByTime(3000);
+
+        driver.sessionEventHandler.handleEvent(
+          {
+            type: 'turn.ended',
+            agentId: 'main',
+            sessionId: 'ses-1',
+            turnId: 2,
+            reason: 'cancelled',
+          } as Event,
+          sendQueued,
+        );
+
+        const entries = driver.state.transcriptEntries;
+        const timingEntry = entries.find((e) => e.content.includes('Cancelled after'));
+        expect(timingEntry).toBeDefined();
+        expect(timingEntry!.content).toBe('Cancelled after 3s');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('records "Failed after 7s" when a turn fails after 7 seconds', async () => {
+      vi.useFakeTimers();
+      try {
+        const { driver } = await makeDriver();
+        const sendQueued = vi.fn();
+
+        driver.sessionEventHandler.handleEvent(
+          { type: 'turn.started', agentId: 'main', sessionId: 'ses-1', turnId: 3 } as Event,
+          sendQueued,
+        );
+
+        vi.advanceTimersByTime(7000);
+
+        driver.sessionEventHandler.handleEvent(
+          {
+            type: 'turn.ended',
+            agentId: 'main',
+            sessionId: 'ses-1',
+            turnId: 3,
+            reason: 'failed',
+            error: { code: 'internal', message: 'oops' },
+          } as Event,
+          sendQueued,
+        );
+
+        const entries = driver.state.transcriptEntries;
+        const timingEntry = entries.find((e) => e.content.includes('Failed after'));
+        expect(timingEntry).toBeDefined();
+        expect(timingEntry!.content).toBe('Failed after 7s');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('records "Blocked after 2s" when a turn is blocked after 2 seconds', async () => {
+      vi.useFakeTimers();
+      try {
+        const { driver } = await makeDriver();
+        const sendQueued = vi.fn();
+
+        driver.sessionEventHandler.handleEvent(
+          { type: 'turn.started', agentId: 'main', sessionId: 'ses-1', turnId: 4 } as Event,
+          sendQueued,
+        );
+
+        vi.advanceTimersByTime(2000);
+
+        driver.sessionEventHandler.handleEvent(
+          {
+            type: 'turn.ended',
+            agentId: 'main',
+            sessionId: 'ses-1',
+            turnId: 4,
+            reason: 'blocked',
+          } as Event,
+          sendQueued,
+        );
+
+        const entries = driver.state.transcriptEntries;
+        const timingEntry = entries.find((e) => e.content.includes('Blocked after'));
+        expect(timingEntry).toBeDefined();
+        expect(timingEntry!.content).toBe('Blocked after 2s');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not create a timing entry when turn.ended fires without a prior turn.started', async () => {
+      const { driver } = await makeDriver();
+      const sendQueued = vi.fn();
+
+      const initialCount = driver.state.transcriptEntries.length;
+
+      driver.sessionEventHandler.handleEvent(
+        {
+          type: 'turn.ended',
+          agentId: 'main',
+          sessionId: 'ses-1',
+          turnId: 999,
+          reason: 'completed',
+        } as Event,
+        sendQueued,
+      );
+
+      expect(driver.state.transcriptEntries).toHaveLength(initialCount);
+    });
+
+    it('excludes human wait (pause) time from the active duration', async () => {
+      vi.useFakeTimers();
+      try {
+        const { driver } = await makeDriver();
+        const sendQueued = vi.fn();
+        const eventHandler = driver.sessionEventHandler as unknown as { onHumanWait(): void; onHumanWaitEnd(): void };
+
+        driver.sessionEventHandler.handleEvent(
+          { type: 'turn.started', agentId: 'main', sessionId: 'ses-1', turnId: 5 } as Event,
+          sendQueued,
+        );
+
+        // 2s of active work
+        vi.advanceTimersByTime(2000);
+
+        // 5s of human wait (approval panel)
+        eventHandler.onHumanWait();
+        vi.advanceTimersByTime(5000);
+
+        // End wait
+        eventHandler.onHumanWaitEnd();
+
+        // 3s more of active work
+        vi.advanceTimersByTime(3000);
+
+        driver.sessionEventHandler.handleEvent(
+          {
+            type: 'turn.ended',
+            agentId: 'main',
+            sessionId: 'ses-1',
+            turnId: 5,
+            reason: 'completed',
+          } as Event,
+          sendQueued,
+        );
+
+        const entries = driver.state.transcriptEntries;
+        const timingEntry = entries.find((e) => e.content.includes('Completed in'));
+        expect(timingEntry).toBeDefined();
+        // Active duration should be 2s + 3s = 5s, not 10s
+        expect(timingEntry!.content).toBe('Completed in 5s');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });

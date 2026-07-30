@@ -161,6 +161,8 @@ export type ImageSource =
   | { kind: 'base64'; mediaType: string; data: string }
   | { kind: 'file'; fileId: string };
 
+export type TurnOutcome = 'completed' | 'failed' | 'blocked' | 'cancelled';
+
 export interface AppMessage {
   id: string;
   sessionId: string;
@@ -171,6 +173,7 @@ export interface AppMessage {
   parentMessageId?: string;
   /** Client-side measured duration from turn.started to turn.ended (ms). */
   durationMs?: number;
+  outcome?: TurnOutcome;
   metadata?: Record<string, unknown>;
 }
 

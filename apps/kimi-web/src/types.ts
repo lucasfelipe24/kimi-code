@@ -264,6 +264,7 @@ export interface ChatTurn {
   createdAt?: string;
   /** Client-side measured duration from turn.started to turn.ended (ms). */
   durationMs?: number;
+  outcome?: 'completed' | 'failed' | 'blocked' | 'cancelled';
   /** Skill activation metadata: when a user turn was triggered by a slash
       command (/skill), this holds the skill name and args for display. */
   skillActivation?: { name: string; args?: string };

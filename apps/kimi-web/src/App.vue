@@ -853,6 +853,7 @@ function openPr(url: string): void {
       :working="client.working.value"
       :starting="client.isStartingFirstPrompt.value"
       :fast-moon="client.fastMoon.value"
+      :turn-timing-snapshot="client.turnTimingSnapshot.value"
       :file-reload-key="client.activeSessionId.value"
       :session-loading="client.sessionLoading.value"
       :compaction="client.compaction.value"
