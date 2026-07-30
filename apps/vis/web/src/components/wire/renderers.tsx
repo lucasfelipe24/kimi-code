@@ -559,6 +559,27 @@ export const WIRE_RENDERERS: RendererMap = {
     headline: () => ({ main: <Dim>swarm mode exited</Dim> }),
   },
 
+  'workflow_mode.enter': {
+    tone: 'subagent',
+    label: 'workflow↻',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2">
+          <Pill tone="subagent" variant="soft">
+            enter
+          </Pill>
+          <Mono>{r.trigger}</Mono>
+        </span>
+      ),
+    }),
+  },
+
+  'workflow_mode.exit': {
+    tone: 'subagent',
+    label: 'workflow✓',
+    headline: () => ({ main: <Dim>workflow mode exited</Dim> }),
+  },
+
   'goal.create': {
     tone: 'lifecycle',
     label: 'goal+',

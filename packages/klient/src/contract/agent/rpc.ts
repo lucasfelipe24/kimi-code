@@ -177,6 +177,17 @@ export const agentTaskInfoSchema = z.discriminatedUnion('kind', [
     toolCallId: z.string().optional(),
     ...taskInfoBaseFields,
   }),
+  z.object({
+    kind: z.literal('workflow'),
+    workflowName: z.string(),
+    phase: z.string().optional(),
+    phases: z
+      .array(z.object({ title: z.string(), detail: z.string().optional() }))
+      .optional(),
+    phaseIndex: z.number().optional(),
+    agentCalls: z.number().optional(),
+    ...taskInfoBaseFields,
+  }),
 ]);
 
 export const stopTaskPayloadSchema = z.object({

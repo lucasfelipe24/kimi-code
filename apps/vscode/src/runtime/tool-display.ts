@@ -28,6 +28,8 @@ export function describeToolDisplay(display: ToolInputDisplay): string {
       return display.plan;
     case "goal_start":
       return display.objective;
+    case "workflow_run":
+      return display.description;
     case "generic":
       return display.summary;
   }
@@ -69,6 +71,7 @@ export function toLegacyDisplay(display: ToolInputDisplay): DisplayBlock[] {
     case "task_stop":
     case "plan_review":
     case "goal_start":
+    case "workflow_run":
     case "generic":
       return [{ type: "brief", text: describeToolDisplay(display) }];
   }
