@@ -1,0 +1,7 @@
+schema_version=1
+release_version=2.2.8-ca3c8c90
+platform=linux-x64
+binary_sha256=924aa98213f68026e91562dfd52fcee1fc1f0e4e76510610b6aba8f787ad4a43
+fonts_version=6610fed257f65cb5f837ec1156f3d940caf0ca4622c11349535a84e8bbb81966
+fonts_installed=true
+asset_base_url=https://statics.moonshot.cn/kimi-ppt-cli-native-inside/2.2.8-ca3c8c90

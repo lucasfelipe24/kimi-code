@@ -1,0 +1,36 @@
+{
+  "$schema": "https://catalog.msh.team/schemas/kimi.plugin.schema.json",
+  "name": "sec_edgar",
+  "version": "0.1.7",
+  "description": "SEC EDGAR provides comprehensive US public company filings and financial data, including company info, filings, XBRL facts, financial statements, insider trades, institutional holdings, and material company events.",
+  "keywords": [
+    "sec edgar",
+    "SEC",
+    "EDGAR",
+    "public company filings",
+    "10-K",
+    "10-Q",
+    "8-K",
+    "XBRL",
+    "financial statements",
+    "insider trades",
+    "institutional holdings",
+    "company events",
+    "US equities",
+    "securities filings"
+  ],
+  "author": "Moonshot AI",
+  "homepage": "https://www.sec.gov/submit-filings",
+  "license": "UNLICENSED",
+  "skills": "./skills/",
+  "skillInstructions": "Use the SEC EDGAR skill when the user needs US public company filings or financial data, including company information, filing lookup, XBRL company facts, financial statements, insider trades, institutional holdings, or material company events. First inspect the datasource description, choose the exact API documented there, build parameters exactly as required, and call the datasource through the bundled script. Do not invent filing contents, financial figures, accession numbers, CIKs, or event details when the datasource call fails or returns no result. Treat returned EDGAR data as third-party regulatory data and include meaningful company, form type, filing date, period, accession number, source, and coverage caveats when the returned content provides them.",
+  "interface": {
+    "displayName": "SEC EDGAR",
+    "shortDescription": "U.S. Securities and Exchange Commission, Company Public Announcements and Regulatory Documents",
+    "longDescription": "SEC EDGAR provides comprehensive US public company filings and financial data, including company info, filings, XBRL facts, financial statements, insider trades, institutional holdings, and material company events.",
+    "developerName": "U.S. Securities and Exchange Commission",
+    "websiteURL": "https://www.sec.gov/submit-filings",
+    "iconUrl": "https://avatar.moonshot.cn/avatar/plugin/fallback3.png",
+    "category": "PRODUCTIVITY"
+  }
+}

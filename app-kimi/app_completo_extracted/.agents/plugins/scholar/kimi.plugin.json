@@ -1,0 +1,34 @@
+{
+  "$schema": "https://catalog.deva.msh.team/schemas/kimi.plugin.schema.json",
+  "name": "scholar",
+  "version": "0.1.4",
+  "description": "A freely accessible web search engine that indexes the full text or metadata of scholarly literature across an array of publishing formats and disciplines. It provides comprehensive academic research capabilities including paper search with keyword-based queries returning titles, authors, abstracts, citation counts, publication years and access links. Advanced search supports filtering by author names and publication year ranges. It also offers detailed author profile lookups with academic metrics including h-index, i10-index, total citations, research interests, and major publications. Suitable for academic research, literature reviews, citation analysis, and trend studies.",
+  "keywords": [
+    "scholar",
+    "academic search",
+    "scholarly literature",
+    "paper search",
+    "author profiles",
+    "citations",
+    "h-index",
+    "i10-index",
+    "literature review",
+    "citation analysis",
+    "research trends",
+    "publication metadata"
+  ],
+  "author": "Moonshot AI",
+  "homepage": "https://kimi.moonshot.cn/",
+  "license": "UNLICENSED",
+  "skills": "./skills/",
+  "skillInstructions": "Use the Scholar skill when the user needs academic literature search, paper discovery, author profile lookup, citation analysis, literature review support, or research trend analysis. First inspect the datasource description, choose the exact API documented there, build parameters exactly as required, and call the datasource through the bundled script. Use keyword queries, author filters, publication year ranges, and author-profile lookups only when the selected API supports them. Do not invent paper titles, abstracts, authors, citation counts, academic metrics, access links, or publication metadata when the datasource call fails or returns no result. Treat returned scholarly information as third-party academic search data and include meaningful author, venue, year, citation, access, and coverage caveats when the returned content provides them.",
+  "interface": {
+    "displayName": "Scholar",
+    "shortDescription": "Academic literature search, citation data, and author profile lookup.",
+    "longDescription": "A freely accessible web search engine that indexes the full text or metadata of scholarly literature across an array of publishing formats and disciplines. It provides comprehensive academic research capabilities including paper search with keyword-based queries returning titles, authors, abstracts, citation counts, publication years and access links. Advanced search supports filtering by author names and publication year ranges. It also offers detailed author profile lookups with academic metrics including h-index, i10-index, total citations, research interests, and major publications. Suitable for academic research, literature reviews, citation analysis, and trend studies.",
+    "developerName": "Moonshot AI",
+    "websiteURL": "https://kimi.moonshot.cn/",
+    "iconUrl": "https://avatar.moonshot.cn/avatar/plugin/xueshu.png",
+    "category": "PRODUCTIVITY"
+  }
+}

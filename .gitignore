@@ -32,8 +32,6 @@ docs/superpowers/
 reports/
 .superpowers/
 /plan/
-app-kimi/
-app-gpt/
 # Agent scratch / throwaway files - do not commit
 .tmp/
 HANDOVER*.md

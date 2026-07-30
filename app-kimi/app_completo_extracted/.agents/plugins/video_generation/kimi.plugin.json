@@ -1,0 +1,32 @@
+{
+  "$schema": "https://catalog.msh.team/schemas/kimi.plugin.schema.json",
+  "name": "video_generation",
+  "version": "0.1.12",
+  "description": "Create mp4 videos from text and optional image, video, or audio references through agent-gw.",
+  "keywords": [
+    "video generation",
+    "text to video",
+    "ai video",
+    "video",
+    "generate video",
+    "mp4",
+    "animation",
+    "reference image",
+    "reference video",
+    "reference audio"
+  ],
+  "author": "Moonshot AI",
+  "homepage": "https://kimi.com/",
+  "license": "UNLICENSED",
+  "skills": "./skills/",
+  "skillInstructions": "Use the video_generation skill when the user wants AI video generation from a text description, optionally guided by reference media. Build a detailed, descriptive prompt; pick a supported ratio (16:9, 4:3, 1:1, 3:4, 9:16, 21:9), resolution (480p or 720p, default 720p), and duration between 4 and 12 seconds. Convert any local reference image, video, or audio file to a public URL through agent-gw first; do not background the conversion commands. Reference limits are at most 9 images, 3 videos, and 3 audio files. Start the generate command with nohup and redirect it to a log file, then start scripts/video_generation_watch.py directly in the foreground (without nohup or &) to check that log every minute and keep the sandbox alive until generation succeeds or fails. The watcher has no timeout, so set the outer command-execution timeout to at least 15 minutes. If the outer execution times out while generation is pending, restart only the foreground watcher with the same log file; never start a duplicate generate command. Wait for the watcher to exit before reporting the result, and do not fabricate a video or a local path when the call fails.",
+  "interface": {
+    "displayName": "Video Generation",
+    "shortDescription": "Generate mp4 videos from text and reference media",
+    "longDescription": "Create an mp4 video based on a text description and optional reference media. Supports aspect ratios 16:9, 4:3, 1:1, 3:4, 9:16, and 21:9; resolutions 480p and 720p (default 720p); and durations from 4 to 12 seconds. Reference limits are 9 images, 3 videos, and 3 audio files. Results are saved locally as mp4 files.",
+    "developerName": "Moonshot AI",
+    "websiteURL": "https://kimi.com/",
+    "iconUrl": "https://avatar.moonshot.cn/avatar/plugin/video_generation.png",
+    "category": "PRODUCTIVITY"
+  }
+}

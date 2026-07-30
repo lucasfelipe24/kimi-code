@@ -1,0 +1,671 @@
+"""Kimi agent-gw 的同步客户端。
+
+覆盖的路由（除标注外均为 POST）：
+    GET  /v1/models
+    POST /v1/chat/completions       （OpenAI 兼容）
+    POST /v1/messages               （Anthropic 兼容）
+    POST /v1/messages/count_tokens
+    POST /v1/embeddings
+    POST /v1/search
+    POST /v1/fetch
+    POST /v1/files                  （multipart 文件上传，透传到 OpenGW）
+    POST /v1/tools                  （分发器：get_stock_realtime_price、nlp_*、call_data_source_tool 等）
+"""
+
+from __future__ import annotations
+
+import json as _json
+import mimetypes
+import os
+from pathlib import Path
+from typing import Any, BinaryIO, Dict, Iterator, List, Mapping, Optional, Tuple, Union
+
+import requests
+
+from . import __version__
+from .errors import (
+    APIError,
+    AuthenticationError,
+    NotFoundError,
+    PaymentRequiredError,
+    QuotaExceededError,
+    RateLimitError,
+    ServerError,
+    ToolError,
+    TransportError,
+)
+
+DEFAULT_BASE_URL = "https://agent-gw-dev.dev.kimi.team/coding"
+DEFAULT_TIMEOUT = 30.0
+DEFAULT_USER_AGENT = f"Kimi AgentGW PySDK/{__version__}"
+
+API_KEY_ENV_VAR = "KIMI_API_KEY"
+BASE_URL_ENV_VAR = "KIMI_BASE_URL"
+CHAT_ID_ENV_VAR = "KIMI_CHAT_ID"
+CONFIG_FILE = Path("~/.kimi/agent-gw.json")  # 用户家目录下的固定路径
+
+
+def _load_config_file() -> Dict[str, Any]:
+    """读 ``~/.kimi/agent-gw.json``，文件不存在返回 ``{}``。
+
+    JSON 必须是 ``{"api_key": "...", "base_url": "..."}`` 形式的对象，否则抛
+    ``ValueError`` —— 这是配置错误，不该静默吃掉。
+    """
+    path = CONFIG_FILE.expanduser()
+    if not path.is_file():
+        return {}
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as e:
+        raise ValueError(
+            f"agent-gw config file {path} exists but could not be read: {e}"
+        ) from e
+    try:
+        data = _json.loads(text)
+    except _json.JSONDecodeError as e:
+        raise ValueError(
+            f"agent-gw config file {path} is not valid JSON: {e}"
+        ) from e
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"agent-gw config file {path} must be a JSON object, got {type(data).__name__}"
+        )
+    return data
+
+
+def _cfg_str(cfg: Mapping[str, Any], *keys: str) -> Optional[str]:
+    """从 ``cfg`` 取首个非空字符串字段（自动 strip），都没值返回 ``None``。"""
+    for key in keys:
+        v = cfg.get(key)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return None
+
+
+def _resolve_api_key(explicit: Optional[str], cfg: Mapping[str, Any]) -> str:
+    """``显式参数 > KIMI_API_KEY env > JSON 配置 > 报错``"""
+    if explicit:
+        return explicit
+    env = os.environ.get(API_KEY_ENV_VAR)
+    if env and env.strip():
+        return env.strip()
+    file_val = _cfg_str(cfg, "api_key")
+    if file_val:
+        return file_val
+    raise ValueError(
+        "agent-gw API key not provided. Supply it via the api_key= argument, "
+        f"the {API_KEY_ENV_VAR} env var, or put it in {CONFIG_FILE} as "
+        '{"api_key": "sk-..."}.'
+    )
+
+
+def _resolve_base_url(explicit: Optional[str], cfg: Mapping[str, Any]) -> str:
+    """``显式参数 > KIMI_BASE_URL env > JSON 配置 ``base_url`` > DEFAULT_BASE_URL``"""
+    if explicit:
+        return explicit
+    env = os.environ.get(BASE_URL_ENV_VAR)
+    if env and env.strip():
+        return env.strip()
+    file_val = _cfg_str(cfg, "base_url")
+    if file_val:
+        return file_val
+    return DEFAULT_BASE_URL
+
+
+def _resolve_kimi_chat_id(explicit: Optional[str], cfg: Mapping[str, Any]) -> Optional[str]:
+    """``显式参数 > KIMI_CHAT_ID env > JSON 配置 ``kimi_chat_id`` > None``"""
+    if explicit and explicit.strip():
+        return explicit.strip()
+    env = os.environ.get(CHAT_ID_ENV_VAR)
+    if env and env.strip():
+        return env.strip()
+    return _cfg_str(cfg, "kimi_chat_id")
+
+
+def _strip_tool_suffix(url: str) -> str:
+    """为兼容已有 ``kimiPluginBaseUrl`` 配置，同时接受
+    ``https://host`` 和 ``https://host/v1/tools`` 两种写法。"""
+    url = url.rstrip("/")
+    for suffix in ("/v1/tools", "/v1"):
+        if url.endswith(suffix):
+            return url[: -len(suffix)]
+    return url
+
+
+class ToolResponse:
+    """``/v1/tools`` 返回信封的包装。
+
+    agent-gw 返回信封结构::
+
+        {
+          "is_success": bool,
+          "error": "...",
+          "result": {"user": [{"text": "<内层 JSON 字符串>"}]}
+        }
+    """
+
+    __slots__ = ("raw",)
+
+    def __init__(self, raw: Any):
+        # 大多数 method 返回 ``{"is_success": ..., "result": ...}`` 信封；
+        # 但有的 method（如 ``get_data_source_desc``）直接返回 plain string，
+        # 这里把非字典的响应包装成一个等价的成功信封，保持调用方代码一致。
+        if isinstance(raw, Mapping):
+            self.raw: Dict[str, Any] = dict(raw)
+        elif isinstance(raw, str):
+            self.raw = {"is_success": True, "result": {"user": [{"text": raw}]}}
+        else:
+            self.raw = {
+                "is_success": True,
+                "result": {"user": [{"text": _json.dumps(raw, ensure_ascii=False)}]},
+            }
+
+    @property
+    def is_success(self) -> bool:
+        return bool(self.raw.get("is_success"))
+
+    @property
+    def error(self) -> str:
+        err = self.raw.get("error", "")
+        return err if isinstance(err, str) else str(err)
+
+    @property
+    def is_rate_limited(self) -> bool:
+        if self.is_success:
+            return False
+        err = self.error.lower()
+        return "429" in err or "rate" in err or "limit" in err
+
+    @property
+    def text(self) -> str:
+        """首条用户文本（即内层 JSON 字符串原文）。"""
+        users = self.raw.get("result", {}).get("user", [])
+        if users and isinstance(users[0], Mapping):
+            return users[0].get("text", "") or ""
+        return ""
+
+    def json(self) -> Any:
+        """把 :attr:`text` 解析为 JSON；字段为空时返回 ``None``。"""
+        text = self.text
+        if not text:
+            return None
+        return _json.loads(text)
+
+    def raise_for_status(self) -> "ToolResponse":
+        if not self.is_success:
+            raise ToolError(self.error or "tool invocation failed", raw=self.raw)
+        return self
+
+    def __repr__(self) -> str:
+        return f"ToolResponse(is_success={self.is_success}, error={self.error!r})"
+
+
+class ToolsAPI:
+    """``POST /v1/tools`` 的封装。"""
+
+    def __init__(self, client: "AgentGwClient"):
+        self._client = client
+
+    def invoke(
+        self,
+        method: str,
+        params: Optional[Mapping[str, Any]] = None,
+        *,
+        timeout: Optional[float] = None,
+    ) -> ToolResponse:
+        body = {"method": method, "params": dict(params or {})}
+        raw = self._client._post_json("/v1/tools", body, timeout=timeout)
+        return ToolResponse(raw)
+
+    # ── Typed convenience helpers ──────────────────────────────────────────
+    def stock_realtime_price(
+        self,
+        ticker: str,
+        *,
+        time: str,
+        type: str = "realtime_price",
+        file_path: Optional[str] = None,
+        timeout: Optional[float] = None,
+    ) -> ToolResponse:
+        """调用 ``get_stock_realtime_price``。
+
+        参数:
+            ticker:    股票代码；批量时用逗号分隔，如 ``"600519.SH"`` 或
+                       ``"600519.SH,000001.SZ"``。美股需带 ``.US`` 后缀，
+                       例如 ``"AAPL.US"``。
+            time:      时间字符串 ``"YYYY-MM-DD HH:MM:SS"``。美股 iFind 期望
+                       美东时间（ET），其余市场传北京时间。
+            type:      ``"realtime_price"``（默认）或 ``"realtime_tech"``。
+            file_path: 可选的 iFind 临时文件路径，例如 ``/tmp/foo.json``。
+        """
+        params: Dict[str, Any] = {"ticker": ticker, "time": time, "type": type}
+        if file_path:
+            params["file_path"] = file_path
+        return self.invoke("get_stock_realtime_price", params, timeout=timeout)
+
+    def nlp_tokenize(self, text: str, **opts: Any) -> ToolResponse:
+        return self.invoke("nlp_tokenize", {"text": text, **opts})
+
+    def nlp_normalize(self, text: str, **opts: Any) -> ToolResponse:
+        return self.invoke("nlp_normalize", {"text": text, **opts})
+
+    def nlp_shortkeys(self, text: str, **opts: Any) -> ToolResponse:
+        return self.invoke("nlp_shortkeys", {"text": text, **opts})
+
+    def nlp_embedding(self, texts: Union[str, List[str]], **opts: Any) -> ToolResponse:
+        """调用 ``nlp_embedding``。
+
+        服务端字段名为 ``texts``（数组），单串入参会自动包成单元素列表。
+        """
+        if isinstance(texts, str):
+            texts = [texts]
+        return self.invoke("nlp_embedding", {"texts": list(texts), **opts})
+
+    def call_data_source_tool(self, params: Mapping[str, Any]) -> ToolResponse:
+        return self.invoke("call_data_source_tool", params)
+
+    def get_data_source_desc(self, params: Mapping[str, Any]) -> ToolResponse:
+        return self.invoke("get_data_source_desc", params)
+
+
+class AgentGwClient:
+    """Kimi agent-gw 的同步客户端。
+
+    ``api_key`` / ``base_url`` / ``kimi_chat_id`` 都按下面这套优先级解析（**取第一个非空**）：
+
+        1. 此处显式传入的参数
+        2. 环境变量（``KIMI_API_KEY`` / ``KIMI_BASE_URL`` / ``KIMI_CHAT_ID``）
+        3. JSON 配置文件 ``~/.kimi/agent-gw.json`` 中的对应字段
+        4. 兜底：``api_key`` 没有时抛 ``ValueError``；``base_url`` 退到
+           ``DEFAULT_BASE_URL``；``kimi_chat_id`` 没有就不发 ``X-Kimi-Chat-Id`` 头
+
+    JSON 文件示例::
+
+        {
+          "api_key":      "sk-...",
+          "base_url":     "https://agent-gw-dev.dev.kimi.team/coding",
+          "kimi_chat_id": "可选；存在则所有请求都会带 X-Kimi-Chat-Id 头"
+        }
+
+    其它参数:
+        timeout:    默认请求超时（秒）。
+        skill:      可选；写入 ``X-Kimi-Skill`` 请求头。
+        kimi_chat_id: 可选；写入 ``X-Kimi-Chat-Id`` 请求头。不传时回落到
+                      ``KIMI_CHAT_ID`` 环境变量，再不行回落到 JSON 配置文件
+                      中的 ``kimi_chat_id`` 字段。
+        user_agent: 覆盖默认 User-Agent；不传时使用
+                    ``"Kimi AgentGW PySDK/<version>"``。
+        session:    传入自定义的 :class:`requests.Session`（连接池、
+                    重试适配器、Mock 等场景）。
+        extra_headers: 附加请求头，每次请求都会带上。
+    """
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        *,
+        base_url: Optional[str] = None,
+        timeout: float = DEFAULT_TIMEOUT,
+        skill: Optional[str] = None,
+        kimi_chat_id: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        session: Optional[requests.Session] = None,
+        extra_headers: Optional[Mapping[str, str]] = None,
+    ):
+        cfg = _load_config_file()
+        self.api_key = _resolve_api_key(api_key, cfg)
+        self.base_url = _strip_tool_suffix(_resolve_base_url(base_url, cfg))
+        self.timeout = float(timeout)
+        self.skill = skill
+        self.kimi_chat_id = _resolve_kimi_chat_id(kimi_chat_id, cfg)
+        self.user_agent = user_agent or DEFAULT_USER_AGENT
+        self._extra_headers = dict(extra_headers or {})
+        self._session = session or requests.Session()
+        self.tools = ToolsAPI(self)
+
+    # ── lifecycle ──────────────────────────────────────────────────────────
+    def close(self) -> None:
+        self._session.close()
+
+    def __enter__(self) -> "AgentGwClient":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
+    # ── HTTP transport ─────────────────────────────────────────────────────
+    def _headers(self, extra: Optional[Mapping[str, str]] = None) -> Dict[str, str]:
+        h = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": self.user_agent,
+        }
+        if self.skill:
+            h["X-Kimi-Skill"] = self.skill
+        if self.kimi_chat_id:
+            h["X-Kimi-Chat-Id"] = self.kimi_chat_id
+        if self._extra_headers:
+            h.update(self._extra_headers)
+        if extra:
+            h.update(extra)
+        return h
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: Any = None,
+        data: Any = None,
+        files: Any = None,
+        params: Optional[Mapping[str, Any]] = None,
+        headers: Optional[Mapping[str, str]] = None,
+        timeout: Optional[float] = None,
+        stream: bool = False,
+    ) -> requests.Response:
+        url = self.base_url + path if path.startswith("/") else f"{self.base_url}/{path}"
+        h = self._headers(headers)
+        if files is not None:
+            # multipart: 必须让 requests 根据 files 自动生成 Content-Type 和 boundary
+            h.pop("Content-Type", None)
+        try:
+            resp = self._session.request(
+                method,
+                url,
+                json=json,
+                data=data,
+                files=files,
+                params=params,
+                headers=h,
+                timeout=timeout if timeout is not None else self.timeout,
+                stream=stream,
+            )
+        except requests.exceptions.Timeout as e:
+            raise TransportError(f"Timeout calling {method} {path}: {e}") from e
+        except requests.exceptions.RequestException as e:
+            raise TransportError(f"Transport error calling {method} {path}: {e}") from e
+        if resp.status_code >= 400:
+            self._raise_for_status(resp)
+        return resp
+
+    def _post_json(
+        self,
+        path: str,
+        body: Any,
+        *,
+        timeout: Optional[float] = None,
+        headers: Optional[Mapping[str, str]] = None,
+    ) -> Any:
+        resp = self._request("POST", path, json=body, headers=headers, timeout=timeout)
+        if resp.status_code == 204 or not resp.content:
+            return None
+        return resp.json()
+
+    def _post_multipart(
+        self,
+        path: str,
+        *,
+        files: Mapping[str, Any],
+        data: Optional[Mapping[str, Any]] = None,
+        timeout: Optional[float] = None,
+    ) -> Any:
+        resp = self._request("POST", path, files=files, data=data, timeout=timeout)
+        if resp.status_code == 204 or not resp.content:
+            return None
+        return resp.json()
+
+    def _get_json(
+        self,
+        path: str,
+        *,
+        params: Optional[Mapping[str, Any]] = None,
+        timeout: Optional[float] = None,
+    ) -> Any:
+        resp = self._request("GET", path, params=params, timeout=timeout)
+        if resp.status_code == 204 or not resp.content:
+            return None
+        return resp.json()
+
+    def _raise_for_status(self, resp: requests.Response) -> None:
+        status = resp.status_code
+        request_id = resp.headers.get("X-Request-ID") or resp.headers.get("x-request-id")
+        body: Any
+        try:
+            body = resp.json()
+        except ValueError:
+            body = resp.text
+        msg = _extract_error_message(body) or resp.reason or "request failed"
+        kwargs = {"status_code": status, "body": body, "request_id": request_id}
+        if status == 401:
+            raise AuthenticationError(msg, **kwargs)
+        if status == 402:
+            raise PaymentRequiredError(msg, **kwargs)
+        if status == 403:
+            raise QuotaExceededError(msg, **kwargs)
+        if status == 404:
+            raise NotFoundError(msg, **kwargs)
+        if status == 429:
+            retry_after_raw = resp.headers.get("Retry-After")
+            try:
+                retry_after = float(retry_after_raw) if retry_after_raw else None
+            except ValueError:
+                retry_after = None
+            raise RateLimitError(msg, retry_after=retry_after, **kwargs)
+        if status >= 500:
+            raise ServerError(msg, **kwargs)
+        raise APIError(msg, **kwargs)
+
+    # ── high-level endpoints ──────────────────────────────────────────────
+    def list_models(self, *, timeout: Optional[float] = None) -> Any:
+        return self._get_json("/v1/models", timeout=timeout)
+
+    def chat_completion(
+        self,
+        *,
+        model: str,
+        messages: List[Mapping[str, Any]],
+        stream: bool = False,
+        timeout: Optional[float] = None,
+        **kwargs: Any,
+    ) -> Any:
+        body: Dict[str, Any] = {"model": model, "messages": list(messages)}
+        body.update(kwargs)
+        if stream:
+            body["stream"] = True
+            return self._sse_iter("/v1/chat/completions", body, timeout=timeout)
+        body["stream"] = False
+        return self._post_json("/v1/chat/completions", body, timeout=timeout)
+
+    def messages(
+        self,
+        *,
+        model: str,
+        messages: List[Mapping[str, Any]],
+        max_tokens: int,
+        stream: bool = False,
+        timeout: Optional[float] = None,
+        **kwargs: Any,
+    ) -> Any:
+        body: Dict[str, Any] = {
+            "model": model,
+            "messages": list(messages),
+            "max_tokens": max_tokens,
+        }
+        body.update(kwargs)
+        if stream:
+            body["stream"] = True
+            return self._sse_iter("/v1/messages", body, timeout=timeout)
+        body["stream"] = False
+        return self._post_json("/v1/messages", body, timeout=timeout)
+
+    def count_tokens(
+        self,
+        *,
+        model: str,
+        messages: List[Mapping[str, Any]],
+        timeout: Optional[float] = None,
+        **kwargs: Any,
+    ) -> Any:
+        body: Dict[str, Any] = {"model": model, "messages": list(messages)}
+        body.update(kwargs)
+        return self._post_json("/v1/messages/count_tokens", body, timeout=timeout)
+
+    def embeddings(
+        self,
+        *,
+        model: str,
+        input: Union[str, List[str]],
+        timeout: Optional[float] = None,
+        **kwargs: Any,
+    ) -> Any:
+        body: Dict[str, Any] = {"model": model, "input": input}
+        body.update(kwargs)
+        return self._post_json("/v1/embeddings", body, timeout=timeout)
+
+    def search(self, query: str, *, timeout: Optional[float] = None, **kwargs: Any) -> Any:
+        """调用 ``POST /v1/search``。
+
+        参数:
+            query:    搜索词；服务端字段名为 ``text_query``。
+            **kwargs: 可选透传，例如 ``timeout_seconds``、``enable_page_crawling``、
+                      ``limit``（详见服务端 ``websearch.Request``）。
+
+        返回值的 ``search_results`` 字段是结果列表。
+        """
+        body = {"text_query": query, **kwargs}
+        return self._post_json("/v1/search", body, timeout=timeout)
+
+    def fetch(
+        self,
+        url: str,
+        *,
+        as_markdown: bool = False,
+        timeout: Optional[float] = None,
+        **kwargs: Any,
+    ) -> Any:
+        body = {"url": url, **kwargs}
+        headers = {"Accept": "text/markdown"} if as_markdown else None
+        resp = self._request("POST", "/v1/fetch", json=body, headers=headers, timeout=timeout)
+        if as_markdown:
+            return resp.text
+        return resp.json()
+
+    def upload_file(
+        self,
+        file: Union[str, "os.PathLike[str]", bytes, bytearray, BinaryIO, Tuple[Any, ...]],
+        *,
+        purpose: str = "file-extract",
+        filename: Optional[str] = None,
+        content_type: Optional[str] = None,
+        timeout: Optional[float] = None,
+    ) -> Any:
+        """调用 ``POST /v1/files`` —— multipart 文件上传，agent-gw 透传到 OpenGW。
+
+        服务端只暴露上传（POST）一个端点，不支持 LIST/GET/DELETE/CONTENT。
+
+        参数:
+            file:         待上传的文件，支持四种写法：
+                          - ``str`` 或 ``pathlib.Path``：当作文件路径，自动以二进制方式读取；
+                          - ``bytes`` / ``bytearray``：原始字节，需要配合 ``filename`` 才能
+                            推断扩展名（不传则用 ``"upload"``）；
+                          - 类文件对象（带 ``.read()``）：调用 ``read()`` 读完整内容；
+                          - ``(filename, content[, content_type])`` 元组：直接透传给 requests。
+            purpose:      OpenAI 风格的 ``purpose`` 字段，agent-gw 默认值是 ``"file-extract"``。
+            filename:     覆盖文件名（多 part 表单里 ``filename=`` 段）。
+            content_type: 显式指定 MIME 类型；不传时按文件名后缀猜测，猜不到落到
+                          ``application/octet-stream``。
+            timeout:      本次请求超时（秒），不传用 client 默认。
+
+        返回服务端 JSON 响应（含 ``id``、``object``、``filename``、``bytes`` 等字段）。
+        """
+        file_tuple = _build_file_tuple(file, filename=filename, content_type=content_type)
+        return self._post_multipart(
+            "/v1/files",
+            files={"file": file_tuple},
+            data={"purpose": purpose},
+            timeout=timeout,
+        )
+
+    # ── server-sent events (chat/completions, messages) ───────────────────
+    def _sse_iter(
+        self,
+        path: str,
+        body: Mapping[str, Any],
+        *,
+        timeout: Optional[float] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        headers = {"Accept": "text/event-stream"}
+        resp = self._request(
+            "POST", path, json=body, headers=headers, timeout=timeout, stream=True
+        )
+        try:
+            for raw in resp.iter_lines(decode_unicode=True):
+                if not raw:
+                    continue
+                if raw.startswith(":"):  # SSE comment
+                    continue
+                if raw.startswith("data:"):
+                    data = raw[5:].lstrip()
+                    if data == "[DONE]":
+                        return
+                    try:
+                        yield _json.loads(data)
+                    except ValueError:
+                        yield {"_raw": data}
+        finally:
+            resp.close()
+
+
+def _build_file_tuple(
+    file: Any,
+    *,
+    filename: Optional[str],
+    content_type: Optional[str],
+) -> Tuple[str, bytes, str]:
+    """把多种文件入参形态统一成 ``(filename, content_bytes, content_type)`` 三元组，
+    供 requests ``files={"file": ...}`` 使用。"""
+    # 已经是 requests 接受的 tuple：原样透传（不再二次推断）
+    if isinstance(file, tuple):
+        return file  # type: ignore[return-value]
+
+    def _ct(name: str) -> str:
+        return content_type or mimetypes.guess_type(name)[0] or "application/octet-stream"
+
+    # 路径
+    if isinstance(file, (str, os.PathLike)):
+        path = Path(os.fspath(file))
+        name = filename or path.name
+        return (name, path.read_bytes(), _ct(name))
+
+    # 原始字节
+    if isinstance(file, (bytes, bytearray)):
+        name = filename or "upload"
+        return (name, bytes(file), _ct(name))
+
+    # 类文件对象
+    if hasattr(file, "read"):
+        raw_name = filename or getattr(file, "name", None) or "upload"
+        name = os.path.basename(str(raw_name))
+        content = file.read()
+        if isinstance(content, str):
+            content = content.encode()
+        return (name, content, _ct(name))
+
+    raise TypeError(f"unsupported file type for upload: {type(file).__name__}")
+
+
+def _extract_error_message(body: Any) -> Optional[str]:
+    if not isinstance(body, Mapping):
+        return None
+    err = body.get("error")
+    if isinstance(err, Mapping):
+        msg = err.get("message")
+        if isinstance(msg, str) and msg:
+            return msg
+    if isinstance(err, str) and err:
+        return err
+    msg = body.get("message")
+    if isinstance(msg, str) and msg:
+        return msg
+    return None
