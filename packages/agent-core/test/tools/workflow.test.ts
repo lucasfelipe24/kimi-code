@@ -57,6 +57,26 @@ describe('WorkflowTool', () => {
     expect(both).toMatchObject({ isError: true });
   });
 
+  it('treats an empty name as absent so a script-only call succeeds', async () => {
+    const runs = runManager();
+    const tool = new WorkflowTool(fakeAgent({ workflowRuns: runs }));
+    const execution = await tool.resolveExecution({ name: '', script: SCRIPT, args: '' });
+    expect('isError' in execution && execution.isError).toBe(false);
+    expect(execution).toMatchObject({
+      display: { kind: 'workflow_run', workflow_name: 'demo-flow', source: 'inline' },
+    });
+  });
+
+  it('treats an empty script as absent so a name-only call succeeds', async () => {
+    const registry = workflowRegistry();
+    const tool = new WorkflowTool(fakeAgent({ workflows: registry }));
+    const execution = await tool.resolveExecution({ name: 'saved-flow', script: '', args: '' });
+    expect('isError' in execution && execution.isError).toBe(false);
+    expect(execution).toMatchObject({
+      display: { kind: 'workflow_run', workflow_name: 'saved-flow', source: 'project' },
+    });
+  });
+
   it('rejects an invalid inline script with a validation message', async () => {
     const tool = new WorkflowTool(fakeAgent({}));
     const result = await tool.resolveExecution({ script: 'return 1;' });

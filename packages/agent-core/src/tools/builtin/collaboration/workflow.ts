@@ -63,7 +63,11 @@ export class WorkflowTool implements BuiltinTool<WorkflowToolInput> {
   constructor(private readonly agent: Agent) {}
 
   async resolveExecution(input: WorkflowToolInput): Promise<ToolExecution> {
-    if ((input.name === undefined) === (input.script === undefined)) {
+    const name = input.name?.trim();
+    const hasName = name !== undefined && name.length > 0;
+    const script = input.script;
+    const hasScript = script !== undefined && script.trim().length > 0;
+    if (hasName === hasScript) {
       return {
         isError: true,
         output: 'Provide exactly one of "name" (saved workflow) or "script" (inline proposal).',
@@ -72,10 +76,10 @@ export class WorkflowTool implements BuiltinTool<WorkflowToolInput> {
     const limits = resolveWorkflowLimits(this.agent.kimiConfig?.workflows);
 
     let definition: WorkflowDefinition;
-    if (input.script !== undefined) {
+    if (hasScript) {
       try {
-        const meta = extractWorkflowMeta(input.script, { maxScriptBytes: limits.maxScriptBytes });
-        definition = { meta, script: input.script, path: '', source: 'extra' };
+        const meta = extractWorkflowMeta(script, { maxScriptBytes: limits.maxScriptBytes });
+        definition = { meta, script, path: '', source: 'extra' };
       } catch (error) {
         return {
           isError: true,
@@ -88,7 +92,7 @@ export class WorkflowTool implements BuiltinTool<WorkflowToolInput> {
         return { isError: true, output: 'Workflow discovery is not available for this agent.' };
       }
       await registry.load();
-      const found = registry.get(input.name!);
+      const found = registry.get(name!);
       if (found === undefined) {
         const available = registry
           .list()
@@ -96,7 +100,7 @@ export class WorkflowTool implements BuiltinTool<WorkflowToolInput> {
           .join(', ');
         return {
           isError: true,
-          output: `Workflow "${input.name!}" not found.${available !== '' ? ` Available workflows: ${available}.` : ' No workflows are discoverable.'}`,
+          output: `Workflow "${name!}" not found.${available !== '' ? ` Available workflows: ${available}.` : ' No workflows are discoverable.'}`,
         };
       }
       definition = found;
@@ -114,7 +118,7 @@ export class WorkflowTool implements BuiltinTool<WorkflowToolInput> {
         phases: meta.phases.map((phase) => ({ title: phase.title, detail: phase.detail })),
         args: args !== '' ? args : undefined,
         script: definition.script,
-        source: input.script !== undefined ? 'inline' : definition.source,
+        source: hasScript ? 'inline' : definition.source,
         limits: {
           max_concurrency: limits.maxConcurrency,
           max_agent_calls: limits.maxAgentCalls,
