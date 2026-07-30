@@ -51,6 +51,7 @@ function makeSession() {
     getWorkflowRun: vi.fn(async () => ({ run: { ...RUN, script: WORKFLOW_DETAIL.script } })),
     cancelWorkflowRun: vi.fn(async () => ({ cancelled: true })),
     saveWorkflow: vi.fn(async () => ({ path: '/tmp/.kimi-code/workflows/demo-flow.js', name: 'demo-flow' })),
+    setWorkflowMode: vi.fn(async () => {}),
   };
 }
 
@@ -74,6 +75,7 @@ function makeHost(options: { hasSession?: boolean } = {}) {
     },
     session: (options.hasSession ?? true) ? session : undefined,
     requireSession: () => session,
+    setAppState: vi.fn(),
     showError: vi.fn(),
     showStatus: vi.fn(),
     showNotice: vi.fn(),
@@ -188,5 +190,27 @@ describe('handleWorkflowCommand', () => {
     expect(rendered).toContain('Workflow runs');
     expect(rendered).toContain('demo-flow');
     browser.handleInput(ESCAPE); // close
+  });
+
+  it('renders the activated marker in the transcript with /workflow on', async () => {
+    const { host, session } = makeHost();
+    await handleWorkflowCommand(host, 'on');
+    expect(session.setWorkflowMode).toHaveBeenCalledWith(true, 'command');
+    const addChild = host.state.transcriptContainer.addChild as ReturnType<typeof vi.fn>;
+    const marker = addChild.mock.calls.at(-1)?.[0] as TestComponent;
+    const rendered = stripAnsi(marker.render(80).join('\n'));
+    expect(rendered).toContain('Dynamic Workflow activated');
+    expect(host.showStatus).not.toHaveBeenCalled();
+  });
+
+  it('renders the deactivated marker in the transcript with /workflow off', async () => {
+    const { host, session } = makeHost();
+    await handleWorkflowCommand(host, 'off');
+    expect(session.setWorkflowMode).toHaveBeenCalledWith(false, 'command');
+    const addChild = host.state.transcriptContainer.addChild as ReturnType<typeof vi.fn>;
+    const marker = addChild.mock.calls.at(-1)?.[0] as TestComponent;
+    const rendered = stripAnsi(marker.render(80).join('\n'));
+    expect(rendered).toContain('Dynamic Workflow deactivated');
+    expect(host.showStatus).not.toHaveBeenCalled();
   });
 });

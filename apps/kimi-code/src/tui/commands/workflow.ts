@@ -1,4 +1,5 @@
 import { TextViewerComponent } from '../components/dialogs/text-viewer';
+import { ModeMarkerComponent } from '../components/messages/mode-markers';
 import { NO_ACTIVE_SESSION_MESSAGE } from '../constant/kimi-tui';
 import { showWorkflowsBrowser, workflowsBrowserOpen } from '../controllers/workflows-browser';
 import { formatErrorMessage } from '../utils/event-payload';
@@ -252,6 +253,10 @@ function showWorkflowError(host: SlashCommandHost, error: unknown): void {
   host.showError(message);
 }
 
+function workflowMarkerLabel(enabled: boolean): string {
+  return enabled ? 'Dynamic Workflow activated' : 'Dynamic Workflow deactivated';
+}
+
 async function toggleWorkflowMode(
   host: SlashCommandHost,
   client: WorkflowV2Client,
@@ -260,7 +265,10 @@ async function toggleWorkflowMode(
   try {
     await client.setWorkflowMode(enabled, 'command');
     host.setAppState({ workflowMode: enabled });
-    host.showStatus(enabled ? 'Dynamic Workflow mode enabled.' : 'Dynamic Workflow mode disabled.');
+    host.state.transcriptContainer.addChild(
+      new ModeMarkerComponent(enabled ? 'active' : 'inactive', workflowMarkerLabel(enabled)),
+    );
+    host.state.ui.requestRender();
   } catch (error) {
     showWorkflowError(host, error);
   }
