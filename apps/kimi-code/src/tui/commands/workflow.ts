@@ -3,6 +3,7 @@ import { ModeMarkerComponent } from '../components/messages/mode-markers';
 import { NO_ACTIVE_SESSION_MESSAGE } from '../constant/kimi-tui';
 import { showWorkflowsBrowser, workflowsBrowserOpen } from '../controllers/workflows-browser';
 import { formatErrorMessage } from '../utils/event-payload';
+import { workflowMarkerLabel } from '../utils/workflow-markers';
 import { WorkflowV2Client } from '../workflow-v2-client';
 import type { SlashCommandHost } from './dispatch';
 
@@ -31,7 +32,7 @@ export async function handleWorkflowCommand(host: SlashCommandHost, args: string
   const subArgs = rest.join(' ');
   switch (subcommand) {
     case 'run':
-      await runWorkflow(host, client, subArgs, `/workflow ${trimmed}`);
+      await runWorkflow(host, client, subArgs);
       return;
     case 'runs':
       if (workflowsBrowserOpen()) return;
@@ -56,7 +57,7 @@ export async function handleWorkflowCommand(host: SlashCommandHost, args: string
     default:
       // `/workflow <name> [args…]` is shorthand for `/workflow run <name> [args…]`.
       if (subcommand !== undefined && !subcommand.startsWith('-')) {
-        await runWorkflow(host, client, trimmed, `/workflow ${trimmed}`);
+        await runWorkflow(host, client, trimmed);
         return;
       }
       host.showError(USAGE);
@@ -87,7 +88,6 @@ async function runWorkflow(
   host: SlashCommandHost,
   client: WorkflowV2Client,
   input: string,
-  commandText: string,
 ): Promise<void> {
   const name = input.split(/\s+/)[0];
   if (name === undefined || name === '') {
@@ -253,10 +253,6 @@ function showWorkflowError(host: SlashCommandHost, error: unknown): void {
   host.showError(message);
 }
 
-function workflowMarkerLabel(enabled: boolean): string {
-  return enabled ? 'Dynamic Workflow activated' : 'Dynamic Workflow deactivated';
-}
-
 async function toggleWorkflowMode(
   host: SlashCommandHost,
   client: WorkflowV2Client,
@@ -266,8 +262,9 @@ async function toggleWorkflowMode(
     await client.setWorkflowMode(enabled, 'command');
     host.setAppState({ workflowMode: enabled });
     host.state.workflowModeEntry = 'manual';
+    const state = enabled ? 'active' : 'inactive';
     host.state.transcriptContainer.addChild(
-      new ModeMarkerComponent(enabled ? 'active' : 'inactive', workflowMarkerLabel(enabled)),
+      new ModeMarkerComponent(state, workflowMarkerLabel(state)),
     );
     host.state.ui.requestRender();
   } catch (error) {

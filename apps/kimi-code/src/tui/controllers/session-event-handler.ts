@@ -49,17 +49,7 @@ import {
   OAUTH_LOGIN_REQUIRED_STARTUP_NOTICE,
 } from '../constant/kimi-tui';
 import { buildGoalCompletionMessage } from '../utils/goal-completion';
-
-function workflowMarkerLabel(state: ModeMarkerState): string {
-  switch (state) {
-    case 'active':
-      return 'Dynamic Workflow activated';
-    case 'inactive':
-      return 'Dynamic Workflow deactivated';
-    case 'ended':
-      return 'Dynamic Workflow ended';
-  }
-}
+import { workflowMarkerLabel } from '../utils/workflow-markers';
 
 import {
   argsRecord,
