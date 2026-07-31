@@ -5,8 +5,7 @@
  * (1) an explicit `[services.langsearch]` config section (read through `config`)
  * — built with its `apiKey`; takes precedence over Moonshot when configured;
  * (2) an explicit
- * `[services.moonshot_search]` config section (read through `config`, mirroring
- * v1 where that section is the single authoritative web-search source) — built
+ * `[services.moonshot_search]` config section (read through `config`) — built
  * with its `apiKey` and/or an `oauth` ref resolved through
  * `IOAuthService.resolveTokenProvider(...)`; and (3) the managed Kimi OAuth
  * provider (`managed:kimi-code`) when it carries an `oauth` ref (the state
@@ -14,15 +13,15 @@
  * `IOAuthService.resolveTokenProvider(...)` and whose base URL is derived from
  * the provider's `baseUrl`. The explicit configs win over the managed
  * derivation. Both Moonshot sources use the host's Kimi identity headers
- * (`IHostRequestHeaders`, mirroring v1's `kimiRequestHeaders`) as default
- * headers. When a rerank backend is configured via `IRerankService`, the
- * resolved provider is wrapped in a `RerankingWebSearchProvider` so its
- * results are reordered by semantic relevance to the query. When none of the
- * sources is configured it yields `undefined` so the contributed `WebSearch`
- * tool stays hidden. Owns no tool registration — the `WebSearch` tool
- * contributes itself via `registerAgentToolService(...)` and reads this
- * service from the Agent-scope accessor. Tests and hosts that need a custom
- * backend bind `IWebSearchProviderService` directly. Bound at App scope.
+ * (`IBootstrapService.args.requestHeaders`) as default headers. When a rerank
+ * backend is configured via `IRerankService`, the resolved provider is wrapped
+ * in a `RerankingWebSearchProvider` so its results are reordered by semantic
+ * relevance to the query. When none of the sources is configured it yields
+ * `undefined` so the contributed `WebSearch` tool stays hidden. Owns no tool
+ * registration — the `WebSearch` tool contributes itself via
+ * `registerAgentToolService(...)` and reads this service from the Agent-scope
+ * accessor. Tests and hosts that need a custom backend bind
+ * `IWebSearchProviderService` directly. Bound at App scope.
  */
 
 import {
@@ -32,9 +31,9 @@ import {
 
 import { LifecycleScope, ScopeActivation, registerScopedService } from '#/_base/di/scope';
 import { IOAuthService } from '#/app/auth/auth';
+import { IBootstrapService } from '#/app/bootstrap/bootstrap';
 import { IConfigService } from '#/app/config/config';
 import { IFlagService } from '#/app/flag/flag';
-import { IHostRequestHeaders } from '#/kosong/model/hostRequestHeaders';
 import { IProviderService } from '#/kosong/provider/provider';
 import { isOAuthCatalogVendor } from '#/kosong/provider/providerDefinition';
 
@@ -55,7 +54,7 @@ export class WebSearchProviderService implements IWebSearchProviderService {
   constructor(
     @IProviderService private readonly providers: IProviderService,
     @IOAuthService private readonly oauth: IOAuthService,
-    @IHostRequestHeaders private readonly hostHeaders: IHostRequestHeaders,
+    @IBootstrapService private readonly bootstrap: IBootstrapService,
     @IConfigService private readonly config: IConfigService,
     @IFlagService private readonly flags: IFlagService,
     @IRerankService private readonly rerankService: IRerankService,
@@ -126,7 +125,7 @@ export class WebSearchProviderService implements IWebSearchProviderService {
       baseUrl: search.baseUrl,
       tokenProvider,
       apiKey: nonEmptyString(search.apiKey),
-      defaultHeaders: { ...this.hostHeaders.headers },
+      defaultHeaders: { ...this.bootstrap.args.requestHeaders },
       customHeaders: search.customHeaders,
     });
   }
@@ -147,7 +146,7 @@ export class WebSearchProviderService implements IWebSearchProviderService {
     return new MoonshotWebSearchProvider({
       baseUrl,
       tokenProvider,
-      defaultHeaders: { ...this.hostHeaders.headers },
+      defaultHeaders: { ...this.bootstrap.args.requestHeaders },
       customHeaders: provider.customHeaders,
     });
   }

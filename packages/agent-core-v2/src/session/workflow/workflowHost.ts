@@ -110,7 +110,6 @@ export class SubagentWorkflowHost implements WorkflowHost {
             profile: profile.name,
             model: binding.model,
             thinking: binding.thinking,
-            cwd: callerData.cwd,
           },
           labels: subagentLabels(caller.id),
         });

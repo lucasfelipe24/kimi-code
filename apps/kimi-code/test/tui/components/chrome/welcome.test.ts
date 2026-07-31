@@ -29,6 +29,7 @@ const appState: AppState = {
   inputMode: 'prompt',
   swarmMode: false,
     workflowMode: false,
+  turnTimingLabel: null,
   theme: 'dark',
   editorCommand: null,
   notifications: { enabled: true, condition: 'unfocused' },

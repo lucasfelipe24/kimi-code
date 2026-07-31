@@ -21,6 +21,7 @@ import type { WorkflowDefinition } from '#/app/workflow/runtime/types';
 import { IWorkflowCatalogService } from '#/app/workflow/workflowCatalog';
 import { createHooks } from '#/hooks';
 import { IModelCatalog, type Model } from '#/kosong/model/catalog';
+import { UNKNOWN_CAPABILITY } from '#/kosong/contract/capability';
 import { IAgentLifecycleService, type CreateAgentOptions } from '#/session/agentLifecycle/agentLifecycle';
 import { ISessionProcessRunner } from '#/session/process/processRunner';
 import { ISessionAgentProfileCatalog } from '#/session/sessionAgentProfileCatalog/sessionAgentProfileCatalog';
@@ -124,10 +125,11 @@ function makeHandle(id: string, services: Map<ServiceIdentifier<unknown>, unknow
 }
 
 const CALLER_PROFILE: ProfileData = {
-  cwd: '/tmp/work',
   modelAlias: 'test-model',
+  modelCapabilities: UNKNOWN_CAPABILITY,
   thinkingLevel: 'high',
-} as ProfileData;
+  systemPrompt: 'test-system-prompt',
+};
 
 describe('WorkflowRunService', () => {
   let disposables: DisposableStore;
