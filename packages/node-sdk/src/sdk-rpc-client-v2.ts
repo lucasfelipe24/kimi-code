@@ -16,9 +16,10 @@
  * - `listWorkspaceSkills` → not covered by the klient facade, so it goes
  *   through the `engineAccessor` escape hatch (`ISkillDiscovery` + the v2
  *   skill-root helpers) instead.
- * - `getConfig` / `setConfig` / `removeProvider` / `getConfigDiagnostics` →
- *   `klient.global.config.*`, with the v1 `KimiConfig` shape restored by the
- *   pure mapping layer in `src/v2/config-mapper.ts`.
+ * - `getConfig` / `setConfig` / `removeProvider` / `replaceService` /
+ *   `removeService` / `getConfigDiagnostics` → `klient.global.config.*`, with
+ *   the v1 `KimiConfig` shape restored by the pure mapping layer in
+ *   `src/v2/config-mapper.ts`.
  * - `listPlugins` / `installPlugin` / `setPluginEnabled` /
  *   `setPluginMcpServerEnabled` / `removePlugin` / `reloadPlugins` /
  *   `getPluginInfo` / `listPluginCommands` → `klient.global.plugins.*`. The
@@ -282,7 +283,10 @@ import type {
   PluginInfo,
   PluginSummary,
   ReloadSummary,
+  RemovableKimiService,
   RenameSessionInput,
+  ReplaceableKimiService,
+  ReplaceableKimiServices,
   ResumeSessionInput,
   ResumedAgentState,
   ResumedSessionSummary,
@@ -360,6 +364,8 @@ export class SDKRpcClientV2 extends SDKRpcClientBase {
    * dummy facade call keeps the reads honest no-ops.
    */
   private readonly configReady: Promise<void>;
+  /** Serializes read-modify-replace writes to entries inside `[services]`. */
+  private serviceConfigWrite = Promise.resolve();
   /**
    * Per-session print-steer state for `handlePrintMainTurnCompleted`: v1
    * keeps the deadline/turn counters on the `Session` object, so they reset
@@ -686,6 +692,39 @@ export class SDKRpcClientV2 extends SDKRpcClientBase {
     }
     await this.klient.global.config.replaceSections({ sections });
     return this.getConfig();
+  }
+
+  private updateServices(
+    update: (services: Record<string, unknown>) => Record<string, unknown> | undefined,
+  ): Promise<KimiConfig> {
+    const operation = this.serviceConfigWrite.then(async () => {
+      await this.configReady;
+      const inspected =
+        await this.klient.global.config.inspect<Record<string, unknown>>('services');
+      await this.klient.global.config.replaceSections({
+        sections: { services: update({ ...inspected.userValue }) },
+      });
+      return this.getConfig();
+    });
+    this.serviceConfigWrite = operation.then(
+      () => undefined,
+      () => undefined,
+    );
+    return operation;
+  }
+
+  override replaceService<Service extends ReplaceableKimiService>(
+    service: Service,
+    config: ReplaceableKimiServices[Service],
+  ): Promise<KimiConfig> {
+    return this.updateServices((services) => ({ ...services, [service]: config }));
+  }
+
+  override removeService(service: RemovableKimiService): Promise<KimiConfig> {
+    return this.updateServices((services) => {
+      delete services[service];
+      return Object.keys(services).length === 0 ? undefined : services;
+    });
   }
 
   override supportsAtomicSectionReplace(): boolean {

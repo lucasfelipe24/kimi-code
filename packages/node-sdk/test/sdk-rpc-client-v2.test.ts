@@ -7,11 +7,11 @@
  * Wiring: real v2 engine bootstrapped on a temp KIMI_CODE_HOME; no provider calls.
  * Run: pnpm exec vitest run test/sdk-rpc-client-v2.test.ts
  */
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createKimiHarnessV2,
@@ -31,6 +31,7 @@ import { recordingTelemetry, type TelemetryRecord } from './telemetry';
 const tempDirs: string[] = [];
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   for (const dir of tempDirs.splice(0)) {
     await rm(dir, { recursive: true, force: true });
   }
@@ -201,6 +202,113 @@ describe('SDKRpcClientV2 (agent-core-v2 wiring MVP)', () => {
       // Sections absent from the write stay untouched.
       expect(next.providers['a']).toBeDefined();
       expect(next.models?.['a/m1']).toBeDefined();
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('replaces v2 web-search services without deep-merging stale credentials', async () => {
+    vi.stubEnv('KIMI_WEB_SEARCH_BASE_URL', 'https://env-search.example.test');
+    vi.stubEnv('KIMI_WEB_SEARCH_API_KEY', 'sk-env-search');
+    const { harness, homeDir } = await makeHarness();
+    try {
+      await harness.setConfig({
+        services: {
+          moonshotSearch: {
+            baseUrl: 'https://search.example.test',
+            apiKey: 'sk-search',
+          },
+          moonshotFetch: {
+            baseUrl: 'https://fetch.example.test',
+            apiKey: 'sk-fetch',
+          },
+          langsearch: {
+            apiKey: 'sk-langsearch-stale',
+            baseUrl: 'https://stale-langsearch.example.test',
+            customHeaders: { 'X-Stale': 'true' },
+          },
+          rerank: {
+            enabled: true,
+            provider: 'langsearch',
+            apiKey: 'sk-rerank-stale',
+          },
+        },
+      });
+
+      let next = await harness.replaceService('langsearch', {
+        apiKey: 'sk-langsearch',
+        tier: 'tier2',
+        count: 8,
+      });
+      expect(next.services?.langsearch).toEqual({
+        apiKey: 'sk-langsearch',
+        tier: 'tier2',
+        count: 8,
+      });
+      expect(next.services?.moonshotSearch).toMatchObject({
+        baseUrl: 'https://env-search.example.test',
+        apiKey: 'sk-env-search',
+      });
+      expect(next.services?.moonshotFetch?.apiKey).toBe('sk-fetch');
+
+      next = await harness.replaceService('rerank', {
+        enabled: false,
+        provider: 'langsearch',
+      });
+      expect(next.services?.rerank).toEqual({
+        enabled: false,
+        provider: 'langsearch',
+      });
+      expect(next.services?.langsearch?.apiKey).toBe('sk-langsearch');
+
+      const reread = await harness.getConfig({ reload: true });
+      expect(reread.services).toEqual(next.services);
+      const persisted = await readFile(join(homeDir, 'config.toml'), 'utf-8');
+      expect(persisted).not.toContain('https://env-search.example.test');
+      expect(persisted).not.toContain('sk-env-search');
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('serializes concurrent v2 service replacements without losing updates', async () => {
+    const { harness } = await makeHarness();
+    try {
+      await Promise.all([
+        harness.replaceService('langsearch', { apiKey: 'sk-langsearch', tier: 'tier2' }),
+        harness.replaceService('rerank', {
+          enabled: true,
+          provider: 'langsearch',
+          apiKey: 'sk-rerank',
+        }),
+      ]);
+
+      const config = await harness.getConfig({ reload: true });
+      expect(config.services?.langsearch?.apiKey).toBe('sk-langsearch');
+      expect(config.services?.rerank?.apiKey).toBe('sk-rerank');
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('removes only the selected v2 service and clears an empty services section', async () => {
+    const { harness, homeDir } = await makeHarness();
+    try {
+      await harness.setConfig({
+        services: {
+          langsearch: { apiKey: 'sk-langsearch', tier: 'tier1' },
+          rerank: { enabled: true, provider: 'langsearch', apiKey: 'sk-rerank' },
+        },
+      });
+
+      let next = await harness.removeService('langsearch');
+      expect(next.services?.langsearch).toBeUndefined();
+      expect(next.services?.rerank?.apiKey).toBe('sk-rerank');
+
+      next = await harness.removeService('rerank');
+      expect(next.services).toEqual({});
+      expect((await harness.getConfig({ reload: true })).services).toEqual({});
+      expect(await readFile(join(homeDir, 'config.toml'), 'utf-8')).not.toContain('[services');
     } finally {
       await harness.close();
     }
