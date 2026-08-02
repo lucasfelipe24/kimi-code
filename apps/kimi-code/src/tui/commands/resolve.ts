@@ -1,5 +1,6 @@
 import {
   findBuiltInSlashCommand,
+  isSlashCommandVisible,
   resolveSlashCommandAvailability,
   type BuiltinSlashCommand,
   type BuiltinSlashCommandName,
@@ -50,6 +51,7 @@ export interface ResolveSlashCommandInput {
   readonly pluginCommandMap: ReadonlyMap<string, string>;
   readonly isStreaming: boolean;
   readonly isCompacting: boolean;
+  readonly engineV2: boolean;
 }
 
 export function resolveSlashCommandInput(options: ResolveSlashCommandInput): SlashCommandIntent {
@@ -57,11 +59,18 @@ export function resolveSlashCommandInput(options: ResolveSlashCommandInput): Sla
   if (parsed === null) return { kind: 'not-command' };
 
   const command = findBuiltInSlashCommand(parsed.name);
-  // `command` is a literal union where only some members carry `experimentalFlag`; widen to read it.
-  if (
-    command !== undefined &&
-    isExperimentalFlagEnabled((command as KimiSlashCommand).experimentalFlag)
-  ) {
+  if (command !== undefined) {
+    // `command` is a literal union where only some members carry the gate
+    // fields; widen to read them.
+    if (!isSlashCommandVisible(command as KimiSlashCommand, options.engineV2, isExperimentalFlagEnabled)) {
+      // Fail closed: a gated built-in never falls through to skills, plugins,
+      // or the model, so its arguments stay out of every downstream channel.
+      return {
+        kind: 'invalid',
+        commandName: parsed.name,
+        reason: 'unavailable',
+      };
+    }
     const busyReason = slashCommandBusyReason(options);
     if (
       busyReason !== undefined &&

@@ -93,6 +93,11 @@ import { IWorkspaceMcpConfigService } from '#/workspace/workspaceMcpConfig/works
 import { WorkspaceMcpConfigService } from '#/workspace/workspaceMcpConfig/workspaceMcpConfigService';
 import { IWorkspaceTrust } from '#/workspace/workspaceTrust/workspaceTrust';
 import { IWorkspaceDirs } from '#/workspace/workspaceDirs/workspaceDirs';
+import { IWorkspaceMemoryCatalog } from '#/workspace/persistentMemory/memoryCatalog';
+import {
+  memoryCatalogMutation,
+  type MemoryCatalogMutationHost,
+} from '#/workspace/persistentMemory/memoryCatalogMutation';
 import { WorkspaceDirsService } from '#/workspace/workspaceDirs/workspaceDirsService';
 import { IWorkspaceSkillCatalog } from '#/workspace/workspaceSkillCatalog/workspaceSkillCatalog';
 import { WorkspaceSkillCatalogService } from '#/workspace/workspaceSkillCatalog/workspaceSkillCatalogService';
@@ -363,6 +368,21 @@ describe('workspace resource sharing (handler chain)', () => {
         _serviceBrand: undefined,
         exec: () => Promise.reject(new Error('process exec is not supported in this test')),
       } satisfies ISessionProcessRunner),
+      stubPair(IWorkspaceMemoryCatalog, {
+        _serviceBrand: undefined,
+        ready: Promise.resolve(),
+        onDidChange: Event.None as Event<void>,
+        list: () => Promise.resolve([]),
+        [memoryCatalogMutation]: () => ({
+          _serviceBrand: undefined,
+          ready: Promise.resolve(),
+          onDidChange: Event.None as Event<void>,
+          list: () => Promise.resolve([]),
+          create: () => Promise.reject(new Error('not implemented')),
+          update: () => Promise.reject(new Error('not implemented')),
+          forget: () => Promise.resolve(),
+        }),
+      } satisfies MemoryCatalogMutationHost as unknown as IWorkspaceMemoryCatalog),
       stubPair(IAgentLifecycleService, {
         _serviceBrand: undefined,
         onDidCreate: () => ({ dispose: () => {} }),

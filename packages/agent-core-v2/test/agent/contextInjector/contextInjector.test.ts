@@ -296,6 +296,38 @@ describe('AgentContextInjectorService', () => {
     ]);
   });
 
+  it('passes an optional abort signal and preserves providers that ignore it', async () => {
+    const controller = new AbortController();
+    let seen: AbortSignal | undefined;
+    injector(ix).register('signal_test', (context) => {
+      seen = context.signal;
+      return 'signal reminder';
+    });
+
+    await injector(ix).injectAfterCompaction(controller.signal);
+
+    expect(seen).toBe(controller.signal);
+    expect(lastText(context)).toContain('signal reminder');
+  });
+
+  it('does not append provider content after compaction injection is aborted', async () => {
+    const controller = new AbortController();
+    let release!: () => void;
+    injector(ix).register('abort_test', async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return 'must not append';
+    });
+
+    const pending = injector(ix).injectAfterCompaction(controller.signal);
+    controller.abort();
+    release();
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(context.get()).toHaveLength(0);
+  });
+
   it('re-arms per-turn providers when injectAfterCompaction runs', async () => {
     const seen: boolean[] = [];
     injector(ix).register('per_turn_test', ({ isNewTurn }) => {

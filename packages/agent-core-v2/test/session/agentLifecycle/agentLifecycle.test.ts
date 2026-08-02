@@ -26,6 +26,8 @@ import { IAgentLifecycleService } from '#/session/agentLifecycle/agentLifecycle'
 import { AgentLifecycleService } from '#/session/agentLifecycle/agentLifecycleService';
 import { ensureMainAgent } from '#/session/agentLifecycle/mainAgent';
 import { ISessionMcpHandle } from '#/session/mcp/sessionMcpHandle';
+import { ISessionMemoryAccessFactory } from '#/session/persistentMemory/memoryAccessFactory';
+import { ISessionMemoryAccess } from '#/session/persistentMemory/memorySeed';
 import { ISessionInstructionsProvider } from '#/session/sessionInstructions/instructionsProvider';
 import { McpOAuthService } from '#/mcpCore/oauth/service';
 import { createMcpOAuthStore } from '#/app/mcpConfig/oauthStore';
@@ -161,6 +163,7 @@ describe('AgentLifecycleService', () => {
   let loopSettled: ReturnType<typeof vi.fn<IAgentLoopService['settled']>>;
   let beforeExecuteListeners: number;
   let didExecuteHookIds: string[];
+  let memoryAccesses: Record<'main' | 'subagent', ISessionMemoryAccess>;
 
   beforeEach(() => {
     _clearAgentToolContributionsForTests();
@@ -361,6 +364,23 @@ describe('AgentLifecycleService', () => {
         oauthService: new McpOAuthService({ store: createMcpOAuthStore(atomicDocsStore) }),
       }),
     } satisfies ISessionMcpHandle);
+    const memoryAccess = (actor: 'main' | 'subagent'): ISessionMemoryAccess => ({
+      _serviceBrand: undefined,
+      ready: Promise.resolve(),
+      onDidChange: Event.None as Event<void>,
+      list: () => Promise.resolve([]),
+      create: () => Promise.reject(new Error(`memory create not used by ${actor}`)),
+      update: () => Promise.reject(new Error(`memory update not used by ${actor}`)),
+      forget: () => Promise.resolve(),
+    });
+    memoryAccesses = {
+      main: memoryAccess('main'),
+      subagent: memoryAccess('subagent'),
+    };
+    ix.stub(ISessionMemoryAccessFactory, {
+      _serviceBrand: undefined,
+      forActor: (actor) => memoryAccesses[actor],
+    });
     stopAllOnExit = vi.fn(async () => []);
     ix.stub(IAgentTaskService, {
       _serviceBrand: undefined,
@@ -385,6 +405,15 @@ describe('AgentLifecycleService', () => {
     expect(svc.list()).toEqual([main]);
     await svc.remove('main');
     expect(svc.get('main')).toBeUndefined();
+  });
+
+  it('binds main and subagent memory access into their agent scopes', async () => {
+    const svc = ix.get(IAgentLifecycleService);
+    const main = await svc.create({ agentId: 'main' });
+    const subagent = await svc.create({ agentId: 'agent-42' });
+
+    expect(main.accessor.get(ISessionMemoryAccess)).toBe(memoryAccesses.main);
+    expect(subagent.accessor.get(ISessionMemoryAccess)).toBe(memoryAccesses.subagent);
   });
 
   it('remove stops the agent background tasks before disposal', async () => {

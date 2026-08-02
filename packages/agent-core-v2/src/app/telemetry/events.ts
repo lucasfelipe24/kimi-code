@@ -441,6 +441,44 @@ export interface ExitEvent {
   duration_ms: number;
 }
 
+export type MemoryWriteOutcome = 'success' | 'rejected' | 'error';
+export type MemoryForgetOutcome = 'success' | 'not_found' | 'rejected' | 'error';
+export type MemoryExtractOutcome = 'success' | 'skipped' | 'error';
+
+export interface MemoryWriteEvent {
+  scope: 'user' | 'workspace' | 'project';
+  type: 'user' | 'feedback' | 'project' | 'reference';
+  outcome: MemoryWriteOutcome;
+}
+
+export interface MemoryForgetEvent {
+  scope: 'user' | 'workspace' | 'project';
+  outcome: MemoryForgetOutcome;
+}
+
+export type MemoryRecallOutcome =
+  | 'success'
+  | 'empty'
+  | 'lookup_timeout'
+  | 'lookup_error'
+  | 'lookup_aborted'
+  | 'rerank_timeout'
+  | 'rerank_error';
+
+export interface MemoryRecallEvent {
+  candidate_count: number;
+  selected_count: number;
+  source: 'deterministic' | 'rerank';
+  outcome: MemoryRecallOutcome;
+  duration_ms: number;
+}
+
+export interface MemoryExtractEvent {
+  turn_count: number;
+  written_count: number;
+  outcome: MemoryExtractOutcome;
+}
+
 export const telemetryEventDefinitions = {
   turn_started: defineAgentTelemetryEvent<TurnStartedEvent>({
     owner: 'kimi-code',
@@ -933,6 +971,46 @@ export const telemetryEventDefinitions = {
     owner: 'kimi-code',
     comment: 'A CLI run exits.',
     properties: { duration_ms: 'Run wall-clock time in milliseconds' },
+  }),
+  memory_write: defineTelemetryEvent<MemoryWriteEvent>({
+    owner: 'kimi-code',
+    comment:
+      'A durable memory is written (remember/update). Content-free: only scope, type, and outcome.',
+    properties: {
+      scope: 'Memory scope the write targeted',
+      type: 'Memory taxonomy type of the written record',
+      outcome: 'Write outcome (success, rejected by a guard, or error)',
+    },
+  }),
+  memory_forget: defineTelemetryEvent<MemoryForgetEvent>({
+    owner: 'kimi-code',
+    comment: 'A durable memory is forgotten. Content-free: only scope and outcome.',
+    properties: {
+      scope: 'Memory scope the forget targeted',
+      outcome: 'Forget outcome (success, not found, rejected by a guard, or error)',
+    },
+  }),
+  memory_recall: defineAgentTelemetryEvent<MemoryRecallEvent>({
+    owner: 'kimi-code',
+    comment:
+      'Memory recall runs for a turn. Content-free: only counts, source, outcome, and latency.',
+    properties: {
+      candidate_count: 'Number of candidate memories considered after the deterministic filter',
+      selected_count: 'Number of memories selected for injection',
+      source: 'Selection source: deterministic filter or secondary-model rerank',
+      outcome: 'Recall outcome: success, empty, lookup failure, rerank timeout, or rerank failure',
+      duration_ms: 'Recall wall-clock time in milliseconds',
+    },
+  }),
+  memory_extract: defineAgentTelemetryEvent<MemoryExtractEvent>({
+    owner: 'kimi-code',
+    comment:
+      'Automatic memory extraction runs at turn end. Content-free: only counts and outcome. A run only PROPOSES (never writes), so written_count is always 0; the explicit commit emits memory_write instead.',
+    properties: {
+      turn_count: 'Number of transcript turns fed to the extraction generation call',
+      written_count: 'Always 0 — a run proposes, it does not write (kept for schema stability)',
+      outcome: 'Extraction outcome (success = proposals drafted, skipped, or error)',
+    },
   }),
 } as const;
 

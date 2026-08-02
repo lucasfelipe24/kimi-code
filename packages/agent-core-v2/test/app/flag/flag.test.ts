@@ -13,6 +13,15 @@ import {
 import { IFlagRegistry, type FlagDefinitionInput } from '#/app/flag/flagRegistry';
 import { FlagRegistryService } from '#/app/flag/flagRegistryService';
 import { FlagService, MASTER_ENV } from '#/app/flag/flagService';
+import {
+  PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ENV,
+  PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID,
+  persistentMemoryAutoExtractFlag,
+} from '#/app/persistentMemory/autoExtractFlag';
+import {
+  PERSISTENT_MEMORY_FLAG_ID,
+  persistentMemoryFlag,
+} from '#/app/persistentMemory/flag';
 import { ILogService } from '#/_base/log/log';
 import { IAtomicTomlDocumentStore } from '#/persistence/interface/atomicDocumentStore';
 import { TomlAtomicDocumentStore } from '#/persistence/backends/node-fs/atomicDocumentStore';
@@ -35,7 +44,13 @@ describe('FlagRegistryService', () => {
   it('registers and resolves by id', () => {
     const reg = new FlagRegistryService();
     reg.register(exampleFlag);
-    expect(reg.list().map((d) => d.id)).toEqual(['example_flag']);
+    expect(reg.list().map((d) => d.id)).toEqual(
+      expect.arrayContaining([
+        PERSISTENT_MEMORY_FLAG_ID,
+        PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID,
+        'example_flag',
+      ]),
+    );
     expect(reg.get('example_flag')?.env).toBe('KIMI_CODE_EXPERIMENTAL_EXAMPLE_FLAG');
   });
 
@@ -128,12 +143,43 @@ describe('FlagService', () => {
     expect(state?.configValue).toBe(false);
   });
 
-  it('lets the master env switch force every flag on', async () => {
+  it('lets the master env switch force standard flags on', async () => {
     const { config, flags } = makeFlags({ [MASTER_ENV]: '1' });
     await config.set(EXPERIMENTAL_SECTION, { example_flag: false });
     const state = flags.explain('example_flag');
     expect(state?.enabled).toBe(true);
     expect(state?.source).toBe('master-env');
+    expect(flags.enabled(PERSISTENT_MEMORY_FLAG_ID)).toBe(true);
+  });
+
+  it('keeps explicit-env flags off under defaults, config, and the master env', async () => {
+    const { config, flags } = makeFlags({ [MASTER_ENV]: '1' });
+    await config.set(EXPERIMENTAL_SECTION, {
+      [PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID]: true,
+    });
+    const state = flags.explain(PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID);
+    expect(state?.enabled).toBe(false);
+    expect(state?.source).toBe('default');
+    expect(state?.configValue).toBeUndefined();
+  });
+
+  it('enables an explicit-env flag only through its dedicated env', () => {
+    const { flags } = makeFlags({
+      [PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ENV]: 'true',
+    });
+    const state = flags.explain(PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID);
+    expect(state?.enabled).toBe(true);
+    expect(state?.source).toBe('env');
+  });
+
+  it('registers the real persistent-memory flag definitions', () => {
+    const { flags } = makeFlags();
+    expect(flags.registry.get(PERSISTENT_MEMORY_FLAG_ID)).toMatchObject(persistentMemoryFlag);
+    expect(flags.registry.get(PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID)).toMatchObject(
+      persistentMemoryAutoExtractFlag,
+    );
+    expect(flags.enabled(PERSISTENT_MEMORY_FLAG_ID)).toBe(false);
+    expect(flags.enabled(PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID)).toBe(false);
   });
 
   it('refreshes overrides when the experimental config section changes', async () => {
@@ -161,9 +207,19 @@ describe('FlagService', () => {
 
   it('exposes snapshot / enabledIds / explainAll', () => {
     const { flags } = makeFlags();
-    expect(flags.snapshot()).toEqual({ example_flag: true });
+    expect(flags.snapshot()).toMatchObject({
+      example_flag: true,
+      [PERSISTENT_MEMORY_FLAG_ID]: false,
+      [PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID]: false,
+    });
     expect(flags.enabledIds()).toEqual(['example_flag']);
-    expect(flags.explainAll().map((s) => s.id)).toEqual(['example_flag']);
+    expect(flags.explainAll().map((s) => s.id)).toEqual(
+      expect.arrayContaining([
+        'example_flag',
+        PERSISTENT_MEMORY_FLAG_ID,
+        PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID,
+      ]),
+    );
   });
 
   it('treats truthy env values case-insensitively', () => {
@@ -193,7 +249,11 @@ describe('FlagService', () => {
       example_flag: false,
     });
 
-    expect(flags.snapshot()).toEqual({ example_flag: false });
+    expect(flags.snapshot()).toMatchObject({
+      example_flag: false,
+      [PERSISTENT_MEMORY_FLAG_ID]: false,
+      [PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID]: false,
+    });
     expect(flags.explain('obsolete_flag')).toBeUndefined();
   });
 });

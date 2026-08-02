@@ -90,6 +90,11 @@ import { labelsFromAgentMeta } from '#/session/agentLifecycle/subagentMetadata';
 import { ISessionContext, sessionContextSeed } from '#/session/sessionContext/sessionContext';
 import { sessionAgentProfileCatalogSeed } from '#/session/sessionAgentProfileCatalog/agentProfileCatalogSeed';
 import { sessionInstructionsProviderSeed } from '#/session/sessionInstructions/instructionsProvider';
+import {
+  type ISessionMemoryAccessFactory,
+  sessionMemoryAccessFactorySeed,
+} from '#/session/persistentMemory/memoryAccessFactory';
+import { sessionMemoryAccessSeed } from '#/session/persistentMemory/memorySeed';
 import { sessionWorkspaceInfoSeed } from '#/session/workspaceInfo/workspaceInfo';
 import {
   ISessionLifecycleHooks,
@@ -119,6 +124,8 @@ import {
 import {
   IWorkspaceAgentProfileLoader,
 } from '#/workspace/workspaceAgentProfileLoader/workspaceAgentProfileLoader';
+import { IWorkspaceMemoryCatalog } from '#/workspace/persistentMemory/memoryCatalog';
+import { memoryAccessForActor } from '#/workspace/persistentMemory/memoryCatalogMutation';
 import { IWorkspaceDirs } from '#/workspace/workspaceDirs/workspaceDirs';
 import { IWorkspaceInstructionsService } from '#/workspace/workspaceInstructions/workspaceInstructions';
 import { IWorkspaceMcpService } from '#/workspace/workspaceMcp/workspaceMcp';
@@ -183,6 +190,7 @@ export class SessionLifecycleService extends Disposable implements ISessionLifec
     @IWorkspaceInstructionsService private readonly instructions: IWorkspaceInstructionsService,
     @IWorkspaceMcpService private readonly mcp: IWorkspaceMcpService,
     @IWorkspaceDirs private readonly workspaceDirs: IWorkspaceDirs,
+    @IWorkspaceMemoryCatalog private readonly memoryCatalog: IWorkspaceMemoryCatalog,
     @IWorkspaceToolPolicy private readonly toolPolicy: IWorkspaceToolPolicy,
     @ISessionProcessRunner private readonly processRunner: ISessionProcessRunner,
   ) {
@@ -246,6 +254,11 @@ export class SessionLifecycleService extends Disposable implements ISessionLifec
       'onDidCreateSession',
       'onWillCloseSession',
     ]);
+    const memoryAccessFactory: ISessionMemoryAccessFactory = {
+      _serviceBrand: undefined,
+      forActor: (actor) => memoryAccessForActor(this.memoryCatalog, actor),
+    };
+    const mainMemoryAccess = memoryAccessFactory.forActor('main');
     await this.hostEnv.ready;
     const handle = createScopedChildHandle(
       this.instantiation,
@@ -264,6 +277,8 @@ export class SessionLifecycleService extends Disposable implements ISessionLifec
           ...sessionInstructionsProviderSeed(this.instructions.sessionProvider()),
           ...sessionMcpHandleSeed(this.mcp.sessionHandle()),
           ...sessionWorkspaceInfoSeed(this.workspaceDirs.sessionInfo()),
+          ...sessionMemoryAccessFactorySeed(memoryAccessFactory),
+          ...sessionMemoryAccessSeed(mainMemoryAccess),
           ...sessionToolPolicyGateSeed(this.toolPolicy.sessionGate()),
           [ISessionProcessRunner, this.processRunner],
         ],

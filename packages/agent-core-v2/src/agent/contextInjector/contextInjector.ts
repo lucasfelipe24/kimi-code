@@ -6,6 +6,7 @@ export interface ContextInjectionContext {
   readonly injectedPositions: readonly number[];
   readonly lastInjectedAt: number | null;
   readonly isNewTurn: boolean;
+  readonly signal?: AbortSignal;
 }
 
 export type ContextInjectionContent = string | readonly ContentPart[];
@@ -22,7 +23,7 @@ export interface IAgentContextInjectorService {
     provider: ContextInjectionProvider,
   ): IDisposable;
 
-  injectAfterCompaction(): Promise<void>;
+  injectAfterCompaction(signal?: AbortSignal): Promise<void>;
 }
 
 export const IAgentContextInjectorService = createDecorator<IAgentContextInjectorService>(

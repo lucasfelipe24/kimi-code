@@ -111,11 +111,12 @@ timeout = 5
 | `background` | `table` | — | 后台任务运行参数 → [`background`](#background) |
 | `tools` | `table` | — | 全局工具开关 → [`tools`](#tools) |
 | `image` | `table` | — | 图片压缩参数 → [`image`](#image) |
+| `memory` | `table` | — | 持久化 memory 限制 → [`memory`](#memory) |
 | `services` | `table` | — | 内置外部服务配置 → [`services`](#services) |
 | `permission` | `table` | — | 初始权限规则 → [`permission`](#permission) |
 | `hooks` | `array<table>` | — | 生命周期 hook，详见 [Hooks](../customization/hooks.md) |
 
-以下各节对 `providers`、`models`、`thinking`、`loop_control`、`background`、`image`、`services`、`permission` 等嵌套表逐一展开。
+以下各节对 `providers`、`models`、`thinking`、`loop_control`、`background`、`image`、`memory`、`services`、`permission` 等嵌套表逐一展开。
 
 ## `providers`
 
@@ -323,6 +324,27 @@ disabled = ["EnterPlanMode", "ExitPlanMode", "mcp__github__*"]
 | `read_byte_budget` | `integer` | `262144`（256 KB） | 模型自行读取的图片（`ReadMediaFile` 默认读取）的单图字节预算。会话中模型反复截图、读图时，累计请求体大小由它控制；细节可通过 `region` 参数按原图坐标全保真回读（`region` 与 `full_resolution` 不受此预算限制） |
 
 `max_edge_px` 可被环境变量 `KIMI_IMAGE_MAX_EDGE_PX` 覆盖，`read_byte_budget` 可被 `KIMI_IMAGE_READ_BYTE_BUDGET` 覆盖，优先级均高于配置文件。
+
+## `memory`
+
+`[memory]` 表只包含 engine v2 持久化 memory 使用的限制，不会启用该功能，也不能包含 `enabled` 字段；请改用 `KIMI_CODE_EXPERIMENTAL_PERSISTENT_MEMORY` 启用持久化 memory。
+
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `recall_max_entries` | `integer` | `5` | 单次 recall 最多选择的 memory 条数 |
+| `recall_max_bytes_per_entry` | `integer` | `4096` | 单条 recall memory 正文最多渲染的 UTF-8 字节数 |
+| `recall_max_session_bytes` | `integer` | `61440` | 单次 recall 注入的完整 memory 信封的 UTF-8 字节上限 |
+| `extraction_max_turns` | `integer` | `5` | 自动提取 proposal 最多包含的最近 User 轮次 |
+
+```toml
+[memory]
+recall_max_entries = 5
+recall_max_bytes_per_entry = 4096
+recall_max_session_bytes = 61440
+extraction_max_turns = 5
+```
+
+自动提取只会生成待处理 proposal，不会自动写入持久化 memory。它必须同时启用 `KIMI_CODE_EXPERIMENTAL_PERSISTENT_MEMORY` 和 explicit-env 的 `KIMI_CODE_EXPERIMENTAL_PERSISTENT_MEMORY_AUTO_EXTRACT` flag；master `KIMI_CODE_EXPERIMENTAL_FLAG` 不会启用自动提取。
 
 <!--
 ## `experimental`

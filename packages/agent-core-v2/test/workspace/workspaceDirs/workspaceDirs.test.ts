@@ -84,6 +84,11 @@ import { IWorkspaceToolPolicy } from '#/workspace/workspaceToolPolicy/workspaceT
 import { WorkspaceToolPolicyService } from '#/workspace/workspaceToolPolicy/workspaceToolPolicyService';
 import { IWorkspaceInstructionsService } from '#/workspace/workspaceInstructions/workspaceInstructions';
 import { IWorkspaceMcpService } from '#/workspace/workspaceMcp/workspaceMcp';
+import { IWorkspaceMemoryCatalog } from '#/workspace/persistentMemory/memoryCatalog';
+import {
+  memoryCatalogMutation,
+  type MemoryCatalogMutationHost,
+} from '#/workspace/persistentMemory/memoryCatalogMutation';
 import { IWorkspaceSkillCatalog } from '#/workspace/workspaceSkillCatalog/workspaceSkillCatalog';
 
 import { stubLog } from '../../_base/log/stubs';
@@ -185,6 +190,24 @@ function workspaceMcpStub(): IWorkspaceMcpService {
       },
     }),
   } as unknown as IWorkspaceMcpService;
+}
+
+function workspaceMemoryCatalogStub(): IWorkspaceMemoryCatalog {
+  return {
+    _serviceBrand: undefined,
+    ready: Promise.resolve(),
+    onDidChange: Event.None as Event<void>,
+    list: () => Promise.resolve([]),
+    [memoryCatalogMutation]: () => ({
+      _serviceBrand: undefined,
+      ready: Promise.resolve(),
+      onDidChange: Event.None as Event<void>,
+      list: () => Promise.resolve([]),
+      create: () => Promise.reject(new Error('not implemented')),
+      update: () => Promise.reject(new Error('not implemented')),
+      forget: () => Promise.resolve(),
+    }),
+  } satisfies MemoryCatalogMutationHost as unknown as IWorkspaceMemoryCatalog;
 }
 
 describe('workspace add-dir (handler chain)', () => {
@@ -377,6 +400,7 @@ describe('workspace add-dir (handler chain)', () => {
       stubPair(IPluginAgentProfileLoader, agentProfileLoaderStub()),
       stubPair(IWorkspaceInstructionsService, workspaceInstructionsStub()),
       stubPair(IWorkspaceMcpService, workspaceMcpStub()),
+      stubPair(IWorkspaceMemoryCatalog, workspaceMemoryCatalogStub()),
     ]);
     hosts.push(host);
     return host;

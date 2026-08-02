@@ -8,7 +8,7 @@
 # commented "# field: type" lines describe the remaining schema fields.
 # Values resolve as: default -> config.toml -> env overlay -> memory.
 
-# Index (23 sections · 3 overlay(s))
+# Index (24 sections · 3 overlay(s))
 #   background               src/agent/task/configSection.ts
 #   cron                     src/app/cron/configSection.ts
 #   defaultPermissionMode    src/agent/permissionMode/configSection.ts
@@ -20,6 +20,7 @@
 #   image                    src/agent/media/configSection.ts
 #   loopControl              src/agent/loop/configSection.ts
 #   mcp                      src/app/mcpConfig/configSection.ts
+#   memory                   src/app/persistentMemory/configSection.ts
 #   mergeAllAvailableSkills  src/app/skillCatalog/configSection.ts
 #   modelCatalog             src/app/kosongConfig/configSection.ts
 #   models                   src/app/kosongConfig/configSection.ts
@@ -179,6 +180,18 @@ extra_skill_dirs = []
 [mcp]
 # startup_timeout_ms: integer
 # tool_timeout_ms: integer
+
+# ##########################################################################
+# memory
+#   owner: src/app/persistentMemory/configSection.ts
+#   scope: core
+# ##########################################################################
+
+[memory]
+recall_max_entries = 5
+recall_max_bytes_per_entry = 4096
+recall_max_session_bytes = 61440
+extraction_max_turns = 5
 
 # ##########################################################################
 # mergeAllAvailableSkills (config.toml: merge_all_available_skills)

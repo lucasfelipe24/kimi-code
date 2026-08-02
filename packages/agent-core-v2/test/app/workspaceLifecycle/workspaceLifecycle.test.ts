@@ -41,6 +41,11 @@ import { IWorkspaceInstructionsService } from '#/workspace/workspaceInstructions
 import { IWorkspaceMcpService } from '#/workspace/workspaceMcp/workspaceMcp';
 import { IWorkspaceDirs } from '#/workspace/workspaceDirs/workspaceDirs';
 import { WorkspaceDirsService } from '#/workspace/workspaceDirs/workspaceDirsService';
+import { IWorkspaceMemoryCatalog } from '#/workspace/persistentMemory/memoryCatalog';
+import {
+  memoryCatalogMutation,
+  type MemoryCatalogMutationHost,
+} from '#/workspace/persistentMemory/memoryCatalogMutation';
 import { IWorkspaceService, type Workspace } from '#/app/workspace/workspace';
 import { Error2, ErrorCodes } from '#/errors';
 import { encodeWorkDirKey } from '#/_base/utils/workdir-slug';
@@ -215,6 +220,21 @@ function sessionStubs(): ReturnType<typeof stubPair>[] {
         },
       }),
     } as unknown as IWorkspaceMcpService),
+    stubPair(IWorkspaceMemoryCatalog, {
+      _serviceBrand: undefined,
+      ready: Promise.resolve(),
+      onDidChange: Event.None as Event<void>,
+      list: () => Promise.resolve([]),
+      [memoryCatalogMutation]: () => ({
+        _serviceBrand: undefined,
+        ready: Promise.resolve(),
+        onDidChange: Event.None as Event<void>,
+        list: () => Promise.resolve([]),
+        create: () => Promise.reject(new Error('not implemented')),
+        update: () => Promise.reject(new Error('not implemented')),
+        forget: () => Promise.resolve(),
+      }),
+    } satisfies MemoryCatalogMutationHost as unknown as IWorkspaceMemoryCatalog),
     stubPair(IAgentLifecycleService, (() => {
       const main = {
         id: 'main',

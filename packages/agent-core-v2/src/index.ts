@@ -335,6 +335,23 @@ import '#/agent/tools/cron/cron-list/cronListTool';
 export * from '#/agent/tools/cron/cron-delete/cron-delete';
 import '#/agent/tools/cron/cron-delete/cronDeleteTool';
 
+export * from '#/app/persistentMemory/errors';
+export * from '#/app/persistentMemory/memoryStore';
+export * from '#/app/persistentMemory/memoryStoreService';
+export * from '#/app/persistentMemory/flag';
+export * from '#/app/persistentMemory/autoExtractFlag';
+export * from '#/app/persistentMemory/configSection';
+export * from '#/app/persistentMemory/redact';
+export * from '#/workspace/persistentMemory/memoryCatalog';
+import '#/workspace/persistentMemory/memoryCatalogService';
+export * from '#/session/persistentMemory/memorySeed';
+export * from '#/agent/tools/memory/memory';
+import '#/agent/tools/memory/memoryTool';
+export * from '#/agent/memoryRecall/memoryRecall';
+import '#/agent/memoryRecall/memoryRecallService';
+export * from '#/agent/memoryExtract/memoryExtract';
+import '#/agent/memoryExtract/memoryExtractService';
+
 import '#/session/agentLifecycle/profile/profiles';
 export * from '#/session/agentLifecycle/agentLifecycle';
 export * from '#/session/agentLifecycle/agentLifecycleService';

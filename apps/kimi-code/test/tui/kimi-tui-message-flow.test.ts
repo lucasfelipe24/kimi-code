@@ -46,6 +46,8 @@ import {
 } from '#/tui/components/dialogs/plugins-selector';
 import { KimiTUI, type KimiTUIStartupInput, type TUIState } from '#/tui/kimi-tui';
 import type { StreamingUIController } from '#/tui/controllers/streaming-ui';
+import { setExperimentalFeatures } from '#/tui/commands/experimental-flags';
+import { HelpPanelComponent } from '#/tui/components/dialogs/help-panel';
 import { handleFeedbackCommand } from '#/tui/commands/info';
 import { packageCodebase, scanCodebase } from '../../src/feedback/codebase';
 import { uploadArchive } from '../../src/feedback/upload';
@@ -304,13 +306,17 @@ function makeHarness(session = makeSession(), overrides: Record<string, unknown>
 async function makeDriver(
   session = makeSession(),
   harnessOverrides: Record<string, unknown> = {},
+  startupInputOverrides: Partial<KimiTUIStartupInput> = {},
 ): Promise<{
   driver: MessageDriver;
   session: ReturnType<typeof makeSession>;
   harness: ReturnType<typeof makeHarness>;
 }> {
   const harness = makeHarness(session, harnessOverrides);
-  const driver = new KimiTUI(harness as never, makeStartupInput()) as unknown as MessageDriver;
+  const driver = new KimiTUI(harness as never, {
+    ...makeStartupInput(),
+    ...startupInputOverrides,
+  }) as unknown as MessageDriver;
   vi.spyOn(driver.state.ui, 'requestRender').mockImplementation(() => {});
   vi.spyOn(driver.state.terminal, 'setProgress').mockImplementation(() => {});
   driver.persistInputHistory = vi.fn(async () => {});
@@ -955,6 +961,25 @@ command = "vim"
         command: command.slice(1),
       });
     }
+  });
+
+  it('persists gated slash commands to input history without their arguments', async () => {
+    const { driver } = await makeDriver();
+
+    driver.handleUserInput('/memory list secret-api-key');
+    await Promise.resolve();
+
+    expect(driver.persistInputHistory).toHaveBeenCalledWith('/memory');
+    expect(driver.persistInputHistory).not.toHaveBeenCalledWith('/memory list secret-api-key');
+  });
+
+  it('persists ungated slash commands to input history verbatim', async () => {
+    const { driver } = await makeDriver();
+
+    driver.handleUserInput('/title My session title');
+    await Promise.resolve();
+
+    expect(driver.persistInputHistory).toHaveBeenCalledWith('/title My session title');
   });
 
   it('does not re-enter plan mode after creating a plan-mode session', async () => {
@@ -5567,6 +5592,56 @@ command = "vim"
     expect(transcript).toContain('(empty)');
     expect(transcript).not.toContain('<hook_result');
   });
+});
+
+describe('slash command visibility wiring', () => {
+  interface VisibilityDriver extends MessageDriver {
+    getSlashCommands(): readonly { name: string }[];
+    showHelpPanel(): void;
+  }
+
+  function getHelpPanelCommandNames(driver: MessageDriver): string[] {
+    const panel = driver.state.editorContainer.children.find(
+      (child) => child instanceof HelpPanelComponent,
+    );
+    if (panel === undefined) throw new Error('Expected a mounted help panel.');
+    const opts = (panel as unknown as { opts: { commands: readonly { name: string }[] } }).opts;
+    return opts.commands.map((command) => command.name);
+  }
+
+  afterEach(() => {
+    setExperimentalFeatures([]);
+  });
+
+  it.each([
+    { engineV2: false, flagEnabled: false, visible: false },
+    { engineV2: false, flagEnabled: true, visible: false },
+    { engineV2: true, flagEnabled: false, visible: false },
+    { engineV2: true, flagEnabled: true, visible: true },
+  ])(
+    'lists /memory through getSlashCommands and the help panel only for engine v2 + flag (%o)',
+    async ({ engineV2, flagEnabled, visible }) => {
+      // The flag flows through the real init path: harness → setExperimentalFeatures.
+      const { driver } = await makeDriver(
+        makeSession(),
+        {
+          getExperimentalFeatures: vi.fn(async () =>
+            flagEnabled ? [{ id: 'persistent-memory', enabled: true }] : [],
+          ),
+        },
+        { engineV2 },
+      );
+      const visibilityDriver = driver as VisibilityDriver;
+
+      // The getter feeds both autocomplete (setupAutocomplete) and the help panel.
+      const names = visibilityDriver.getSlashCommands().map((command) => command.name);
+      expect(names.includes('memory')).toBe(visible);
+      expect(names).toContain('help');
+
+      visibilityDriver.showHelpPanel();
+      expect(getHelpPanelCommandNames(driver).includes('memory')).toBe(visible);
+    },
+  );
 });
 
 describe('/model status displayName override', () => {

@@ -111,11 +111,12 @@ Fields in the config file fall into two categories: **top-level scalars** that d
 | `background` | `table` | — | Background task runtime parameters → [`background`](#background) |
 | `tools` | `table` | — | Global tool switch → [`tools`](#tools) |
 | `image` | `table` | — | Image compression parameters → [`image`](#image) |
+| `memory` | `table` | — | Persistent-memory limits → [`memory`](#memory) |
 | `services` | `table` | — | Built-in external service configuration → [`services`](#services) |
 | `permission` | `table` | — | Initial permission rules → [`permission`](#permission) |
 | `hooks` | `array<table>` | — | Lifecycle hooks; see [Hooks](../customization/hooks.md) |
 
-The following sections cover each of the nested tables in turn: `providers`, `models`, `thinking`, `loop_control`, `background`, `tools`, `image`, `services`, and `permission`.
+The following sections cover each of the nested tables in turn: `providers`, `models`, `thinking`, `loop_control`, `background`, `tools`, `image`, `memory`, `services`, and `permission`.
 
 ## `providers`
 
@@ -323,6 +324,27 @@ Like the `tools` / `disallowedTools` fields of an agent file, this section shape
 | `read_byte_budget` | `integer` | `262144` (256 KB) | Per-image byte budget for images the model reads for itself (`ReadMediaFile` default reads). It bounds the accumulated request-body size when the model keeps screenshotting and reading images; fine detail stays reachable through the `region` parameter, which reads a crop back at full fidelity (`region` and `full_resolution` are not subject to this budget) |
 
 `max_edge_px` can be overridden by the `KIMI_IMAGE_MAX_EDGE_PX` environment variable and `read_byte_budget` by `KIMI_IMAGE_READ_BYTE_BUDGET`; both take higher priority than `config.toml`.
+
+## `memory`
+
+The `[memory]` table contains only the limits used by persistent memory in engine v2. It does not enable the feature and must not contain an `enabled` field; enable persistent memory with `KIMI_CODE_EXPERIMENTAL_PERSISTENT_MEMORY` instead.
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `recall_max_entries` | `integer` | `5` | Maximum memory entries selected for one recall |
+| `recall_max_bytes_per_entry` | `integer` | `4096` | Maximum UTF-8 bytes rendered for one recalled entry's body |
+| `recall_max_session_bytes` | `integer` | `61440` | Maximum UTF-8 bytes for the complete recalled-memory envelope in one recall injection |
+| `extraction_max_turns` | `integer` | `5` | Maximum recent user turns included in an automatic extraction proposal |
+
+```toml
+[memory]
+recall_max_entries = 5
+recall_max_bytes_per_entry = 4096
+recall_max_session_bytes = 61440
+extraction_max_turns = 5
+```
+
+Automatic extraction produces pending proposals only; it never writes them to persistent memory automatically. It requires both `KIMI_CODE_EXPERIMENTAL_PERSISTENT_MEMORY` and the explicit-env `KIMI_CODE_EXPERIMENTAL_PERSISTENT_MEMORY_AUTO_EXTRACT` flag. The master `KIMI_CODE_EXPERIMENTAL_FLAG` does not enable automatic extraction.
 
 <!--
 ## `experimental`

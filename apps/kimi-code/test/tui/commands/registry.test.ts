@@ -1,8 +1,10 @@
 import {
   BUILTIN_SLASH_COMMANDS,
   findBuiltInSlashCommand,
+  isSlashCommandVisible,
   parseSlashInput,
   resolveSlashCommandAvailability,
+  sanitizeSlashInputForHistory,
   addDirArgumentCompletions,
   sortSlashCommands,
   swarmArgumentCompletions,
@@ -160,6 +162,7 @@ describe('built-in slash command registry', () => {
         'login',
         'logout',
         'mcp',
+        'memory',
         'model',
         'new',
         'permission',
@@ -195,5 +198,54 @@ describe('built-in slash command registry', () => {
     expect(command).toBeDefined();
     expect((command as KimiSlashCommand).experimentalFlag).toBe('secondary-model');
     expect(resolveSlashCommandAvailability(command!, '')).toBe('always');
+  });
+
+  it('gates memory behind the persistent-memory experiment, always available', () => {
+    const command = findBuiltInSlashCommand('memory');
+    expect(command).toBeDefined();
+    expect(command!.description).toBe('Show persistent-memory status');
+    expect((command as KimiSlashCommand).experimentalFlag).toBe('persistent-memory');
+    expect((command as KimiSlashCommand).engineV2Only).toBe(true);
+    expect(resolveSlashCommandAvailability(command!, '')).toBe('always');
+  });
+});
+
+describe('isSlashCommandVisible', () => {
+  it.each([
+    { engineV2: false, flagEnabled: false, visible: false },
+    { engineV2: false, flagEnabled: true, visible: false },
+    { engineV2: true, flagEnabled: false, visible: false },
+    { engineV2: true, flagEnabled: true, visible: true },
+  ])('gates memory on engine v2 and the persistent-memory flag (%o)', ({ engineV2, flagEnabled, visible }) => {
+    const command = findBuiltInSlashCommand('memory') as KimiSlashCommand;
+    const isFlagEnabled = (flag: string | undefined) => flag !== undefined && flagEnabled;
+
+    expect(isSlashCommandVisible(command, engineV2, isFlagEnabled)).toBe(visible);
+  });
+
+  it('keeps ungated commands visible in every state', () => {
+    const command = findBuiltInSlashCommand('help') as KimiSlashCommand;
+    // Mirrors the real isExperimentalFlagEnabled: undefined flag means no gate.
+    const noFlags = (flag: string | undefined) => flag === undefined;
+
+    expect(isSlashCommandVisible(command, false, noFlags)).toBe(true);
+    expect(isSlashCommandVisible(command, true, noFlags)).toBe(true);
+  });
+});
+
+describe('sanitizeSlashInputForHistory', () => {
+  it('strips arguments from gated commands', () => {
+    expect(sanitizeSlashInputForHistory('/memory list secret-api-key')).toBe('/memory');
+    expect(sanitizeSlashInputForHistory('/workflow run demo-flow')).toBe('/workflow');
+  });
+
+  it('keeps gated commands without arguments verbatim', () => {
+    expect(sanitizeSlashInputForHistory('/memory')).toBe('/memory');
+  });
+
+  it('keeps ungated commands and non-commands verbatim', () => {
+    expect(sanitizeSlashInputForHistory('/title My secret title')).toBe('/title My secret title');
+    expect(sanitizeSlashInputForHistory('/does-not-exist arg')).toBe('/does-not-exist arg');
+    expect(sanitizeSlashInputForHistory('hello world')).toBe('hello world');
   });
 });

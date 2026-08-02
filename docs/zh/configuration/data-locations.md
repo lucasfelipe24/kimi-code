@@ -40,6 +40,13 @@ $KIMI_CODE_HOME  （默认 ~/.kimi-code）
 │   ├── <name>.json
 │   └── mcp/
 │       └── <key>-<suffix>.json
+├── memory/                 # 持久化 memory 记录（engine v2；可选）
+│   ├── user/
+│   │   └── <ulid>.json
+│   ├── workspace/<workspaceId>/
+│   │   └── <ulid>.json
+│   └── project/<workspaceId>/
+│       └── <ulid>.json
 ├── sessions/               # 会话数据（详见下文）
 │   └── <workDirKey>/<sessionId>/
 ├── bin/
@@ -67,6 +74,7 @@ $KIMI_CODE_HOME  （默认 ~/.kimi-code）
 - **`skills/`**：Kimi 专属用户级 Skills。该目录会随 `KIMI_CODE_HOME` 移动；跨工具通用 Skills 仍可放在 `~/.agents/skills/`。详见 [Agent Skills](../customization/skills.md)。
 - **`plugins/installed.json`**：记录已安装的 plugin、每个 plugin 的启用状态，以及通过 `/plugins` 或 `/plugins mcp disable|enable` 修改的 MCP server 能力状态。本地路径和 zip URL 安装的文件会复制到 `plugins/managed/<id>/`。详见 [Plugins](../customization/plugins.md)。
 - **`credentials/`**：OAuth 凭据目录，权限 `0o700`（目录）/ `0o600`（文件），仅当前用户可读写。托管供应商凭据存为 `credentials/<name>.json`，MCP server 凭据存在 `credentials/mcp/` 子目录下。凭据写入使用原子流程（tmp → fsync → rename）防止写损。
+- **`memory/`**：可选的 engine v2 持久化 memory 记录。每条记录都是 `memory/<scope>/<id>.json` 下的一个 JSON 文档：全局 user memory 使用 `user/<ulid>.json`，workspace memory 使用 `workspace/<workspaceId>/<ulid>.json`，project memory 使用 `project/<workspaceId>/<ulid>.json`。workspace id 是编码后的工作目录 key（`wd_<slug>_<12-char-sha256>`）。
 
 ## 会话数据
 
@@ -119,6 +127,7 @@ $KIMI_CODE_HOME  （默认 ~/.kimi-code）
 | 清理全局 Kimi 专属 Agent 指令 | 删除 `$KIMI_CODE_HOME/AGENTS.md`（默认为 `~/.kimi-code/AGENTS.md`） |
 | 清理 plugin 安装记录 | 删除 `$KIMI_CODE_HOME/plugins/`（本地 plugin 源码不受影响） |
 | 清空 Kimi 专属用户级 Skills | 删除 `$KIMI_CODE_HOME/skills/`（默认为 `~/.kimi-code/skills/`） |
+| 清理持久化 memory | 删除 `$KIMI_CODE_HOME/memory/` |
 
 ## 下一步
 

@@ -34,6 +34,7 @@ export function stubBootstrap(
     cache: 'cache',
     credentials: 'credentials',
     cron: 'cron',
+    memory: 'memory',
   };
   return {
     _serviceBrand: undefined,

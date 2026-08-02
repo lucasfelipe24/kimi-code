@@ -98,21 +98,28 @@ export class AgentContextInjectorService extends Disposable implements IAgentCon
     });
   }
 
-  async injectAfterCompaction(): Promise<void> {
+  async injectAfterCompaction(signal?: AbortSignal): Promise<void> {
     this.isNewTurn = true;
-    await this.inject();
+    await this.inject(signal);
   }
 
-  private async inject(): Promise<void> {
+  private async inject(signal?: AbortSignal): Promise<void> {
+    const throwIfAborted = (): void => {
+      signal?.throwIfAborted();
+    };
+    throwIfAborted();
     const isNewTurn = this.isNewTurn;
     this.isNewTurn = false;
     for (const entry of this.entries) {
+      throwIfAborted();
       const injectedPositions: readonly number[] = [...entry.positions];
       const content = await entry.provider({
         injectedPositions,
         lastInjectedAt: injectedPositions.at(-1) ?? null,
         isNewTurn,
+        signal,
       });
+      throwIfAborted();
       if (!this.entries.has(entry)) continue;
       if (content === undefined) continue;
       const origin = { kind: 'injection' as const, variant: entry.name };

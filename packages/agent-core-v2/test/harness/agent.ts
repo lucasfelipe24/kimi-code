@@ -27,6 +27,7 @@ import { IAgentGoalService } from '#/agent/goal/goal';
 import { AgentGoalService } from '#/agent/goal/goalService';
 import { ISessionMcpHandle } from '#/session/mcp/sessionMcpHandle';
 import { ISessionWorkspaceInfo } from '#/session/workspaceInfo/workspaceInfo';
+import { ISessionMemoryAccess } from '#/session/persistentMemory/memorySeed';
 import { McpConnectionManager } from '#/mcpCore/connection-manager';
 import { loadAgentsMdForRoots, type LoadedAgentsMd } from '#/agent/profile/context';
 import { InMemorySkillCatalog } from '#/app/skillCatalog/registry';
@@ -1212,6 +1213,21 @@ export class AgentTestContext {
               additionalDirs: [],
               onDidChange: Event.None as Event<void>,
             } satisfies ISessionWorkspaceInfo);
+            reg.defineInstance(ISessionMemoryAccess, {
+              _serviceBrand: undefined,
+              ready: Promise.resolve(),
+              onDidChange: Event.None as Event<void>,
+              list: () => Promise.resolve([]),
+              create: () =>
+                Promise.reject(
+                  new Error('ISessionMemoryAccess.create is not supported in the test harness'),
+                ),
+              update: () =>
+                Promise.reject(
+                  new Error('ISessionMemoryAccess.update is not supported in the test harness'),
+                ),
+              forget: () => Promise.resolve(),
+            } satisfies ISessionMemoryAccess);
             // The harness skips the Workspace scope entirely, so the session
             // state service's cascade parent is seeded directly: a workspace
             // state instance chained onto the App-scope root.

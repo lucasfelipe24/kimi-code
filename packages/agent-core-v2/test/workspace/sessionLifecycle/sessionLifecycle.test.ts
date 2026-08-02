@@ -36,6 +36,14 @@ import { IUserAgentProfileLoader } from '#/workspace/workspaceAgentProfileLoader
 import { IPluginAgentProfileLoader } from '#/workspace/workspaceAgentProfileLoader/pluginAgentProfileLoader';
 import { IWorkspaceDirs } from '#/workspace/workspaceDirs/workspaceDirs';
 import { WorkspaceDirsService } from '#/workspace/workspaceDirs/workspaceDirsService';
+import { IWorkspaceMemoryCatalog } from '#/workspace/persistentMemory/memoryCatalog';
+import {
+  hasCatalogMutationCapability,
+  memoryCatalogMutation,
+  type MemoryCatalogMutationHost,
+  type MemoryMutationActor,
+} from '#/workspace/persistentMemory/memoryCatalogMutation';
+import { ISessionMemoryAccess } from '#/session/persistentMemory/memorySeed';
 import { IWorkspaceInstructionsService } from '#/workspace/workspaceInstructions/workspaceInstructions';
 import { IWorkspaceMcpService } from '#/workspace/workspaceMcp/workspaceMcp';
 import { IAgentPlanService } from '#/agent/plan/plan';
@@ -337,6 +345,43 @@ function atomicDocumentStoreStub(): IAtomicDocumentStore {
   };
 }
 
+let expectedMainMemoryAccess: ISessionMemoryAccess | undefined;
+
+function workspaceMemoryCatalogStub(): IWorkspaceMemoryCatalog {
+  const accesses: Record<MemoryMutationActor, ISessionMemoryAccess> = {
+    main: {
+      _serviceBrand: undefined,
+      ready: Promise.resolve(),
+      onDidChange: Event.None as Event<void>,
+      list: () => Promise.resolve([]),
+      create: () => Promise.reject(new Error('not used in this test')),
+      update: () => Promise.reject(new Error('not used in this test')),
+      forget: () => Promise.resolve(),
+    },
+    subagent: {
+      _serviceBrand: undefined,
+      ready: Promise.resolve(),
+      onDidChange: Event.None as Event<void>,
+      list: () => Promise.resolve([]),
+      create: () => Promise.reject(new Error('not used in this test')),
+      update: () => Promise.reject(new Error('not used in this test')),
+      forget: () => Promise.resolve(),
+    },
+  };
+  expectedMainMemoryAccess = accesses.main;
+  const catalog: MemoryCatalogMutationHost = {
+    _serviceBrand: undefined,
+    ready: Promise.resolve(),
+    onDidChange: Event.None as Event<void>,
+    list: () => Promise.resolve([]),
+    [memoryCatalogMutation]: (capability, actor) => {
+      if (!hasCatalogMutationCapability(capability)) throw new Error('invalid capability');
+      return accesses[actor];
+    },
+  };
+  return catalog;
+}
+
 function sessionToolPolicyStub(): ISessionToolPolicy {
   return {
     _serviceBrand: undefined,
@@ -571,6 +616,7 @@ describe('SessionLifecycleService', () => {
       } satisfies ISessionProcessRunner),
       ...agentProfileLoaderStubs(),
       stubPair(IWorkspaceInstructionsService, workspaceInstructionsStub()),
+      stubPair(IWorkspaceMemoryCatalog, workspaceMemoryCatalogStub()),
       stubPair(IWorkspaceService, workspaceStub()),
       stubPair(ISessionIndex, sessionIndexStub()),
       stubPair(IAppendLogStore, appendLogStoreStub()),
@@ -616,10 +662,11 @@ describe('SessionLifecycleService', () => {
     expect(svc.get('s1')).toBeUndefined();
   });
 
-  it('create seeds identity and materializes metadata', async () => {
+  it('create seeds identity, main memory access, and materializes metadata', async () => {
     const svc = await build();
     const h = await svc.create({ sessionId: 's1', workDir: '/tmp/proj' });
     expect(h.kind).toBe(LifecycleScope.Session);
+    expect(h.accessor.get(ISessionMemoryAccess)).toBe(expectedMainMemoryAccess);
   });
 
   it('re-arms the explicit agent-profile loader after a fatal ready rejection so a later create succeeds', async () => {

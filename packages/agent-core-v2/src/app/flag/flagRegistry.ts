@@ -22,6 +22,7 @@ export interface FlagDefinitionInput {
   readonly env: string;
   readonly default: boolean;
   readonly surface: FlagSurface;
+  readonly activation?: 'standard' | 'explicit-env';
 }
 
 const contributedFlags: FlagDefinitionInput[] = [];

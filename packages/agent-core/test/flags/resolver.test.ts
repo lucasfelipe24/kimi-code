@@ -185,6 +185,29 @@ describe('FlagResolver', () => {
 });
 
 describe('FLAG_DEFINITIONS invariants', () => {
+  it('does not register the v2-only persistent-memory flag', () => {
+    const registeredIds: readonly string[] = FLAG_DEFINITIONS.map(({ id }) => id);
+    expect(registeredIds.includes('persistent-memory')).toBe(false);
+  });
+
+  it('does not let env, master switch, or config resurrect the persistent-memory flag', () => {
+    const resolver = new FlagResolver(
+      {
+        KIMI_CODE_EXPERIMENTAL_PERSISTENT_MEMORY: '1',
+        [MASTER_ENV]: '1',
+      },
+      FLAG_DEFINITIONS,
+      { 'persistent-memory': true } as never,
+    );
+
+    const flagId: string = 'persistent-memory';
+    const snapshotIds: readonly string[] = Object.keys(resolver.snapshot());
+    const enabledIds: readonly string[] = resolver.enabledIds();
+    expect(snapshotIds.includes(flagId)).toBe(false);
+    expect(enabledIds.includes(flagId)).toBe(false);
+    expect(resolver.enabled(flagId as FlagId)).toBe(false);
+  });
+
   it('every env satisfies: prefix / unique / not the master switch', () => {
     const seenEnv = new Set<string>();
     const seenId = new Set<string>();

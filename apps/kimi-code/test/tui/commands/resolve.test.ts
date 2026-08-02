@@ -1,4 +1,5 @@
 import {
+  findBuiltInSlashCommand,
   resolveSkillCommand,
   resolveSlashCommandInput,
   setExperimentalFeatures,
@@ -17,6 +18,7 @@ function resolve(
     pluginCommandMap: new Map<string, string>(),
     isStreaming: false,
     isCompacting: false,
+    engineV2: false,
     ...overrides,
   });
 }
@@ -323,6 +325,68 @@ describe('workflow command resolution', () => {
         name: 'workflow',
       });
     }
+  });
+});
+
+describe('memory command resolution', () => {
+  afterEach(() => {
+    setExperimentalFeatures([]);
+  });
+
+  it.each([
+    { engineV2: false, flagEnabled: false, available: false },
+    { engineV2: false, flagEnabled: true, available: false },
+    { engineV2: true, flagEnabled: false, available: false },
+    { engineV2: true, flagEnabled: true, available: true },
+  ])('requires engine v2 and the persistent-memory flag (%o)', ({ engineV2, flagEnabled, available }) => {
+    setExperimentalFeatures(
+      flagEnabled ? [{ id: 'persistent-memory', enabled: true }] : [],
+    );
+
+    expect(resolve('/memory', { engineV2 })).toEqual(
+      available
+        ? { kind: 'builtin', command: findBuiltInSlashCommand('memory'), name: 'memory', args: '' }
+        : { kind: 'invalid', commandName: 'memory', reason: 'unavailable' },
+    );
+  });
+
+  it('fails closed without leaking arguments', () => {
+    expect(resolve('/memory list secret-content', { engineV2: false })).toEqual({
+      kind: 'invalid',
+      commandName: 'memory',
+      reason: 'unavailable',
+    });
+  });
+
+  it('does not fall through to a same-named skill when the gate is closed', () => {
+    const skillCommandMap = new Map([['memory', 'memory']]);
+
+    expect(resolve('/memory list', { engineV2: false, skillCommandMap })).toEqual({
+      kind: 'invalid',
+      commandName: 'memory',
+      reason: 'unavailable',
+    });
+  });
+
+  it('resolves the builtin over a same-named skill when the gate is open', () => {
+    setExperimentalFeatures([{ id: 'persistent-memory', enabled: true }]);
+    const skillCommandMap = new Map([['memory', 'memory']]);
+
+    expect(resolve('/memory list', { engineV2: true, skillCommandMap })).toMatchObject({
+      kind: 'builtin',
+      name: 'memory',
+      args: 'list',
+    });
+  });
+
+  it('preserves arguments when the command resolves', () => {
+    setExperimentalFeatures([{ id: 'persistent-memory', enabled: true }]);
+
+    expect(resolve('/memory list', { engineV2: true })).toMatchObject({
+      kind: 'builtin',
+      name: 'memory',
+      args: 'list',
+    });
   });
 });
 

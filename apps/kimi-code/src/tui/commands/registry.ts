@@ -5,6 +5,7 @@ import { basename, dirname, join, relative, resolve } from 'pathe';
 import type { AutocompleteItem } from '@moonshot-ai/pi-tui';
 
 import { completeLeadingArg, type ArgCompletionSpec } from './complete-args';
+import { parseSlashInput } from './parse';
 import type {
   KimiSlashCommand,
   SlashCommandAvailability,
@@ -364,6 +365,15 @@ export const BUILTIN_SLASH_COMMANDS = [
     completeArgs: addDirArgumentCompletions,
   },
   {
+    name: 'memory',
+    aliases: [],
+    description: 'Show persistent-memory status',
+    priority: 60,
+    availability: 'always',
+    experimentalFlag: 'persistent-memory',
+    engineV2Only: true,
+  },
+  {
     name: 'experiments',
     aliases: ['experimental'],
     description: 'Manage experimental features',
@@ -537,6 +547,30 @@ export function resolveSlashCommandAvailability(
 ): SlashCommandAvailability {
   const availability = command.availability ?? 'idle-only';
   return typeof availability === 'function' ? availability(args) : availability;
+}
+
+export function isSlashCommandVisible(
+  command: KimiSlashCommand,
+  engineV2: boolean,
+  isFlagEnabled: (flag: string | undefined) => boolean,
+): boolean {
+  return (!command.engineV2Only || engineV2) && isFlagEnabled(command.experimentalFlag);
+}
+
+/**
+ * Input-history policy: commands gated behind an experiment or engine v2 may
+ * take sensitive arguments in the future, so history persists only the command
+ * name. Everything else is stored verbatim.
+ */
+export function sanitizeSlashInputForHistory(text: string): string {
+  const parsed = parseSlashInput(text);
+  if (parsed === null || parsed.args.length === 0) return text;
+  const command = findBuiltInSlashCommand(parsed.name);
+  if (command === undefined) return text;
+  const gated =
+    (command as KimiSlashCommand).experimentalFlag !== undefined ||
+    (command as KimiSlashCommand).engineV2Only === true;
+  return gated ? `/${parsed.name}` : text;
 }
 
 export function sortSlashCommands(commands: readonly KimiSlashCommand[]): KimiSlashCommand[] {

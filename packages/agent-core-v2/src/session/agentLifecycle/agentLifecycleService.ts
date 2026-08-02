@@ -49,6 +49,8 @@ import { IAgentContextMemoryService } from '#/agent/contextMemory/contextMemory'
 import { IAgentFullCompactionService } from '#/agent/fullCompaction/fullCompaction';
 import { IAgentToolActivationService } from '#/agent/toolActivation/toolActivation';
 import { ISessionInteractionService } from '#/session/interaction/interaction';
+import { ISessionMemoryAccessFactory } from '#/session/persistentMemory/memoryAccessFactory';
+import { ISessionMemoryAccess } from '#/session/persistentMemory/memorySeed';
 import { IWireService } from '#/wire/wire';
 import { ITelemetryService } from '#/app/telemetry/telemetry';
 import {
@@ -56,6 +58,7 @@ import {
   type CreateAgentOptions,
   type ForkAgentOptions,
   IAgentLifecycleService,
+  MAIN_AGENT_ID,
 } from './agentLifecycle';
 
 let nextAgentId = 0;
@@ -83,6 +86,8 @@ export class AgentLifecycleService extends Disposable implements IAgentLifecycle
     @IConfigService private readonly config: IConfigService,
     @ISessionMcpHandle private readonly mcpHandle: ISessionMcpHandle,
     @ISessionInteractionService private readonly interaction: ISessionInteractionService,
+    @ISessionMemoryAccessFactory
+    private readonly memoryAccessFactory: ISessionMemoryAccessFactory,
     @ITelemetryService private readonly telemetry: ITelemetryService,
   ) {
     super();
@@ -154,6 +159,10 @@ export class AgentLifecycleService extends Disposable implements IAgentLifecycle
       {
         extra: [
           [IAgentScopeContext, makeAgentScopeContext({ agentId, agentScope })],
+          [
+            ISessionMemoryAccess,
+            this.memoryAccessFactory.forActor(agentId === MAIN_AGENT_ID ? 'main' : 'subagent'),
+          ],
           [ITelemetryService, this.telemetry.withContext({ agent_id: agentId })],
         ],
       },

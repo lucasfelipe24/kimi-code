@@ -38,6 +38,8 @@ import '#/agent/permissionMode/configSection';
 import { DEFAULT_PERMISSION_MODE_SECTION } from '#/agent/permissionMode/configSection';
 import '#/agent/media/configSection';
 import { IMAGE_SECTION, type ImageConfig } from '#/agent/media/configSection';
+import '#/app/persistentMemory/configSection';
+import { DEFAULT_MEMORY_CONFIG, MEMORY_SECTION } from '#/app/persistentMemory/configSection';
 import '#/agent/loop/configSection';
 import {
   LOOP_CONTROL_SECTION,
@@ -661,6 +663,27 @@ describe('skill config sections', () => {
 
     expect(registry.getSection(EXTRA_SKILL_DIRS_SECTION)?.defaultValue).toEqual([]);
     expect(registry.getSection(MERGE_ALL_AVAILABLE_SKILLS_SECTION)?.defaultValue).toBe(true);
+  });
+});
+
+describe('memory config section', () => {
+  it('registers the [memory] section with defaults and bounded schema', () => {
+    const registry = new ConfigRegistry();
+
+    const section = registry.getSection(MEMORY_SECTION);
+    expect(section).toBeDefined();
+    expect(section?.defaultValue).toEqual(DEFAULT_MEMORY_CONFIG);
+    expect(section?.defaultValue).not.toHaveProperty('enabled');
+
+    expect(registry.validate(MEMORY_SECTION, {})).toEqual({});
+    expect(registry.validate(MEMORY_SECTION, { recallMaxEntries: 5 })).toEqual({
+      recallMaxEntries: 5,
+    });
+    expect(registry.validate(MEMORY_SECTION, { enabled: true })).toEqual({});
+    expect(() => registry.validate(MEMORY_SECTION, { recallMaxEntries: 0 })).toThrow();
+    expect(() => registry.validate(MEMORY_SECTION, { recallMaxEntries: 21 })).toThrow();
+    expect(() => registry.validate(MEMORY_SECTION, { recallMaxBytesPerEntry: 128 })).toThrow();
+    expect(() => registry.validate(MEMORY_SECTION, { extractionMaxTurns: 11 })).toThrow();
   });
 });
 

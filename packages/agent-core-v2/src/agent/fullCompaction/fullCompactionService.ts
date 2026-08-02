@@ -559,7 +559,7 @@ export class AgentFullCompactionService extends Disposable implements IAgentFull
         this.log.error('failed to refresh system prompt after compaction', { error });
       }
       this.lastCompactedTokenCount = result.tokensAfter;
-      await this.contextInjector.injectAfterCompaction();
+      await this.contextInjector.injectAfterCompaction(active.abortController.signal);
       this.lastCompactedTokenCount = this.tokenCountWithPending();
       if (!this.markCompleted(active)) {
         throw compactionCancelledReason(active);

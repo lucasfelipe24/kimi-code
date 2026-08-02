@@ -39,6 +39,7 @@ import {
 } from './config';
 import { handleGoalCommand } from './goal';
 import { handleFeedbackCommand, showMcpServers, showStatusReport, showUsage } from './info';
+import { handleMemoryCommand } from './memory';
 import { handleAddDirCommand } from './add-dir';
 import { parseSlashInput } from './parse';
 import { handlePluginsCommand } from './plugins';
@@ -83,6 +84,7 @@ export {
 } from './config';
 export { handleSwarmCommand } from './swarm';
 export { handleFeedbackCommand, showMcpServers, showStatusReport, showUsage } from './info';
+export { handleMemoryCommand } from './memory';
 export { handlePluginsCommand } from './plugins';
 export { handleReloadCommand, handleReloadTuiCommand } from './reload';
 export { handleGoalCommand } from './goal';
@@ -104,6 +106,7 @@ export interface SlashCommandHost {
   state: TUIState;
   session: Session | undefined;
   readonly harness: KimiHarness;
+  readonly engineV2?: boolean;
   cancelInFlight: (() => void) | undefined;
   deferUserMessages: boolean;
 
@@ -188,6 +191,7 @@ async function executeSlashCommand(host: SlashCommandHost, input: string): Promi
     pluginCommandMap: host.pluginCommandMap,
     isStreaming: host.state.appState.streamingPhase !== 'idle',
     isCompacting: host.state.appState.isCompacting,
+    engineV2: host.engineV2 === true,
   });
 
   switch (intent.kind) {
@@ -202,7 +206,12 @@ async function executeSlashCommand(host: SlashCommandHost, input: string): Promi
         reason: intent.reason,
         command: intent.commandName,
       });
-      host.showError(`Invalid slash command: /${intent.commandName}`);
+      // Generic local error: never echo the rejected arguments back.
+      host.showError(
+        intent.reason === 'unavailable'
+          ? `/${intent.commandName} is not available in this version.`
+          : `Invalid slash command: /${intent.commandName}`,
+      );
       return;
     case 'skill': {
       const session = host.session;
@@ -290,6 +299,9 @@ async function handleBuiltInSlashCommand(
       return;
     case 'experiments':
       await showExperimentsPanel(host);
+      return;
+    case 'memory':
+      handleMemoryCommand(host, args);
       return;
     case 'reload':
       await handleReloadCommand(host);

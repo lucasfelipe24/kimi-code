@@ -40,6 +40,13 @@ $KIMI_CODE_HOME  (default: ~/.kimi-code)
 │   ├── <name>.json
 │   └── mcp/
 │       └── <key>-<suffix>.json
+├── memory/                 # Persistent-memory records (engine v2; optional)
+│   ├── user/
+│   │   └── <ulid>.json
+│   ├── workspace/<workspaceId>/
+│   │   └── <ulid>.json
+│   └── project/<workspaceId>/
+│       └── <ulid>.json
 ├── sessions/               # Session data (see below)
 │   └── <workDirKey>/<sessionId>/
 ├── bin/
@@ -67,6 +74,7 @@ Each top-level file under the data root serves a specific purpose; most are mana
 - **`skills/`**: Kimi-specific user-level Skills. This directory moves with `KIMI_CODE_HOME`; generic cross-tool Skills can still live under `~/.agents/skills/`. See [Agent Skills](../customization/skills.md).
 - **`plugins/installed.json`**: records installed plugins, each plugin's enabled state, and MCP server capability state changes made via `/plugins` or `/plugins mcp disable|enable`. Files installed from local paths or zip URLs are copied to `plugins/managed/<id>/`. See [Plugins](../customization/plugins.md).
 - **`credentials/`**: OAuth credential directory, with permissions `0o700` (directory) / `0o600` (files), readable and writable only by the current user. Managed provider credentials are stored as `credentials/<name>.json`; MCP server credentials are stored under `credentials/mcp/`. Credentials are written using an atomic flow (tmp → fsync → rename) to prevent corruption.
+- **`memory/`**: Optional engine v2 persistent-memory records. Each record is one JSON document at `memory/<scope>/<id>.json`: `user/<ulid>.json` for global user memory, `workspace/<workspaceId>/<ulid>.json` for workspace memory, or `project/<workspaceId>/<ulid>.json` for project memory. The workspace id is the encoded working-directory key (`wd_<slug>_<12-char-sha256>`).
 
 ## Session data
 
@@ -119,6 +127,7 @@ Deleting the data root directory (`~/.kimi-code/` or the path set by `KIMI_CODE_
 | Clear global Kimi-specific agent instructions | Delete `$KIMI_CODE_HOME/AGENTS.md` (default `~/.kimi-code/AGENTS.md`) |
 | Clear plugin install records | Delete `$KIMI_CODE_HOME/plugins/` (local plugin source directories are not affected) |
 | Clear Kimi-specific user-level Skills | Delete `$KIMI_CODE_HOME/skills/` (default `~/.kimi-code/skills/`) |
+| Clear persistent memory | Delete `$KIMI_CODE_HOME/memory/` |
 
 ## Next steps
 

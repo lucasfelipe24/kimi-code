@@ -42,6 +42,8 @@ import {
   buildPluginSlashCommands,
   buildSkillSlashCommands,
   isExperimentalFlagEnabled,
+  isSlashCommandVisible,
+  sanitizeSlashInputForHistory,
   setExperimentalFeatures,
   sortSlashCommands,
   type KimiSlashCommand,
@@ -332,7 +334,7 @@ export class KimiTUI {
   private backgroundRefreshPromise: Promise<void> | undefined;
   private readonly migrationPlan: MigrationPlan | null;
   private readonly migrateOnly: boolean;
-  private readonly engineV2: boolean;
+  readonly engineV2: boolean;
   private startupNotice: string | undefined;
   private lastActivityMode: string | undefined;
   private turnTimingInterval: ReturnType<typeof setInterval> | undefined;
@@ -452,7 +454,7 @@ export class KimiTUI {
 
   private getSlashCommands(): readonly KimiSlashCommand[] {
     const builtins = sortSlashCommands(BUILTIN_SLASH_COMMANDS).filter((command) =>
-      isExperimentalFlagEnabled(command.experimentalFlag),
+      isSlashCommandVisible(command, this.engineV2, isExperimentalFlagEnabled),
     );
     return [...builtins, ...this.skillCommands, ...this.pluginCommands];
   }
@@ -1046,7 +1048,8 @@ export class KimiTUI {
     // Shell commands are stored with a leading `!` so ↑ recall can tell them
     // apart from prompts and restore bash mode (see CustomEditor's mode-aware
     // history navigation). The `!` is stripped again when the entry is recalled.
-    const historyText = wasBashMode ? `!${text}` : text;
+    // Gated slash commands are stored without their arguments (SEC-002).
+    const historyText = wasBashMode ? `!${text}` : sanitizeSlashInputForHistory(text);
     void this.persistInputHistory(historyText);
     if (wasBashMode) {
       // Only one foreground action at a time: queue the shell command while
