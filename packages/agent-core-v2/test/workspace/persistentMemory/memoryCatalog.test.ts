@@ -20,7 +20,6 @@ import { DisposableStore } from '#/_base/di/lifecycle';
 import { createServices } from '#/_base/di/test';
 import { ILogService } from '#/_base/log/log';
 import { IBootstrapService } from '#/app/bootstrap/bootstrap';
-import { IFlagService } from '#/app/flag/flag';
 import { MemoryErrors } from '#/app/persistentMemory/errors';
 import { IMemoryStore } from '#/app/persistentMemory/memoryStore';
 import { mutationAccess, type MemoryStoreMutation } from '#/app/persistentMemory/memoryStoreMutation';
@@ -63,13 +62,11 @@ describe('WorkspaceMemoryCatalogService', () => {
   let trust: IWorkspaceTrust;
   let store: IMemoryStore;
   let mutations: MemoryStoreMutation;
-  let flagEnabled: boolean;
 
   beforeEach(async () => {
     homeDir = mkdtempSync(join(tmpdir(), 'kimi-memory-catalog-home-'));
     cwd = mkdtempSync(join(tmpdir(), 'kimi-memory-catalog-cwd-'));
     disposables = new DisposableStore();
-    flagEnabled = true;
 
     const ix = createServices(disposables, {
       strict: true,
@@ -85,7 +82,6 @@ describe('WorkspaceMemoryCatalogService', () => {
           new JsonAtomicDocumentStore(new FileStorageService(homeDir)),
         );
         reg.defineInstance(ILogService, stubLog());
-        reg.definePartialInstance(IFlagService, { enabled: () => flagEnabled });
         reg.define(IMemoryStore, MemoryStoreService);
         reg.define(IWorkspaceTrust, WorkspaceTrustService);
         reg.define(IWorkspaceMemoryCatalog, WorkspaceMemoryCatalogService);
@@ -528,21 +524,4 @@ describe('WorkspaceMemoryCatalogService', () => {
     });
   });
 
-  describe('feature-flag gate at the mutation boundary', () => {
-    it('rejects create with MEMORY_DISABLED when the persistent-memory flag is off', async () => {
-      flagEnabled = false;
-      expect(
-        await errorCode(
-          access.create({
-            scope: 'workspace',
-            type: 'reference',
-            name: 'n',
-            description: 'd',
-            body: 'b',
-          }),
-        ),
-      ).toBe(MemoryErrors.codes.MEMORY_DISABLED);
-      expect(await store.list(`workspace/${WORKSPACE_ID}`)).toHaveLength(0);
-    });
-  });
 });

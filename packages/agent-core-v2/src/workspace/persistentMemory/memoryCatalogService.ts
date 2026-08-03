@@ -4,8 +4,8 @@
  * Projects the App-scoped memory store into user, workspace, and trusted-project
  * records for one workspace. Public DI reflection sees only the read catalog.
  * Authorized actor-bound closures enter the symbol-only mutation boundary,
- * which enforces capability, feature flag, actor scope, trust, redaction, and
- * residual-secret rejection before persistence. Bound at Workspace scope.
+ * which enforces capability, actor scope, trust, redaction, and residual-secret
+ * rejection before persistence. Bound at Workspace scope.
  */
 
 import { ulid } from 'ulid';
@@ -13,9 +13,7 @@ import { ulid } from 'ulid';
 import { Disposable } from '#/_base/di/lifecycle';
 import { LifecycleScope, ScopeActivation, registerScopedService } from '#/_base/di/scope';
 import { Emitter } from '#/_base/event';
-import { IFlagService } from '#/app/flag/flag';
 import { MemoryErrors } from '#/app/persistentMemory/errors';
-import { PERSISTENT_MEMORY_FLAG_ID } from '#/app/persistentMemory/flag';
 import {
   IMemoryStore,
   MemoryError,
@@ -66,7 +64,6 @@ export class WorkspaceMemoryCatalogService
     @IWorkspaceContext workspace: IWorkspaceContext,
     @IMemoryStore private readonly store: IMemoryStore,
     @IWorkspaceTrust private readonly trust: IWorkspaceTrust,
-    @IFlagService private readonly flags: IFlagService,
   ) {
     super();
     this.workspaceId = workspace.workspaceId;
@@ -228,9 +225,6 @@ export class WorkspaceMemoryCatalogService
     scope: MemoryScope,
   ): void {
     this.assertActorScope(capability, actor, scope);
-    if (!this.flags.enabled(PERSISTENT_MEMORY_FLAG_ID)) {
-      throw new MemoryError(MemoryErrors.codes.MEMORY_DISABLED, 'persistent memory disabled');
-    }
     if (scope === 'project' && !this.trust.isTrusted()) {
       throw new MemoryError(
         MemoryErrors.codes.MEMORY_TRUST_REQUIRED,

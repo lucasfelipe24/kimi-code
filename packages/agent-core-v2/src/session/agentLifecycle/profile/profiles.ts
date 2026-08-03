@@ -45,6 +45,7 @@ const AGENT_TOOLS = [
   'GetGoal',
   'SetGoalBudget',
   'UpdateGoal',
+  'Memory',
   'mcp__*',
 ] as const;
 
@@ -62,6 +63,7 @@ const CODER_TOOLS = [
   'Grep',
   'Read',
   'ReadMediaFile',
+  'Memory',
   'Skill',
   'TaskList',
   'TaskOutput',

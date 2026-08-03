@@ -53,6 +53,8 @@ import en_onboarding from './en/onboarding';
 import zh_onboarding from './zh/onboarding';
 import en_settings from './en/settings';
 import zh_settings from './zh/settings';
+import en_memory from './en/memory';
+import zh_memory from './zh/memory';
 import en_header from './en/header';
 import zh_header from './zh/header';
 import en_workflow from './en/workflow';
@@ -90,6 +92,7 @@ export const messages = {
     theme: en_theme,
     onboarding: en_onboarding,
     settings: en_settings,
+    memory: en_memory,
     header: en_header,
     sideChat: en_sideChat,
   },
@@ -122,6 +125,7 @@ export const messages = {
     theme: zh_theme,
     onboarding: zh_onboarding,
     settings: zh_settings,
+    memory: zh_memory,
     header: zh_header,
     sideChat: zh_sideChat,
   },

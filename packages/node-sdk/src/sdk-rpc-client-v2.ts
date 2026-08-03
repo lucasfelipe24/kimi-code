@@ -200,7 +200,9 @@ import {
   IWorkspaceDirs,
   ISessionLifecycleService,
   IWorkspaceLifecycleService,
+  IWorkspaceMemoryCatalog,
   IWorkspaceTrust,
+  memoryAccessForActor,
   closeSessionById,
   followWorkspaceHandlers,
   getLiveSessionById,
@@ -296,6 +298,9 @@ import type {
   SessionSummary,
   SessionUsage,
   SkillSummary,
+  CreateMemoryInput,
+  MemorySummary,
+  UpdateMemoryInput,
   TelemetryClient,
   WorkspaceTrustInfo,
 } from '#/types';
@@ -619,6 +624,51 @@ export class SDKRpcClientV2 extends SDKRpcClientBase {
       .get(IWorkspaceLifecycleService)
       .handlerFor({ root: workDir });
     await handler.accessor.get(IWorkspaceTrust).trust();
+  }
+
+  /**
+   * Persistent-memory CRUD, resolved in-process (same `handlerFor({ root })`
+   * path as trust). Reads use the public `IWorkspaceMemoryCatalog.list`; writes
+   * enter the authorized mutation boundary via `memoryAccessForActor(catalog,
+   * 'main')` — the SDK caller is the main actor. All gating (feature flag,
+   * trust, redaction, caps) stays inside the catalog.
+   */
+  override async listMemories(workDir: string): Promise<readonly MemorySummary[]> {
+    const catalog = await this.memoryCatalog(workDir);
+    return (await catalog.list()).map(toMemorySummary);
+  }
+
+  override async createMemory(workDir: string, input: CreateMemoryInput): Promise<MemorySummary> {
+    const catalog = await this.memoryCatalog(workDir);
+    return toMemorySummary(await memoryAccessForActor(catalog, 'main').create(input));
+  }
+
+  override async updateMemory(
+    workDir: string,
+    id: string,
+    input: UpdateMemoryInput,
+  ): Promise<MemorySummary> {
+    const catalog = await this.memoryCatalog(workDir);
+    const { scope, ...patch } = input;
+    return toMemorySummary(await memoryAccessForActor(catalog, 'main').update(scope, id, patch));
+  }
+
+  override async forgetMemory(
+    workDir: string,
+    scope: MemorySummary['scope'],
+    id: string,
+  ): Promise<void> {
+    const catalog = await this.memoryCatalog(workDir);
+    await memoryAccessForActor(catalog, 'main').forget(scope, id);
+  }
+
+  private async memoryCatalog(workDir: string): Promise<IWorkspaceMemoryCatalog> {
+    const handler = await this.engineAccessor
+      .get(IWorkspaceLifecycleService)
+      .handlerFor({ root: workDir });
+    const catalog = handler.accessor.get(IWorkspaceMemoryCatalog);
+    await catalog.ready;
+    return catalog;
   }
 
   /**
@@ -2241,4 +2291,31 @@ function normalizeRequiredWorkDir(operation: string, workDir: string): string {
     throw new KimiError(ErrorCodes.REQUEST_WORK_DIR_REQUIRED, `${operation} requires workDir`);
   }
   return normalizeWorkDir(workDir);
+}
+
+/** Engine `EffectiveMemory` → SDK `MemorySummary` (epoch ms → ISO strings). */
+function toMemorySummary(record: {
+  id: string;
+  name: string;
+  description: string;
+  type: MemorySummary['type'];
+  scope: MemorySummary['scope'];
+  origin: MemorySummary['origin'];
+  createdAt: number;
+  updatedAt: number;
+  version: number;
+  body: string;
+}): MemorySummary {
+  return {
+    id: record.id,
+    name: record.name,
+    description: record.description,
+    type: record.type,
+    scope: record.scope,
+    origin: record.origin,
+    createdAt: new Date(record.createdAt).toISOString(),
+    updatedAt: new Date(record.updatedAt).toISOString(),
+    version: record.version,
+    body: record.body,
+  };
 }

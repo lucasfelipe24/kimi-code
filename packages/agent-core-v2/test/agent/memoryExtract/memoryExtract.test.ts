@@ -43,7 +43,6 @@ import { IConfigService } from '#/app/config/config';
 import { IEventBus } from '#/app/event/eventBus';
 import { IFlagService } from '#/app/flag/flag';
 import { PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID } from '#/app/persistentMemory/autoExtractFlag';
-import { PERSISTENT_MEMORY_FLAG_ID } from '#/app/persistentMemory/flag';
 import {
   DEFAULT_MEMORY_CONFIG,
   type MemoryConfig,
@@ -218,7 +217,6 @@ describe('AgentMemoryExtractService', () => {
   let eventBus: IEventBus;
   let access: FakeMemoryAccess;
   let requester: FakeLLMRequester;
-  let baseFlag: boolean;
   let autoFlag: boolean;
   let configValue: MemoryConfig;
   let tracked: TrackedEvent[];
@@ -236,9 +234,7 @@ describe('AgentMemoryExtractService', () => {
           makeAgentScopeContext({ agentId, agentScope: `agents/${agentId}` }),
         );
         reg.definePartialInstance(IFlagService, {
-          enabled: (id) =>
-            (id === PERSISTENT_MEMORY_FLAG_ID && baseFlag) ||
-            (id === PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID && autoFlag),
+          enabled: (id) => id === PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID && autoFlag,
         });
         reg.definePartialInstance(IConfigService, {
           get: (<T,>() => configValue as T) as IConfigService['get'],
@@ -274,7 +270,6 @@ describe('AgentMemoryExtractService', () => {
     disposables = new DisposableStore();
     access = new FakeMemoryAccess();
     requester = new FakeLLMRequester();
-    baseFlag = true;
     autoFlag = true;
     configValue = { ...DEFAULT_MEMORY_CONFIG };
     tracked = [];
@@ -483,22 +478,6 @@ describe('AgentMemoryExtractService', () => {
     expect(extractEvents().at(-1)?.properties?.['outcome']).toBe('skipped');
   });
 
-  it('is a no-op when the base persistent-memory flag is off', async () => {
-    baseFlag = false;
-    context.append(userMessage('how do I deploy the service'));
-    let calls = 0;
-    service().setExtractor(() => {
-      calls += 1;
-      return Promise.resolve([]);
-    });
-
-    endTurn();
-    await service().whenIdle();
-
-    expect(calls).toBe(0);
-    expect(extractEvents()).toHaveLength(0);
-  });
-
   it('is a no-op when the granular auto-extract flag is off, and clears pending proposals', async () => {
     // First, draft a proposal while both flags are on.
     context.append(userMessage('how do I deploy the service'));
@@ -521,14 +500,14 @@ describe('AgentMemoryExtractService', () => {
     expect(service().pendingProposals()).toHaveLength(0);
   });
 
-  it('revalidates both flags after the await before proposing or advancing the cursor', async () => {
+  it('revalidates the auto-extract flag after the await before proposing or advancing the cursor', async () => {
     context.append(userMessage('how do I deploy the service'));
     const gate = deferred<readonly MemoryExtractDraft[]>();
     service().setExtractor(() => gate.promise);
 
     endTurn();
-    // Flip the base flag off while the generation is in flight, then resolve.
-    baseFlag = false;
+    // Flip the auto-extract flag off while the generation is in flight, then resolve.
+    autoFlag = false;
     gate.resolve([DRAFT_ONE]);
     await service().whenIdle();
 
@@ -744,21 +723,16 @@ describe('AgentMemoryExtractService', () => {
     expect(extractEvents().every((event) => event.properties?.['written_count'] === 0)).toBe(true);
   });
 
-  it('commitProposal requires the base flag and main-agent identity', async () => {
+  it('commitProposal writes through the catalog for the main agent', async () => {
     context.append(userMessage('how do I deploy the service'));
     service().setExtractor(() => Promise.resolve([DRAFT_ONE]));
     endTurn();
     await service().whenIdle();
     const proposalId = service().pendingProposals()[0]!.id;
 
-    baseFlag = false;
-    const rejected = await service().commitProposal(proposalId);
-    expect(rejected).toBeUndefined();
-    expect(access.createCalls).toHaveLength(0);
-    // Proposal stays pending; re-enabling lets it commit.
-    baseFlag = true;
     const id = await service().commitProposal(proposalId);
     expect(id).toBeDefined();
+    expect(access.createCalls).toHaveLength(1);
   });
 
   it('keeps a proposal pending when the commit hits a trust failure', async () => {

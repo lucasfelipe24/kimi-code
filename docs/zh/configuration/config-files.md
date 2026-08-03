@@ -331,7 +331,7 @@ disabled = ["EnterPlanMode", "ExitPlanMode", "mcp__github__*"]
 
 ## `memory`
 
-`[memory]` 表只包含 engine v2 持久化 memory 使用的限制，不会启用该功能，也不能包含 `enabled` 字段；请改用 `KIMI_CODE_EXPERIMENTAL_PERSISTENT_MEMORY` 启用持久化 memory。
+`[memory]` 表只包含 engine v2 持久化 memory 使用的限制。持久化 memory 是 engine v2 的原生能力，始终启用；该表不会启用它，也不能包含 `enabled` 字段。
 
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
@@ -348,7 +348,7 @@ recall_max_session_bytes = 61440
 extraction_max_turns = 5
 ```
 
-自动提取只会生成待处理 proposal，不会自动写入持久化 memory。它必须同时启用 `KIMI_CODE_EXPERIMENTAL_PERSISTENT_MEMORY` 和 explicit-env 的 `KIMI_CODE_EXPERIMENTAL_PERSISTENT_MEMORY_AUTO_EXTRACT` flag；master `KIMI_CODE_EXPERIMENTAL_FLAG` 不会启用自动提取。
+自动提取只会生成待处理 proposal，不会自动写入持久化 memory。它通过 explicit-env 的 `KIMI_CODE_EXPERIMENTAL_PERSISTENT_MEMORY_AUTO_EXTRACT` flag 选择性开启；master `KIMI_CODE_EXPERIMENTAL_FLAG` 不会启用自动提取。
 
 <!--
 ## `experimental`

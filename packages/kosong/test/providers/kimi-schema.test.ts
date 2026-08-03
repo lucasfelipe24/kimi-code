@@ -1,4 +1,8 @@
-import { derefJsonSchema, normalizeKimiToolSchema } from '#/providers/kimi-schema';
+import {
+  derefJsonSchema,
+  normalizeKimiToolParameters,
+  normalizeKimiToolSchema,
+} from '#/providers/kimi-schema';
 import { describe, expect, it, vi } from 'vitest';
 
 describe('derefJsonSchema', () => {
@@ -793,5 +797,74 @@ describe('normalizeKimiToolSchema', () => {
       ],
     });
     expect(result).not.toHaveProperty('type');
+  });
+});
+
+describe('normalizeKimiToolParameters', () => {
+  it('adds a root type: "object" to an empty parameters schema', () => {
+    expect(normalizeKimiToolParameters({})).toEqual({ type: 'object' });
+  });
+
+  it('adds a root type: "object" when only properties are declared', () => {
+    const schema = {
+      properties: {
+        query: { type: 'string' },
+      },
+      required: ['query'],
+    };
+
+    const result = normalizeKimiToolParameters(schema);
+
+    expect(result).toEqual({
+      type: 'object',
+      properties: {
+        query: { type: 'string' },
+      },
+      required: ['query'],
+    });
+  });
+
+  it('preserves an explicit root type', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        query: { type: 'string' },
+      },
+    };
+
+    const result = normalizeKimiToolParameters(schema);
+
+    expect(result).toEqual({
+      type: 'object',
+      properties: {
+        query: { type: 'string' },
+      },
+    });
+  });
+
+  it('still normalizes nested property types while filling the root type', () => {
+    const schema = {
+      properties: {
+        mode: { enum: ['fast', 'safe'] },
+      },
+    };
+
+    const result = normalizeKimiToolParameters(schema);
+
+    expect(result).toEqual({
+      type: 'object',
+      properties: {
+        mode: { enum: ['fast', 'safe'], type: 'string' },
+      },
+    });
+  });
+
+  it('does not mutate the original schema', () => {
+    const schema = { properties: { a: { type: 'string' } } };
+    const original = structuredClone(schema);
+
+    normalizeKimiToolParameters(schema);
+
+    expect(schema).toEqual(original);
   });
 });

@@ -25,6 +25,9 @@ import type {
   KimiConfigPatch,
   KimiHostIdentity,
   ListSessionsOptions,
+  CreateMemoryInput,
+  MemorySummary,
+  UpdateMemoryInput,
   McpServerConfig,
   McpTestResult,
   RenameSessionInput,
@@ -257,6 +260,35 @@ export class KimiHarness {
   /** Skills visible to a new session in `workDir`, without creating that session. */
   async listWorkspaceSkills(workDir: string): Promise<readonly SkillSummary[]> {
     return this.rpc.listWorkspaceSkills(workDir);
+  }
+
+  /**
+   * Persistent-memory CRUD for a workspace directory (the `persistent-memory`
+   * experiment; agent-core-v2 only). The v1 engine reports an empty list and
+   * the mutations throw `not_implemented`.
+   */
+  async listMemories(workDir: string): Promise<readonly MemorySummary[]> {
+    return this.rpc.listMemories(workDir);
+  }
+
+  async createMemory(workDir: string, input: CreateMemoryInput): Promise<MemorySummary> {
+    return this.rpc.createMemory(workDir, input);
+  }
+
+  async updateMemory(
+    workDir: string,
+    id: string,
+    input: UpdateMemoryInput,
+  ): Promise<MemorySummary> {
+    return this.rpc.updateMemory(workDir, id, input);
+  }
+
+  async forgetMemory(
+    workDir: string,
+    scope: MemorySummary['scope'],
+    id: string,
+  ): Promise<void> {
+    return this.rpc.forgetMemory(workDir, scope, id);
   }
 
   /**

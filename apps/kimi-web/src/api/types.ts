@@ -692,6 +692,47 @@ export interface AppSkill {
   source: string;
 }
 
+/** Storage scope a persistent memory lives in. */
+export type AppMemoryScope = 'user' | 'workspace' | 'project';
+
+/** Taxonomy type of a persistent memory. */
+export type AppMemoryType = 'user' | 'feedback' | 'project' | 'reference';
+
+/**
+ * A durable cross-session memory (the `persistent-memory` experiment). Only
+ * available on the v2 (kap-server) backend.
+ */
+export interface AppMemory {
+  id: string;
+  name: string;
+  description: string;
+  type: AppMemoryType;
+  scope: AppMemoryScope;
+  /** Resolved precedence origin (may differ from `scope` under shadowing). */
+  origin: AppMemoryScope;
+  /** ISO timestamps. */
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+  body: string;
+}
+
+export interface AppMemoryCreateInput {
+  scope: AppMemoryScope;
+  type: AppMemoryType;
+  name: string;
+  description: string;
+  body: string;
+}
+
+export interface AppMemoryUpdateInput {
+  scope: AppMemoryScope;
+  type?: AppMemoryType;
+  name?: string;
+  description?: string;
+  body?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Workflow
 // ---------------------------------------------------------------------------
@@ -817,6 +858,13 @@ export interface KimiWebApi {
   addWorkspace(input: { root: string; name?: string }): Promise<AppWorkspace>;
   updateWorkspace(id: string, input: { name: string }): Promise<AppWorkspace>;
   deleteWorkspace(id: string): Promise<void>;
+
+  // Persistent memory (v2 only) — workspace-scoped CRUD over durable memories.
+  // GET/POST /workspaces/{id}/memories, PATCH/DELETE /workspaces/{id}/memories/{mid}.
+  listMemories(workspaceId: string): Promise<AppMemory[]>;
+  createMemory(workspaceId: string, input: AppMemoryCreateInput): Promise<AppMemory>;
+  updateMemory(workspaceId: string, id: string, input: AppMemoryUpdateInput): Promise<AppMemory>;
+  forgetMemory(workspaceId: string, scope: AppMemoryScope, id: string): Promise<void>;
   browseFs(path?: string): Promise<FsBrowseResult>;
   getFsHome(): Promise<{ home: string; recentRoots: string[] }>;
 

@@ -11,12 +11,11 @@
  * redaction, content rejection, write caps and the trust gate are all enforced
  * behind that access at the catalog boundary; the tool stays actor-agnostic and
  * lets those rejections surface as tool errors. Emits content-free
- * `memory_write` / `memory_forget` telemetry through `telemetry`. Refuses at
- * execution time when the `persistent-memory` flag is toggled off mid-turn.
+ * `memory_write` / `memory_forget` telemetry through `telemetry`.
  *
  * Registered via the module-level `registerAgentToolService(IMemoryTool,
- * MemoryTool)` at the bottom of this file, gated by the `persistent-memory`
- * experimental flag through the contribution's `when` predicate. Bound at Agent
+ * MemoryTool)` at the bottom of this file. Persistent memory is a native v2
+ * capability, so the tool is always available (no flag gate). Bound at Agent
  * scope.
  */
 
@@ -29,9 +28,7 @@ import {
   type ExecutableToolResult,
   type ToolExecution,
 } from '#/tool/toolContract';
-import { IFlagService } from '#/app/flag/flag';
 import { MemoryErrors } from '#/app/persistentMemory/errors';
-import { PERSISTENT_MEMORY_FLAG_ID } from '#/app/persistentMemory/flag';
 import { MemoryError, type MemoryScope } from '#/app/persistentMemory/memoryStore';
 import { ITelemetryService } from '#/app/telemetry/telemetry';
 import { ISessionMemoryAccess } from '#/session/persistentMemory/memorySeed';
@@ -39,14 +36,12 @@ import { ISessionMemoryAccess } from '#/session/persistentMemory/memorySeed';
 import {
   IMemoryTool,
   MEMORY_TOOL_NAME,
+  MemoryToolAdvertisedSchema,
   MemoryToolInputSchema,
   type MemoryToolInput,
 } from './memory';
 
 import MEMORY_DESCRIPTION from './memory.md?raw';
-
-const DISABLED_MESSAGE =
-  'Persistent memory is experimental and currently disabled. Enable the persistent-memory experiment to use this tool.';
 
 const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   [MemoryErrors.codes.MEMORY_INVALID_ID]: 'memory error: invalid memory id',
@@ -76,11 +71,12 @@ export class MemoryTool implements IMemoryTool {
   declare readonly _serviceBrand: undefined;
   readonly name: string = MEMORY_TOOL_NAME;
   readonly description: string = MEMORY_DESCRIPTION;
-  readonly parameters: Record<string, unknown> = toInputJsonSchema(MemoryToolInputSchema);
+  // Advertise the flat schema (providers cannot fill a bare top-level union);
+  // the strict per-action union is still enforced in `resolveExecution`.
+  readonly parameters: Record<string, unknown> = toInputJsonSchema(MemoryToolAdvertisedSchema);
 
   constructor(
     @ISessionMemoryAccess private readonly access: ISessionMemoryAccess,
-    @IFlagService private readonly flags: IFlagService,
     @ITelemetryService private readonly telemetry: ITelemetryService,
   ) {}
 
@@ -122,9 +118,6 @@ export class MemoryTool implements IMemoryTool {
   ): Promise<ExecutableToolResult> {
     try {
       signal.throwIfAborted();
-      if (!this.flags.enabled(PERSISTENT_MEMORY_FLAG_ID)) {
-        return { output: DISABLED_MESSAGE, isError: true };
-      }
       switch (input.action) {
         case 'remember':
           return await this.remember(input);
@@ -217,5 +210,4 @@ export class MemoryTool implements IMemoryTool {
 registerAgentToolService(IMemoryTool, MemoryTool, {
   name: MEMORY_TOOL_NAME,
   domain: 'persistentMemory',
-  when: (accessor) => accessor.get(IFlagService).enabled(PERSISTENT_MEMORY_FLAG_ID),
 });

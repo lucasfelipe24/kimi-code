@@ -119,7 +119,7 @@ Prompt 模式在目标完成时以退出码 `0` 退出，在目标阻塞时以 `
 | `/btw [问题]` | — | 在 fork 出的子 Agent 中打开旁路对话，不改变当前主 Agent 轮次；不带问题时会先打开面板等待输入 | 是 |
 | `/usage` | — | 显示 token 用量、上下文占用以及配额信息 | 是 |
 | `/status` | — | 显示当前会话运行时状态：版本、模型、工作目录、权限模式等 | 是 |
-| `/memory` | — | 仅在 engine v2 且启用持久化 memory 后显示持久化 memory 状态。不支持参数和 CRUD 子命令；请直接使用不带参数的 `/memory` | 是 |
+| `/memory` | — | 在 engine v2 上管理持久化 memory：列出、创建（`N`）、编辑（`E`）、查看（`Enter`）、删除（`D`）。创建和编辑会以 Markdown 文档的形式在 `$EDITOR` 中打开该 memory | 是 |
 | `/mcp` | — | 列出当前会话中的 MCP server 及连接状态 | 是 |
 | `/plugins` | — | 打开交互式 plugin 管理器 | 是 |
 | `/version` | — | 显示 Kimi Code CLI 版本号 | 是 |

@@ -72,6 +72,8 @@ export const ErrorCode = {
   TOOL_CALL_NOT_FOUND: 40416,
   /** 目录（models.dev catalog）中不存在该条目 */
   CATALOG_ENTRY_NOT_FOUND: 40417,
+  /** memory id 不存在 */
+  MEMORY_NOT_FOUND: 40418,
 
   /** session 有正在进行的 prompt，拒绝新请求 */
   SESSION_BUSY: 40901,
@@ -116,6 +118,14 @@ export const ErrorCode = {
   GOAL_UNSUPPORTED_AGENT: 40920,
   /** 创建时 provider_id 已存在 */
   PROVIDER_ALREADY_EXISTS: 40921,
+  /** memory 写入需要受信任的 workspace（project scope） */
+  MEMORY_TRUST_REQUIRED: 40922,
+  /** memory 内容被拒绝（疑似凭证 / 敏感信息） */
+  MEMORY_CONTENT_REJECTED: 40923,
+  /** persistent-memory 实验开关未启用 */
+  MEMORY_DISABLED: 40924,
+  /** memory scope 已达容量上限 */
+  MEMORY_SCOPE_FULL: 40925,
 
   /** approval 60s 超时 */
   APPROVAL_EXPIRED: 41001,
@@ -134,6 +144,8 @@ export const ErrorCode = {
   FS_PATH_ESCAPES_SESSION: 41304,
   /** fs.grep 执行 >30s */
   FS_GREP_TIMEOUT: 41305,
+  /** memory body 超过字节上限 */
+  MEMORY_BODY_TOO_LARGE: 41306,
 
   /** WS 单连接 watch_paths > 100 */
   FS_WATCH_LIMIT_EXCEEDED: 42902,

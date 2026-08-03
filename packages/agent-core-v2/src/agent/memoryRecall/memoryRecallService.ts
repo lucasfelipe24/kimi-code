@@ -2,8 +2,8 @@
  * `persistentMemory` domain — `IAgentMemoryRecallService` implementation.
  *
  * Owns the `persistent_memory` context-injection provider: once per user turn
- * it reads the last user query from `contextMemory`, gates on the
- * `persistent-memory` flag and a two-word minimum, deterministically filters
+ * it reads the last user query from `contextMemory`, gates on a two-word
+ * minimum, deterministically filters
  * the effective memory catalog projected through the Session seed
  * `ISessionMemoryAccess`, optionally reranks the candidates through an
  * installed secondary-model reranker (timeout ⇒ deterministic fallback,
@@ -28,8 +28,6 @@ import { ILogService } from '#/_base/log/log';
 import { IAgentContextInjectorService } from '#/agent/contextInjector/contextInjector';
 import { IAgentContextMemoryService } from '#/agent/contextMemory/contextMemory';
 import { IConfigService } from '#/app/config/config';
-import { IFlagService } from '#/app/flag/flag';
-import { PERSISTENT_MEMORY_FLAG_ID } from '#/app/persistentMemory/flag';
 import {
   DEFAULT_MEMORY_CONFIG,
   MEMORY_SECTION,
@@ -81,7 +79,6 @@ export class AgentMemoryRecallService extends Disposable implements IAgentMemory
     @IAgentContextInjectorService dynamicInjector: IAgentContextInjectorService,
     @IAgentContextMemoryService private readonly context: IAgentContextMemoryService,
     @ISessionMemoryAccess private readonly access: ISessionMemoryAccess,
-    @IFlagService private readonly flags: IFlagService,
     @IConfigService private readonly config: IConfigService,
     @ITelemetryService private readonly telemetry: ITelemetryService,
     @ILogService private readonly log: ILogService,
@@ -179,8 +176,6 @@ export class AgentMemoryRecallService extends Disposable implements IAgentMemory
     lastInjectedAt: number | null,
     signal?: AbortSignal,
   ): Promise<string | undefined> {
-    if (!this.flags.enabled(PERSISTENT_MEMORY_FLAG_ID)) return undefined;
-
     const history = this.context.get();
     const query = extractLastUserQuery(history);
     // Ignore one-word prompts (too little signal to recall on).

@@ -121,7 +121,7 @@ Prompt mode exits with code `0` when the goal completes, `3` when it blocks, and
 | `/btw [question]` | — | Open a side conversation in a forked sub-Agent without affecting the current main Agent turn; without a question, opens the panel first to wait for input | Yes |
 | `/usage` | — | Show token usage, context consumption, and quota information | Yes |
 | `/status` | — | Show the current session runtime state: version, model, working directory, permission mode, etc. | Yes |
-| `/memory` | — | With persistent memory enabled in engine v2, show persistent-memory status. Arguments and CRUD subcommands are not supported; use `/memory` without arguments | Yes |
+| `/memory` | — | On engine v2, manage persistent memories: list, create (`N`), edit (`E`), view (`Enter`), and forget (`D`). Create and edit open the memory as a markdown document in `$EDITOR` | Yes |
 | `/mcp` | — | List MCP servers and their connection status in the current session | Yes |
 | `/plugins` | — | Open the interactive plugin manager | Yes |
 | `/version` | — | Display the Kimi Code CLI version number | Yes |

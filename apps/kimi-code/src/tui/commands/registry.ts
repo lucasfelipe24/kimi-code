@@ -367,10 +367,9 @@ export const BUILTIN_SLASH_COMMANDS = [
   {
     name: 'memory',
     aliases: [],
-    description: 'Show persistent-memory status',
+    description: 'View and manage persistent memories',
     priority: 60,
     availability: 'always',
-    experimentalFlag: 'persistent-memory',
     engineV2Only: true,
   },
   {

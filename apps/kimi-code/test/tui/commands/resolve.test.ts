@@ -334,15 +334,9 @@ describe('memory command resolution', () => {
   });
 
   it.each([
-    { engineV2: false, flagEnabled: false, available: false },
-    { engineV2: false, flagEnabled: true, available: false },
-    { engineV2: true, flagEnabled: false, available: false },
-    { engineV2: true, flagEnabled: true, available: true },
-  ])('requires engine v2 and the persistent-memory flag (%o)', ({ engineV2, flagEnabled, available }) => {
-    setExperimentalFeatures(
-      flagEnabled ? [{ id: 'persistent-memory', enabled: true }] : [],
-    );
-
+    { engineV2: false, available: false },
+    { engineV2: true, available: true },
+  ])('requires engine v2 (%o)', ({ engineV2, available }) => {
     expect(resolve('/memory', { engineV2 })).toEqual(
       available
         ? { kind: 'builtin', command: findBuiltInSlashCommand('memory'), name: 'memory', args: '' }
@@ -368,8 +362,7 @@ describe('memory command resolution', () => {
     });
   });
 
-  it('resolves the builtin over a same-named skill when the gate is open', () => {
-    setExperimentalFeatures([{ id: 'persistent-memory', enabled: true }]);
+  it('resolves the builtin over a same-named skill when engine v2 is active', () => {
     const skillCommandMap = new Map([['memory', 'memory']]);
 
     expect(resolve('/memory list', { engineV2: true, skillCommandMap })).toMatchObject({
@@ -380,8 +373,6 @@ describe('memory command resolution', () => {
   });
 
   it('preserves arguments when the command resolves', () => {
-    setExperimentalFeatures([{ id: 'persistent-memory', enabled: true }]);
-
     expect(resolve('/memory list', { engineV2: true })).toMatchObject({
       kind: 'builtin',
       name: 'memory',

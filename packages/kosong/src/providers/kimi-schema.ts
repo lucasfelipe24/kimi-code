@@ -123,6 +123,28 @@ export function normalizeKimiToolSchema(schema: Record<string, unknown>): Record
   return ensureKimiPropertyTypes(derefJsonSchema(schema));
 }
 
+/**
+ * Normalize a tool's top-level `parameters` JSON Schema for the Kimi/Moonshot
+ * wire. In addition to the nested property-type normalization done by
+ * `normalizeKimiToolSchema`, this guarantees the root schema declares
+ * `type: "object"`: Moonshot's validator rejects a tool whose
+ * `function.parameters` root omits it ("tools.function.parameters.type is
+ * required and must be \"object\""). Some tools — notably MCP servers that emit
+ * `{ properties: {...} }` without a root `type`, or a parameterless tool with
+ * an empty `{}` schema — trip this. We only fill a missing root `type`; an
+ * explicit root type is left untouched so a genuinely malformed schema still
+ * surfaces the provider error.
+ */
+export function normalizeKimiToolParameters(
+  schema: Record<string, unknown>,
+): Record<string, unknown> {
+  const normalized = normalizeKimiToolSchema(schema);
+  if (!hasOwn(normalized, 'type')) {
+    normalized['type'] = 'object';
+  }
+  return normalized;
+}
+
 function ensureKimiPropertyTypes(schema: Record<string, unknown>): Record<string, unknown> {
   const normalized = cloneJsonValue(schema);
   if (!isRecord(normalized)) {

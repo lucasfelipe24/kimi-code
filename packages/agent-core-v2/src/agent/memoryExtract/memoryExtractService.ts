@@ -3,9 +3,9 @@
  *
  * Owns automatic end-of-turn memory extraction (plan §6). Subscribes to
  * `turn.ended` on the per-agent `eventBus` and acts ONLY on `reason:
- * 'completed'` turns (a cancelled/failed/blocked turn is not mined). Runs only
- * when BOTH the base `persistent-memory` flag and the granular
- * `persistent-memory-auto-extract` flag are on and only for the MAIN agent
+ * 'completed'` turns (a cancelled/failed/blocked turn is not mined). Persistent
+ * memory is native, so extraction runs when the granular
+ * `persistent-memory-auto-extract` opt-in flag is on and only for the MAIN agent
  * (`scopeContext`). Each run reads the CURRENT turn transcript from
  * `contextMemory` (never file reads), skips when the main agent already
  * SUCCESSFULLY wrote memory this turn (a `Memory remember` correlated to a
@@ -44,7 +44,6 @@ import {
   type MemoryConfig,
 } from '#/app/persistentMemory/configSection';
 import { PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID } from '#/app/persistentMemory/autoExtractFlag';
-import { PERSISTENT_MEMORY_FLAG_ID } from '#/app/persistentMemory/flag';
 import { MemoryError } from '#/app/persistentMemory/memoryStore';
 import { looksLikeSecret } from '#/app/persistentMemory/redact';
 import { ITelemetryService } from '#/app/telemetry/telemetry';
@@ -188,7 +187,8 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
   }
 
   private baseEnabled(): boolean {
-    return this.flags.enabled(PERSISTENT_MEMORY_FLAG_ID);
+    // Persistent memory is a native v2 capability — always enabled.
+    return true;
   }
 
   private autoEnabled(): boolean {

@@ -12,8 +12,6 @@ export interface SlashCommandCompletionContext {
   readonly session?: Pick<Session, 'listWorkflows'>;
 }
 
-type TuiExperimentalFlag = FlagId | 'persistent-memory';
-
 export interface KimiSlashCommand<Name extends string = string> extends SlashCommand {
   readonly name: Name;
   readonly aliases: readonly string[];
@@ -21,7 +19,7 @@ export interface KimiSlashCommand<Name extends string = string> extends SlashCom
   readonly priority?: number;
   readonly availability?: SlashCommandAvailability | ((args: string) => SlashCommandAvailability);
   /** When set, the command is hidden from the palette and blocked unless this flag is enabled. */
-  readonly experimentalFlag?: TuiExperimentalFlag;
+  readonly experimentalFlag?: FlagId;
   /** When true, the command is available only when the TUI runs on engine v2. */
   readonly engineV2Only?: boolean;
   /**

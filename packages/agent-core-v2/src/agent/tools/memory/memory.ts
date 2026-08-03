@@ -64,6 +64,46 @@ export const MemoryToolInputSchema = z.discriminatedUnion('action', [
 
 export type MemoryToolInput = z.infer<typeof MemoryToolInputSchema>;
 
+/**
+ * Flat schema advertised to the model. A discriminated union renders as a
+ * top-level `oneOf` with no root `properties`, which providers cannot fill
+ * (arguments arrive empty). This flat object exposes every field with
+ * per-field guidance on which `action` needs it; the authoritative,
+ * action-specific validation still runs against {@link MemoryToolInputSchema}
+ * at execution time, so a malformed combination (e.g. `remember` without a
+ * `body`) is rejected there.
+ */
+export const MemoryToolAdvertisedSchema = z.object({
+  action: z
+    .enum(['remember', 'forget', 'list'])
+    .describe('The operation: remember (create), forget (delete by id), or list.'),
+  scope: MemoryScopeSchema.optional().describe(
+    'Memory scope: user (global), workspace, or project. Required for remember and forget; an optional filter for list.',
+  ),
+  type: MemoryTypeSchema.optional().describe(
+    'Memory taxonomy type. Required for remember.',
+  ),
+  name: z
+    .string()
+    .min(1)
+    .max(MEMORY_MAX_NAME_LENGTH)
+    .optional()
+    .describe('Short, human-readable label for the memory. Required for remember.'),
+  description: z
+    .string()
+    .min(1)
+    .max(MEMORY_MAX_DESCRIPTION_LENGTH)
+    .optional()
+    .describe('One-line summary of when this memory is relevant. Required for remember.'),
+  body: z
+    .string()
+    .min(1)
+    .max(DEFAULT_MEMORY_MAX_BODY_BYTES)
+    .optional()
+    .describe('The durable content to remember. Required for remember.'),
+  id: MemoryIdSchema.optional().describe('ULID of the memory to forget. Required for forget.'),
+});
+
 export interface IMemoryTool extends AgentTool<MemoryToolInput> {
   readonly _serviceBrand: undefined;
 }

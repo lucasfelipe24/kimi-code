@@ -200,11 +200,11 @@ describe('built-in slash command registry', () => {
     expect(resolveSlashCommandAvailability(command!, '')).toBe('always');
   });
 
-  it('gates memory behind the persistent-memory experiment, always available', () => {
+  it('exposes memory as a native engine-v2 command, always available', () => {
     const command = findBuiltInSlashCommand('memory');
     expect(command).toBeDefined();
-    expect(command!.description).toBe('Show persistent-memory status');
-    expect((command as KimiSlashCommand).experimentalFlag).toBe('persistent-memory');
+    expect(command!.description).toBe('View and manage persistent memories');
+    expect((command as KimiSlashCommand).experimentalFlag).toBeUndefined();
     expect((command as KimiSlashCommand).engineV2Only).toBe(true);
     expect(resolveSlashCommandAvailability(command!, '')).toBe('always');
   });
@@ -212,15 +212,14 @@ describe('built-in slash command registry', () => {
 
 describe('isSlashCommandVisible', () => {
   it.each([
-    { engineV2: false, flagEnabled: false, visible: false },
-    { engineV2: false, flagEnabled: true, visible: false },
-    { engineV2: true, flagEnabled: false, visible: false },
-    { engineV2: true, flagEnabled: true, visible: true },
-  ])('gates memory on engine v2 and the persistent-memory flag (%o)', ({ engineV2, flagEnabled, visible }) => {
+    { engineV2: false, visible: false },
+    { engineV2: true, visible: true },
+  ])('gates memory on engine v2 only (%o)', ({ engineV2, visible }) => {
     const command = findBuiltInSlashCommand('memory') as KimiSlashCommand;
-    const isFlagEnabled = (flag: string | undefined) => flag !== undefined && flagEnabled;
+    // No experimental flag gates memory anymore; only engineV2Only applies.
+    const noFlags = (flag: string | undefined) => flag === undefined;
 
-    expect(isSlashCommandVisible(command, engineV2, isFlagEnabled)).toBe(visible);
+    expect(isSlashCommandVisible(command, engineV2, noFlags)).toBe(visible);
   });
 
   it('keeps ungated commands visible in every state', () => {

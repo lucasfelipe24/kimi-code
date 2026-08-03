@@ -74,4 +74,29 @@ describe('tool input JSON Schema', () => {
       }),
     ).not.toBeNull();
   });
+
+  describe('discriminated-union input', () => {
+    const unionSchema = z.discriminatedUnion('action', [
+      z.object({ action: z.literal('remember'), name: z.string() }),
+      z.object({ action: z.literal('forget'), id: z.string() }),
+      z.object({ action: z.literal('list') }),
+    ]);
+
+    it('stamps `type: object` on the union root so providers accept it', () => {
+      const schema = toInputJsonSchema(unionSchema);
+
+      // The root must advertise an object type even though the branches live
+      // under `oneOf`; providers reject a bare top-level combinator.
+      expect(schema['type']).toBe('object');
+      expect(schema).toHaveProperty('oneOf');
+    });
+
+    it('still validates each branch through runtime validation', () => {
+      const validator = compileToolArgsValidator(toInputJsonSchema(unionSchema));
+
+      expect(validateToolArgs(validator, { action: 'remember', name: 'n' })).toBeNull();
+      expect(validateToolArgs(validator, { action: 'list' })).toBeNull();
+      expect(validateToolArgs(validator, { action: 'bogus' })).not.toBeNull();
+    });
+  });
 });

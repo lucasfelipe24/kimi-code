@@ -331,7 +331,7 @@ Like the `tools` / `disallowedTools` fields of an agent file, this section shape
 
 ## `memory`
 
-The `[memory]` table contains only the limits used by persistent memory in engine v2. It does not enable the feature and must not contain an `enabled` field; enable persistent memory with `KIMI_CODE_EXPERIMENTAL_PERSISTENT_MEMORY` instead.
+The `[memory]` table contains only the limits used by persistent memory in engine v2. Persistent memory is a native engine-v2 capability that is always on; this table does not enable it and must not contain an `enabled` field.
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -348,7 +348,7 @@ recall_max_session_bytes = 61440
 extraction_max_turns = 5
 ```
 
-Automatic extraction produces pending proposals only; it never writes them to persistent memory automatically. It requires both `KIMI_CODE_EXPERIMENTAL_PERSISTENT_MEMORY` and the explicit-env `KIMI_CODE_EXPERIMENTAL_PERSISTENT_MEMORY_AUTO_EXTRACT` flag. The master `KIMI_CODE_EXPERIMENTAL_FLAG` does not enable automatic extraction.
+Automatic extraction produces pending proposals only; it never writes them to persistent memory automatically. It is opt-in through the explicit-env `KIMI_CODE_EXPERIMENTAL_PERSISTENT_MEMORY_AUTO_EXTRACT` flag. The master `KIMI_CODE_EXPERIMENTAL_FLAG` does not enable automatic extraction.
 
 <!--
 ## `experimental`

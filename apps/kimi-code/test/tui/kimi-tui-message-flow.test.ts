@@ -5614,23 +5614,12 @@ describe('slash command visibility wiring', () => {
   });
 
   it.each([
-    { engineV2: false, flagEnabled: false, visible: false },
-    { engineV2: false, flagEnabled: true, visible: false },
-    { engineV2: true, flagEnabled: false, visible: false },
-    { engineV2: true, flagEnabled: true, visible: true },
+    { engineV2: false, visible: false },
+    { engineV2: true, visible: true },
   ])(
-    'lists /memory through getSlashCommands and the help panel only for engine v2 + flag (%o)',
-    async ({ engineV2, flagEnabled, visible }) => {
-      // The flag flows through the real init path: harness → setExperimentalFeatures.
-      const { driver } = await makeDriver(
-        makeSession(),
-        {
-          getExperimentalFeatures: vi.fn(async () =>
-            flagEnabled ? [{ id: 'persistent-memory', enabled: true }] : [],
-          ),
-        },
-        { engineV2 },
-      );
+    'lists /memory through getSlashCommands and the help panel only for engine v2 (%o)',
+    async ({ engineV2, visible }) => {
+      const { driver } = await makeDriver(makeSession(), {}, { engineV2 });
       const visibilityDriver = driver as VisibilityDriver;
 
       // The getter feeds both autocomplete (setupAutocomplete) and the help panel.

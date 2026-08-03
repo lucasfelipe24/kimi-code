@@ -12,6 +12,11 @@ import type {
   AppModel,
   AppProvider,
   ProviderRefreshResult,
+  AppMemory,
+  AppMemoryCreateInput,
+  AppMemoryScope,
+  AppMemoryType,
+  AppMemoryUpdateInput,
   AppSession,
   AppSkill,
   AppSessionCursor,
@@ -199,6 +204,34 @@ interface WireSkillDescriptor {
   source: string;
   type?: string;
   disable_model_invocation?: boolean;
+}
+
+interface WireMemory {
+  id: string;
+  name: string;
+  description: string;
+  type: AppMemoryType;
+  scope: AppMemoryScope;
+  origin: AppMemoryScope;
+  created_at: string;
+  updated_at: string;
+  version: number;
+  body: string;
+}
+
+function toAppMemory(wire: WireMemory): AppMemory {
+  return {
+    id: wire.id,
+    name: wire.name,
+    description: wire.description,
+    type: wire.type,
+    scope: wire.scope,
+    origin: wire.origin,
+    createdAt: wire.created_at,
+    updatedAt: wire.updated_at,
+    version: wire.version,
+    body: wire.body,
+  };
 }
 
 interface WireArchiveResult {
@@ -915,6 +948,47 @@ export class DaemonKimiWebApi implements KimiWebApi {
       args !== undefined && args.length > 0 ? { args } : {},
     );
     return { activated: data.activated, skillName: data.skill_name };
+  }
+
+  // -------------------------------------------------------------------------
+  // Persistent memory (v2 only) — workspace-scoped CRUD
+  // GET    /workspaces/{id}/memories                  → { items: WireMemory[] }
+  // POST   /workspaces/{id}/memories                  → WireMemory
+  // PATCH  /workspaces/{id}/memories/{mid}            → WireMemory
+  // DELETE /workspaces/{id}/memories/{mid}?scope=     → { deleted: true }
+  // -------------------------------------------------------------------------
+
+  async listMemories(workspaceId: string): Promise<AppMemory[]> {
+    const data = await this.http.get<{ items: WireMemory[] }>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/memories`,
+    );
+    return (data.items ?? []).map(toAppMemory);
+  }
+
+  async createMemory(workspaceId: string, input: AppMemoryCreateInput): Promise<AppMemory> {
+    const data = await this.http.post<WireMemory>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/memories`,
+      input,
+    );
+    return toAppMemory(data);
+  }
+
+  async updateMemory(
+    workspaceId: string,
+    id: string,
+    input: AppMemoryUpdateInput,
+  ): Promise<AppMemory> {
+    const data = await this.http.patch<WireMemory>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/memories/${encodeURIComponent(id)}`,
+      input,
+    );
+    return toAppMemory(data);
+  }
+
+  async forgetMemory(workspaceId: string, scope: AppMemoryScope, id: string): Promise<void> {
+    await this.http.delete<{ deleted: true }>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/memories/${encodeURIComponent(id)}?scope=${encodeURIComponent(scope)}`,
+    );
   }
 
   // -------------------------------------------------------------------------

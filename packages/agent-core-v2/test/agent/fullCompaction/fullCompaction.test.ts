@@ -34,7 +34,7 @@ import { COMPACTION_SUMMARY_PREFIX } from '#/agent/contextMemory/compactionHando
 import { IAgentMemoryRecallService } from '#/agent/memoryRecall/memoryRecall';
 import { IAgentContextInjectorService } from '#/agent/contextInjector/contextInjector';
 import type { EffectiveMemory } from '#/workspace/persistentMemory/memoryCatalog';
-import { PERSISTENT_MEMORY_FLAG_ID } from '#/app/persistentMemory/flag';
+
 import { IFlagService } from '#/app/flag/flag';
 import { ISessionMemoryAccess } from '#/session/persistentMemory/memorySeed';
 import { stubFlag } from '../../app/flag/stubs';
@@ -392,7 +392,7 @@ describe('FullCompaction', () => {
       appServices((reg) => {
         reg.defineInstance(
           IFlagService,
-          stubFlag((id) => id === PERSISTENT_MEMORY_FLAG_ID),
+          stubFlag(() => false),
         );
       }),
       sessionServices((reg) => {
@@ -472,10 +472,9 @@ describe('FullCompaction', () => {
   });
 
   it.each([
-    ['flag off', false, undefined],
-    ['empty recall', true, []],
-    ['recall unavailable', true, 'error'],
-  ] as const)('degrades after compaction when persistent memory is %s', async (_case, enabled, records) => {
+    ['empty recall', []],
+    ['recall unavailable', 'error'],
+  ] as const)('degrades after compaction when persistent memory has %s', async (_case, records) => {
     const access = new FullCompactionMemoryAccess();
     if (records === 'error') {
       access.listError = new Error('memory catalog unavailable');
@@ -484,10 +483,7 @@ describe('FullCompaction', () => {
     }
     const ctx = testAgent(
       appServices((reg) => {
-        reg.defineInstance(
-          IFlagService,
-          stubFlag(() => enabled),
-        );
+        reg.defineInstance(IFlagService, stubFlag(() => false));
       }),
       sessionServices((reg) => {
         reg.defineInstance(ISessionMemoryAccess, access);
@@ -524,7 +520,7 @@ describe('FullCompaction', () => {
     access.listImpl = () => new Promise<readonly EffectiveMemory[]>(() => {});
     const ctx = testAgent(
       appServices((reg) => {
-        reg.defineInstance(IFlagService, stubFlag((id) => id === PERSISTENT_MEMORY_FLAG_ID));
+        reg.defineInstance(IFlagService, stubFlag(() => false));
       }),
       sessionServices((reg) => {
         reg.defineInstance(ISessionMemoryAccess, access);
@@ -554,7 +550,7 @@ describe('FullCompaction', () => {
     access.listImpl = () => new Promise<readonly EffectiveMemory[]>(() => {});
     const ctx = testAgent(
       appServices((reg) => {
-        reg.defineInstance(IFlagService, stubFlag((id) => id === PERSISTENT_MEMORY_FLAG_ID));
+        reg.defineInstance(IFlagService, stubFlag(() => false));
       }),
       sessionServices((reg) => {
         reg.defineInstance(ISessionMemoryAccess, access);
@@ -588,7 +584,7 @@ describe('FullCompaction', () => {
       appServices((reg) => {
         reg.defineInstance(
           IFlagService,
-          stubFlag((id) => id === PERSISTENT_MEMORY_FLAG_ID),
+          stubFlag(() => false),
         );
       }),
       sessionServices((reg) => {
@@ -632,7 +628,7 @@ describe('FullCompaction', () => {
       appServices((reg) => {
         reg.defineInstance(
           IFlagService,
-          stubFlag((id) => id === PERSISTENT_MEMORY_FLAG_ID),
+          stubFlag(() => false),
         );
       }),
       sessionServices((reg) => {

@@ -42,8 +42,6 @@ import {
 } from '#/agent/memoryRecall/memoryRecall';
 import { AgentMemoryRecallService } from '#/agent/memoryRecall/memoryRecallService';
 import { IConfigService } from '#/app/config/config';
-import { IFlagService } from '#/app/flag/flag';
-import { PERSISTENT_MEMORY_FLAG_ID } from '#/app/persistentMemory/flag';
 import { DEFAULT_MEMORY_CONFIG, type MemoryConfig } from '#/app/persistentMemory/configSection';
 import type { MemoryScope } from '#/app/persistentMemory/memoryStore';
 import { ITelemetryService } from '#/app/telemetry/telemetry';
@@ -125,7 +123,6 @@ describe('AgentMemoryRecallService recall injection', () => {
   let ix: TestInstantiationService;
   let context: IAgentContextMemoryService;
   let access: FakeMemoryAccess;
-  let flagEnabled: boolean;
   let configValue: MemoryConfig;
   let tracked: TrackedEvent[];
   let logs: string[];
@@ -141,9 +138,6 @@ describe('AgentMemoryRecallService recall injection', () => {
         reg.define(IAgentSystemReminderService, AgentSystemReminderService);
         reg.define(IAgentContextInjectorService, AgentContextInjectorService);
         reg.defineInstance(ISessionMemoryAccess, access);
-        reg.definePartialInstance(IFlagService, {
-          enabled: (id) => id === PERSISTENT_MEMORY_FLAG_ID && flagEnabled,
-        });
         reg.definePartialInstance(IConfigService, {
           get: (<T,>() => configValue as T) as IConfigService['get'],
         });
@@ -164,7 +158,6 @@ describe('AgentMemoryRecallService recall injection', () => {
   beforeEach(() => {
     disposables = new DisposableStore();
     access = new FakeMemoryAccess();
-    flagEnabled = true;
     configValue = { ...DEFAULT_MEMORY_CONFIG };
     tracked = [];
     logs = [];
@@ -271,17 +264,6 @@ describe('AgentMemoryRecallService recall injection', () => {
   it('does not inject for a one-word prompt', async () => {
     access.seed(memory({ name: 'deploy runbook', body: 'deploy' }));
     context.append(userMessage('deploy'));
-
-    await injector().inject();
-
-    expect(context.get().some((m) => m.origin?.kind === 'injection')).toBe(false);
-    expect(recallEvent()).toBeUndefined();
-  });
-
-  it('does not inject when the persistent-memory flag is off', async () => {
-    flagEnabled = false;
-    access.seed(memory({ name: 'deploy runbook', body: 'run deploy.sh' }));
-    context.append(userMessage('how do I deploy the service'));
 
     await injector().inject();
 

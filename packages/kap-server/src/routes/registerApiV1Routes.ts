@@ -25,6 +25,7 @@ import { registerConnectionsRoutes } from './connections';
 import { registerFilesRoutes } from './files';
 import { registerFsRoutes } from './fs';
 import { registerGuiStoreRoutes } from './guiStore';
+import { registerMemoryRoutes } from './memory';
 import { registerMessagesRoutes } from './messages';
 import type { IGuiStoreService } from '../services/guiStore/guiStore';
 import { registerDebugRoutes } from '../transport/registerDebugRoutes';
@@ -160,6 +161,7 @@ export async function registerApiV1Routes(
         apiV1 as unknown as Parameters<typeof registerWorkspaceFsRoutes>[0],
         core,
       );
+      registerMemoryRoutes(apiV1 as unknown as Parameters<typeof registerMemoryRoutes>[0], core);
       registerFilesRoutes(apiV1 as unknown as Parameters<typeof registerFilesRoutes>[0], core);
       registerFsRoutes(apiV1 as unknown as Parameters<typeof registerFsRoutes>[0], core);
       registerGuiStoreRoutes(apiV1 as unknown as Parameters<typeof registerGuiStoreRoutes>[0], opts.guiStore);

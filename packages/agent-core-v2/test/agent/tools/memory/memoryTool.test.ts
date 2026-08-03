@@ -1,14 +1,11 @@
 import { ulid } from 'ulid';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { ServicesAccessor } from '#/_base/di/instantiation';
 import { DisposableStore } from '#/_base/di/lifecycle';
 import { Emitter } from '#/_base/event';
 import { createServices, type TestInstantiationService } from '#/_base/di/test';
 import { getAgentToolContributions } from '#/agent/toolRegistry/toolContribution';
 import type { ExecutableToolContext, RunnableToolExecution } from '#/tool/toolContract';
-import { IFlagService } from '#/app/flag/flag';
-import { PERSISTENT_MEMORY_FLAG_ID } from '#/app/persistentMemory/flag';
 import { DEFAULT_MEMORY_MAX_BODY_BYTES, MemoryError } from '#/app/persistentMemory/memoryStore';
 import { MemoryErrors } from '#/app/persistentMemory/errors';
 import { looksLikeSecret, redactMemoryBody } from '#/app/persistentMemory/redact';
@@ -141,14 +138,12 @@ describe('MemoryTool', () => {
   let disposables: DisposableStore;
   let ix: TestInstantiationService;
   let access: FakeMemoryAccess;
-  let flagEnabled: boolean;
   let tracked: TrackedEvent[];
 
   function build(): void {
     ix = createServices(disposables, {
       additionalServices: (reg) => {
         reg.defineInstance(ISessionMemoryAccess, access);
-        reg.definePartialInstance(IFlagService, { enabled: () => flagEnabled });
         reg.definePartialInstance(ITelemetryService, {
           track2: (name, properties) => {
             tracked.push({ name, properties: properties as TelemetryProperties | undefined });
@@ -162,24 +157,49 @@ describe('MemoryTool', () => {
   beforeEach(() => {
     disposables = new DisposableStore();
     access = new FakeMemoryAccess();
-    flagEnabled = true;
     tracked = [];
     build();
   });
   afterEach(() => disposables.dispose());
 
-  it('is gated by the persistent-memory flag through the contribution when-predicate', () => {
+  it('is registered as a native tool without a flag gate', () => {
     const contribution = getAgentToolContributions().find(
       (entry) => entry.options.name === MEMORY_TOOL_NAME,
     );
     expect(contribution).toBeDefined();
-    const accessor = {
-      get: () => ({ enabled: (id: string) => id === PERSISTENT_MEMORY_FLAG_ID && flagEnabled }),
-    } as unknown as ServicesAccessor;
-    flagEnabled = false;
-    expect(contribution!.options.when?.(accessor)).toBe(false);
-    flagEnabled = true;
-    expect(contribution!.options.when?.(accessor)).toBe(true);
+    // Persistent memory is native — no `when` predicate gates the tool.
+    expect(contribution!.options.when).toBeUndefined();
+  });
+
+  it('advertises a flat, provider-fillable object schema', () => {
+    const tool = ix.get(IMemoryTool);
+    const params = tool.parameters as {
+      type?: string;
+      properties?: Record<string, unknown>;
+      required?: string[];
+    };
+    // A bare top-level union renders as `oneOf` with no `properties`, which
+    // providers cannot fill — the advertised schema must be a flat object.
+    expect(params.type).toBe('object');
+    expect(Object.keys(params.properties ?? {})).toEqual(
+      expect.arrayContaining(['action', 'scope', 'type', 'name', 'description', 'body', 'id']),
+    );
+    expect(params.required).toEqual(['action']);
+  });
+
+  it('still rejects a per-action-invalid combination at execution time', () => {
+    const tool = ix.get(IMemoryTool);
+    // `remember` requires a body; the flat schema allows omitting it, but the
+    // strict union in resolveExecution must reject it.
+    const execution = tool.resolveExecution({
+      action: 'remember',
+      scope: 'workspace',
+      type: 'reference',
+      name: 'n',
+      description: 'd',
+    } as never);
+    expect('execute' in execution).toBe(false);
+    expect((execution as { isError?: boolean }).isError).toBe(true);
   });
 
   it('remember writes a memory and returns its id', async () => {
@@ -334,24 +354,6 @@ describe('MemoryTool', () => {
     // Telemetry reports not_found because nothing matched in the declared scope.
     const forget = tracked.find((event) => event.name === 'memory_forget');
     expect(forget?.properties?.['outcome']).toBe('not_found');
-  });
-
-  it('refuses to run when the flag is off at execution time', async () => {
-    flagEnabled = false;
-    const tool = ix.get(IMemoryTool);
-    const execution = tool.resolveExecution({
-      action: 'remember',
-      scope: 'workspace',
-      type: 'reference',
-      name: 'x',
-      description: 'y',
-      body: 'z',
-    });
-    const result = await (execution as RunnableToolExecution).execute(ctx());
-
-    expect(result.isError).toBe(true);
-    expect(result.output).toContain('disabled');
-    expect(access.createCalls).toEqual([]);
   });
 
   it('propagates the trust gate error as a tool error', async () => {

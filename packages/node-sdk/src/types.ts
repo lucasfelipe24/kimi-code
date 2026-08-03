@@ -102,6 +102,47 @@ export interface CreateGoalInput {
   readonly replace?: boolean;
 }
 
+/** Storage scope a persistent memory lives in. */
+export type MemoryScope = 'user' | 'workspace' | 'project';
+
+/** Taxonomy type of a persistent memory. */
+export type MemoryType = 'user' | 'feedback' | 'project' | 'reference';
+
+/**
+ * A durable cross-session memory (the `persistent-memory` experiment). Only
+ * meaningful on the agent-core-v2 engine; the v1 engine has no memory concept.
+ */
+export interface MemorySummary {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly type: MemoryType;
+  readonly scope: MemoryScope;
+  /** Resolved precedence origin (may differ from `scope` under shadowing). */
+  readonly origin: MemoryScope;
+  /** ISO timestamps. */
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly version: number;
+  readonly body: string;
+}
+
+export interface CreateMemoryInput {
+  readonly scope: MemoryScope;
+  readonly type: MemoryType;
+  readonly name: string;
+  readonly description: string;
+  readonly body: string;
+}
+
+export interface UpdateMemoryInput {
+  readonly scope: MemoryScope;
+  readonly type?: MemoryType;
+  readonly name?: string;
+  readonly description?: string;
+  readonly body?: string;
+}
+
 export type TextPromptPart = Extract<ContentPart, { type: 'text' }>;
 export type PromptPart = Extract<ContentPart, { type: 'text' | 'image_url' | 'video_url' }>;
 

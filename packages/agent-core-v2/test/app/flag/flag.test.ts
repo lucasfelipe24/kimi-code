@@ -18,10 +18,6 @@ import {
   PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID,
   persistentMemoryAutoExtractFlag,
 } from '#/app/persistentMemory/autoExtractFlag';
-import {
-  PERSISTENT_MEMORY_FLAG_ID,
-  persistentMemoryFlag,
-} from '#/app/persistentMemory/flag';
 import { ILogService } from '#/_base/log/log';
 import { IAtomicTomlDocumentStore } from '#/persistence/interface/atomicDocumentStore';
 import { TomlAtomicDocumentStore } from '#/persistence/backends/node-fs/atomicDocumentStore';
@@ -46,11 +42,11 @@ describe('FlagRegistryService', () => {
     reg.register(exampleFlag);
     expect(reg.list().map((d) => d.id)).toEqual(
       expect.arrayContaining([
-        PERSISTENT_MEMORY_FLAG_ID,
         PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID,
         'example_flag',
       ]),
     );
+    expect(reg.list().map((d) => d.id)).not.toContain('persistent-memory');
     expect(reg.get('example_flag')?.env).toBe('KIMI_CODE_EXPERIMENTAL_EXAMPLE_FLAG');
   });
 
@@ -149,7 +145,6 @@ describe('FlagService', () => {
     const state = flags.explain('example_flag');
     expect(state?.enabled).toBe(true);
     expect(state?.source).toBe('master-env');
-    expect(flags.enabled(PERSISTENT_MEMORY_FLAG_ID)).toBe(true);
   });
 
   it('keeps explicit-env flags off under defaults, config, and the master env', async () => {
@@ -172,14 +167,14 @@ describe('FlagService', () => {
     expect(state?.source).toBe('env');
   });
 
-  it('registers the real persistent-memory flag definitions', () => {
+  it('registers the auto-extract flag but not the removed persistent-memory flag', () => {
     const { flags } = makeFlags();
-    expect(flags.registry.get(PERSISTENT_MEMORY_FLAG_ID)).toMatchObject(persistentMemoryFlag);
     expect(flags.registry.get(PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID)).toMatchObject(
       persistentMemoryAutoExtractFlag,
     );
-    expect(flags.enabled(PERSISTENT_MEMORY_FLAG_ID)).toBe(false);
     expect(flags.enabled(PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID)).toBe(false);
+    // Persistent memory is native now — its gate flag is gone from the registry.
+    expect(flags.registry.get('persistent-memory')).toBeUndefined();
   });
 
   it('refreshes overrides when the experimental config section changes', async () => {
@@ -209,14 +204,13 @@ describe('FlagService', () => {
     const { flags } = makeFlags();
     expect(flags.snapshot()).toMatchObject({
       example_flag: true,
-      [PERSISTENT_MEMORY_FLAG_ID]: false,
       [PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID]: false,
     });
+    expect(flags.snapshot()).not.toHaveProperty('persistent-memory');
     expect(flags.enabledIds()).toEqual(['example_flag']);
     expect(flags.explainAll().map((s) => s.id)).toEqual(
       expect.arrayContaining([
         'example_flag',
-        PERSISTENT_MEMORY_FLAG_ID,
         PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID,
       ]),
     );
@@ -251,7 +245,6 @@ describe('FlagService', () => {
 
     expect(flags.snapshot()).toMatchObject({
       example_flag: false,
-      [PERSISTENT_MEMORY_FLAG_ID]: false,
       [PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID]: false,
     });
     expect(flags.explain('obsolete_flag')).toBeUndefined();

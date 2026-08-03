@@ -9,6 +9,7 @@ import { useKimiWebClient } from '../../composables/useKimiWebClient';
 import type { AppSession } from '../../api/types';
 import { useDialogFocus } from '../../composables/useDialogFocus';
 import LanguageSwitcher from './LanguageSwitcher.vue';
+import MemoryManager from './MemoryManager.vue';
 import { serverEndpointLabel } from '../../api/config';
 import { downloadTraceLog, isTraceEnabled } from '../../debug/trace';
 import type { Accent, ColorScheme } from '../../composables/useKimiWebClient';
@@ -69,17 +70,21 @@ const emit = defineEmits<{
   close: [];
 }>();
 
-type SettingsTab = 'general' | 'agent' | 'account' | 'advanced' | 'archived';
+type SettingsTab = 'general' | 'agent' | 'memory' | 'account' | 'advanced' | 'archived';
 
 const activeTab = ref<SettingsTab>('general');
 
-const tabs: { id: SettingsTab; labelKey: string }[] = [
+const tabs = computed<{ id: SettingsTab; labelKey: string }[]>(() => [
   { id: 'general', labelKey: 'settings.tabs.general' },
   { id: 'agent', labelKey: 'settings.tabs.agent' },
+  // Persistent memory is a v2-only capability; hide the tab on the v1 backend.
+  ...(props.backend === 'v2'
+    ? [{ id: 'memory' as const, labelKey: 'settings.tabs.memory' }]
+    : []),
   { id: 'account', labelKey: 'settings.tabs.account' },
   { id: 'advanced', labelKey: 'settings.tabs.advanced' },
   { id: 'archived', labelKey: 'settings.tabs.archived' },
-];
+]);
 
 const daemonEndpoint = serverEndpointLabel();
 const backendLabel = computed(() =>
@@ -555,6 +560,14 @@ function archiveTime(iso: string): string {
             </div>
           </section>
         </section>
+
+        <!-- Memory: persistent-memory manager (v2 only) -->
+        <MemoryManager
+          v-if="backend === 'v2'"
+          v-show="activeTab === 'memory'"
+          :workspace-id="client.activeWorkspaceId.value"
+          :backend="backend"
+        />
 
         <!-- Advanced: diagnostics + data/privacy -->
         <section v-show="activeTab === 'advanced'" class="panel">

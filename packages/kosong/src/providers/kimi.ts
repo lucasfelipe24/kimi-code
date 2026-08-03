@@ -1,4 +1,4 @@
-import { normalizeKimiToolSchema } from './kimi-schema';
+import { normalizeKimiToolParameters } from './kimi-schema';
 import { parseTraceId } from '#/errors';
 import type { ContentPart, Message, StreamedMessagePart, ToolCall } from '#/message';
 import type {
@@ -207,7 +207,7 @@ function convertTool(tool: Tool): OpenAIToolParam {
     ...converted,
     function: {
       ...converted.function,
-      parameters: normalizeKimiToolSchema(tool.parameters),
+      parameters: normalizeKimiToolParameters(tool.parameters),
     },
   };
 }

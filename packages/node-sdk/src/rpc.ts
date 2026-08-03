@@ -45,6 +45,9 @@ import type {
   KimiConfig,
   KimiConfigPatch,
   ListSessionsOptions,
+  CreateMemoryInput,
+  MemorySummary,
+  UpdateMemoryInput,
   McpServerInfo,
   McpStartupMetrics,
   McpTestResult,
@@ -247,6 +250,40 @@ export abstract class SDKRpcClientBase {
 
   async trustWorkspace(workDir: string): Promise<void> {
     void workDir;
+  }
+
+  /**
+   * Persistent-memory CRUD for a workspace directory. Only the v2 engine has a
+   * memory concept, so the base implementation reports an empty list and the
+   * mutations throw `NOT_IMPLEMENTED`; the v2 client overrides all four.
+   */
+  async listMemories(workDir: string): Promise<readonly MemorySummary[]> {
+    void workDir;
+    return [];
+  }
+
+  async createMemory(workDir: string, input: CreateMemoryInput): Promise<MemorySummary> {
+    void workDir;
+    void input;
+    throw new KimiError(ErrorCodes.NOT_IMPLEMENTED, 'Persistent memory requires the agent-core-v2 engine.');
+  }
+
+  async updateMemory(
+    workDir: string,
+    id: string,
+    input: UpdateMemoryInput,
+  ): Promise<MemorySummary> {
+    void workDir;
+    void id;
+    void input;
+    throw new KimiError(ErrorCodes.NOT_IMPLEMENTED, 'Persistent memory requires the agent-core-v2 engine.');
+  }
+
+  async forgetMemory(workDir: string, scope: MemorySummary['scope'], id: string): Promise<void> {
+    void workDir;
+    void scope;
+    void id;
+    throw new KimiError(ErrorCodes.NOT_IMPLEMENTED, 'Persistent memory requires the agent-core-v2 engine.');
   }
 
   async renameSession(input: RenameSessionInput): Promise<void> {
