@@ -10,6 +10,8 @@ import type { KlientContract } from './types.js';
 import { agentActivityViewContract } from './agent/activity.js';
 import { agentRpcContract } from './agent/rpc.js';
 import {
+  agentFullCompactionContract,
+  agentMcpContract,
   agentPlanContract,
   agentProfileContract,
   agentShellCommandContract,
@@ -17,6 +19,7 @@ import {
   agentUsageContract,
 } from './agent/services.js';
 import { authContract, authSummaryContract } from './global/auth.js';
+import { capabilitiesContract } from './global/capabilities.js';
 import { catalogContract } from './global/catalog.js';
 import { providerDiscoveryContract } from './global/providerDiscovery.js';
 import { configContract } from './global/config.js';
@@ -36,6 +39,7 @@ import {
 } from './session/lifecycle.js';
 import { sessionMetadataContract } from './session/metadata.js';
 import { sessionQuestionContract } from './session/question.js';
+import { sessionSkillCatalogContract } from './session/skills.js';
 import { workflowCatalogContract, workflowRunContract } from './session/workflow.js';
 
 export const globalContract: KlientContract = {
@@ -51,6 +55,7 @@ export const globalContract: KlientContract = {
   authSummaryService: authSummaryContract,
   flagService: flagsContract,
   pluginService: pluginsContract,
+  capabilityService: capabilitiesContract,
   hostFolderBrowser: hostFsContract,
   bootstrapService: envContract,
   // workspace scope (+ the app-registered handler registry)
@@ -61,6 +66,7 @@ export const globalContract: KlientContract = {
   sessionInteractionService: sessionInteractionContract,
   sessionApprovalService: sessionApprovalContract,
   sessionQuestionService: sessionQuestionContract,
+  sessionSkillCatalog: sessionSkillCatalogContract,
   // workflow scope
   workflowCatalogService: workflowCatalogContract,
   workflowRunService: workflowRunContract,
@@ -72,6 +78,8 @@ export const globalContract: KlientContract = {
   agentUsageService: agentUsageContract,
   agentPlanService: agentPlanContract,
   agentTaskService: agentTaskContract,
+  agentMcpService: agentMcpContract,
+  agentFullCompactionService: agentFullCompactionContract,
 };
 
 export type { KlientContract, ProcedureContract, ServiceContract, StreamingProcedureContract } from './types.js';

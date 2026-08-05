@@ -12,29 +12,36 @@
  * after a successful Kimi login), whose bearer token comes from
  * `IOAuthService.resolveTokenProvider(...)` and whose base URL is derived from
  * the provider's `baseUrl`. The explicit configs win over the managed
- * derivation. Both Moonshot sources use the host's Kimi identity headers
- * (`IBootstrapService.args.requestHeaders`) as default headers. When a rerank
- * backend is configured via `IRerankService`, the resolved provider is wrapped
- * in a `RerankingWebSearchProvider` so its results are reordered by semantic
- * relevance to the query. When none of the sources is configured it yields
- * `undefined` so the contributed `WebSearch` tool stays hidden. Owns no tool
- * registration — the `WebSearch` tool contributes itself via
- * `registerAgentToolService(...)` and reads this service from the Agent-scope
- * accessor. Tests and hosts that need a custom backend bind
- * `IWebSearchProviderService` directly. Bound at App scope.
+ * derivation. When a rerank backend is configured via `IRerankService`, the
+ * resolved provider is wrapped in a `RerankingWebSearchProvider` so its
+ * results are reordered by semantic relevance to the query. When none of the
+ * sources is configured it yields `undefined` so the contributed `WebSearch`
+ * tool stays hidden. Owns no tool registration — the `WebSearch` tool
+ * contributes itself via `registerAgentToolService(...)` and reads this
+ * service from the Agent-scope accessor. Tests and hosts that need a custom
+ * backend bind `IWebSearchProviderService` directly. Bound at App scope.
+ *
+ * Default headers split by who chose the endpoint: a `[services]` entry names
+ * its own, so that path sends `agentIdentity`'s frozen `requestHeaders` — the
+ * host header set with the `User-Agent` product token rewritten to the
+ * configured identity — while the managed OAuth path sends the host's own
+ * headers (`IBootstrapService.args.requestHeaders`) verbatim, being the
+ * endpoint the session authenticated against.
  */
 
 import {
   KIMI_CODE_PROVIDER_NAME,
   kimiCodeBaseUrl,
+  type BearerTokenProvider,
 } from '@moonshot-ai/kimi-code-oauth';
 
 import { LifecycleScope, ScopeActivation, registerScopedService } from '#/_base/di/scope';
 import { IOAuthService } from '#/app/auth/auth';
+import { IAgentIdentity } from '#/app/agentIdentity/agentIdentity';
 import { IBootstrapService } from '#/app/bootstrap/bootstrap';
 import { IConfigService } from '#/app/config/config';
 import { IFlagService } from '#/app/flag/flag';
-import { IProviderService } from '#/kosong/provider/provider';
+import { IProviderService, type ProviderConfig } from '#/kosong/provider/provider';
 import { isOAuthCatalogVendor } from '#/kosong/provider/providerDefinition';
 
 import { SERVICES_SECTION, type ServicesConfig } from '../configSection';
@@ -58,6 +65,7 @@ export class WebSearchProviderService implements IWebSearchProviderService {
     @IConfigService private readonly config: IConfigService,
     @IFlagService private readonly flags: IFlagService,
     @IRerankService private readonly rerankService: IRerankService,
+    @IAgentIdentity private readonly identity: IAgentIdentity,
   ) {}
 
   getWebSearchProvider(): WebSearchProvider | undefined {
@@ -112,25 +120,19 @@ export class WebSearchProviderService implements IWebSearchProviderService {
     return this.langSearchLimiter.value;
   }
 
-  private fromServicesConfig(): WebSearchProvider | undefined {
-    const search = this.config.get<ServicesConfig>(SERVICES_SECTION)?.moonshotSearch;
-    if (search?.baseUrl === undefined) {
-      return undefined;
-    }
-    const tokenProvider =
-      search.oauth === undefined
-        ? undefined
-        : this.oauth.resolveTokenProvider(KIMI_CODE_PROVIDER_NAME, search.oauth);
-    return new MoonshotWebSearchProvider({
-      baseUrl: search.baseUrl,
-      tokenProvider,
-      apiKey: nonEmptyString(search.apiKey),
-      defaultHeaders: { ...this.bootstrap.args.requestHeaders },
-      customHeaders: search.customHeaders,
-    });
+  hasWebSearchProvider(): boolean {
+    return this.configuredSearch() !== undefined || this.managedTokenProvider() !== undefined;
   }
 
-  private fromManagedOAuth(): WebSearchProvider | undefined {
+  private configuredSearch(): (ServicesConfig['moonshotSearch'] & { baseUrl: string }) | undefined {
+    const search = this.config.get<ServicesConfig>(SERVICES_SECTION)?.moonshotSearch;
+    if (search?.baseUrl === undefined) return undefined;
+    return search as ServicesConfig['moonshotSearch'] & { baseUrl: string };
+  }
+
+  private managedTokenProvider():
+    | { provider: ProviderConfig; tokenProvider: BearerTokenProvider }
+    | undefined {
     const provider = this.providers.get(KIMI_CODE_PROVIDER_NAME);
     if (provider === undefined || !isOAuthCatalogVendor(provider.type) || provider.oauth === undefined) {
       return undefined;
@@ -139,9 +141,30 @@ export class WebSearchProviderService implements IWebSearchProviderService {
       KIMI_CODE_PROVIDER_NAME,
       provider.oauth,
     );
-    if (tokenProvider === undefined) {
-      return undefined;
-    }
+    if (tokenProvider === undefined) return undefined;
+    return { provider, tokenProvider };
+  }
+
+  private fromServicesConfig(): WebSearchProvider | undefined {
+    const search = this.configuredSearch();
+    if (search === undefined) return undefined;
+    const tokenProvider =
+      search.oauth === undefined
+        ? undefined
+        : this.oauth.resolveTokenProvider(KIMI_CODE_PROVIDER_NAME, search.oauth);
+    return new MoonshotWebSearchProvider({
+      baseUrl: search.baseUrl,
+      tokenProvider,
+      apiKey: nonEmptyString(search.apiKey),
+      defaultHeaders: { ...this.identity.current().requestHeaders },
+      customHeaders: search.customHeaders,
+    });
+  }
+
+  private fromManagedOAuth(): WebSearchProvider | undefined {
+    const managed = this.managedTokenProvider();
+    if (managed === undefined) return undefined;
+    const { provider, tokenProvider } = managed;
     const baseUrl = `${(provider.baseUrl ?? kimiCodeBaseUrl()).replace(/\/+$/, '')}/search`;
     return new MoonshotWebSearchProvider({
       baseUrl,
