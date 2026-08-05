@@ -45,7 +45,7 @@ This is a TypeScript monorepo built for agent-assisted development. Keep the roo
 - **Bundler / build tool**: `tsdown` per package; the CLI additionally bundles the web UI and native assets in its `build` script.
 - **Lint**: `oxlint` (config `.oxlintrc.json`). **Format**: `oxfmt` (config `.oxfmtrc.json`).
 - **Test**: `vitest` (root `vitest.config.ts`, projects = `packages/*`, `apps/kimi-code`, `apps/vscode`; v8 coverage).
-- **UI stacks**: the TUI (`apps/kimi-code`) is built on `@moonshot-ai/pi-tui` + React (`react-jsx`); the web UIs (`apps/kimi-web`) use Vue 3 + Vite; the inspector tools (`apps/kimi-inspect`, `apps/vis/web`) use React/TSX.
+- **UI stacks**: the TUI (`apps/kimi-code`) is built on `@moonshot-ai/pi-tui` + React (`react-jsx`); the browser web UI ships as the prebuilt `apps/kimi-code/dist-web` bundle (source lives in the code-app repo); the inspector tools (`apps/kimi-inspect`, `apps/vis/web`) use React/TSX.
 - **Versioning / release**: `changesets` (`.changeset/`), `simple-git-hooks` + `lint-staged` on commit.
 
 ## Build, Test, and Lint Commands
@@ -58,8 +58,8 @@ Run all of these from the repo root unless noted. See `package.json` `scripts` f
 - `pnpm lint` — `oxlint --type-aware`. `pnpm lint:fix` adds `--fix`.
 - `pnpm test` — `vitest run` (all projects). `pnpm test:watch` and `pnpm test:coverage` are also available.
 - `pnpm sherif` — validate monorepo dependency consistency.
-- `pnpm dev:cli` — run the CLI in dev mode (`apps/kimi-code`). `pnpm dev:cli:v2` enables all experimental flags.
-- `pnpm dev:web` — run the web UI. `pnpm dev:kap-server` / `pnpm dev:v2` — run the server backend for the web/inspector clients.
+- `pnpm dev:cli` — run the CLI in dev mode (`apps/kimi-code`). `pnpm dev:cli:legacy` runs it on the legacy engine (`KIMI_CODE_LEGACY_FLAG=1`).
+- `pnpm dev:server` / `pnpm dev:kap-server` / `pnpm dev:v2` — run the server backend for the web/inspector clients (the web UI itself lives in the code-app repo).
 - `pnpm dev:docs` — run the VitePress docs site (installs `docs/` with `--ignore-workspace`).
 - Full release gate (`pnpm publish` script): `typecheck` → `lint` → `sherif` → `test` → `build` → `lint:pkg` → `changeset publish`. CI runs `lint`, `typecheck`, and `test` on every PR.
 - Per-package commands via filters, e.g. `pnpm --filter @moonshot-ai/klient docker:e2e`, or `pnpm -C apps/kimi-code run e2e` (gated by `KIMI_E2E=1`).

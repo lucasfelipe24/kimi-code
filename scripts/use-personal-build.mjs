@@ -296,8 +296,7 @@ function ensureWindowsPath() {
 function buildCommands() {
   return [
     ['pnpm', ['install', '--frozen-lockfile']],
-    ['pnpm', ['--filter', '@moonshot-ai/kimi-web', 'run', 'build']],
-    [process.execPath, ['apps/kimi-code/scripts/copy-web-assets.mjs']],
+    [process.execPath, ['apps/kimi-code/scripts/check-web-assets.mjs']],
     ['pnpm', ['--filter', '@moonshot-ai/kimi-code', 'run', 'build:native:sea']],
     ['pnpm', ['--filter', '@moonshot-ai/kimi-code', 'run', 'test:native:smoke']],
   ];
@@ -325,9 +324,8 @@ async function buildNativeBinary() {
   console.log('==> Installing dependencies');
   runPnpm(['install', '--frozen-lockfile']);
 
-  console.log('==> Building Kimi web assets');
-  runPnpm(['--filter', '@moonshot-ai/kimi-web', 'run', 'build']);
-  runCommand(process.execPath, ['apps/kimi-code/scripts/copy-web-assets.mjs']);
+  console.log('==> Verifying Kimi web assets');
+  runCommand(process.execPath, ['apps/kimi-code/scripts/check-web-assets.mjs']);
 
   console.log('==> Building native Kimi Code executable');
   runPnpm(['--filter', '@moonshot-ai/kimi-code', 'run', 'build:native:sea']);
