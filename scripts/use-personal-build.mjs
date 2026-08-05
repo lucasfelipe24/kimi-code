@@ -350,7 +350,7 @@ async function installLauncher(paths) {
   }
 
   await replaceFileAtomically(paths.launcherPath, createLinuxLauncher(paths.binaryPath), 0o755);
-  return await ensureLinuxPath();
+  return  ensureLinuxPath();
 }
 
 async function main() {

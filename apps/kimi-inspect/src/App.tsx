@@ -142,7 +142,7 @@ export function App() {
                 ready={ready}
                 onTrailChange={setTrail}
                 jump={jump}
-                onJumpHandled={() => setJump(null)}
+                onJumpHandled={() =>{  setJump(null); }}
                 onOpenSearchHit={openSearchHit}
               />
             )}

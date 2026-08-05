@@ -368,7 +368,7 @@ describe('limits and cancellation', () => {
   it('fails with a duration error when maxDurationMs elapses', async () => {
     const host = echoHost(async (_request, signal) => {
       await new Promise<void>((resolve) => {
-        signal.addEventListener('abort', () => resolve(), { once: true });
+        signal.addEventListener('abort', () =>{  resolve(); }, { once: true });
       });
       return { status: 'error', message: 'aborted' };
     });

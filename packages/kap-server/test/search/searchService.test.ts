@@ -214,7 +214,7 @@ function blockFirstCall(
     }
     return orig.apply(this, args);
   };
-  return { entered, release: () => releaseResolve() };
+  return { entered, release: () =>{  releaseResolve(); } };
 }
 
 /** An ILogService that records warn calls (message + serialized meta). */
@@ -1142,7 +1142,7 @@ describe('GlobalSearchService', () => {
       const page = await Promise.race([
         service.search({ query: '苹果' }),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('search waited for the blocked sync')), 2_000),
+          setTimeout(() =>{  reject(new Error('search waited for the blocked sync')); }, 2_000),
         ),
       ]);
       expect(page.items.length).toBe(1); // the published generation, not the delta
@@ -1847,7 +1847,7 @@ describe('GlobalSearchService', () => {
       expect(page.source).toBe('live');
       // user prompt + assistant frame + title all contain '苹'.
       expect(page.items.length).toBe(3);
-      expect(page.items.map((h) => h.role).sort()).toEqual(['assistant', 'title', 'user']);
+      expect(page.items.map((h) => h.role).toSorted()).toEqual(['assistant', 'title', 'user']);
 
       // The index route keeps rejecting the same 1-character query.
       await expect(service.search({ query: '苹', mode: 'literal' })).rejects.toMatchObject({

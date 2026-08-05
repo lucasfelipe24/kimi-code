@@ -48,7 +48,7 @@ export function LoginScreen({ onLoginSuccess, onSkip }: LoginScreenProps) {
       if (result.success) {
         onLoginSuccess();
       } else {
-        const errorMessage = result.error || "Login failed";
+        const errorMessage = result.error ?? "Login failed";
         if (isPaymentRequiredError(errorMessage)) {
           setShowSubscribeDialog(true);
           setState("idle");
@@ -57,8 +57,8 @@ export function LoginScreen({ onLoginSuccess, onSkip }: LoginScreenProps) {
           setError(errorMessage);
         }
       }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       if (isPaymentRequiredError(errorMessage)) {
         setShowSubscribeDialog(true);
         setState("idle");
@@ -78,7 +78,7 @@ export function LoginScreen({ onLoginSuccess, onSkip }: LoginScreenProps) {
     if (!url) return;
     await navigator.clipboard.writeText(url);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() =>{  setCopied(false); }, 2000);
   };
 
   if (state === "pending") {
@@ -171,7 +171,7 @@ export function LoginScreen({ onLoginSuccess, onSkip }: LoginScreenProps) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setShowSubscribeDialog(false)}>Skip</AlertDialogCancel>
+            <AlertDialogCancel onClick={() =>{  setShowSubscribeDialog(false); }}>Skip</AlertDialogCancel>
             <AlertDialogAction onClick={handleSubscribe}>Subscribe</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

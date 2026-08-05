@@ -135,9 +135,9 @@ export class InMemoryStorageService implements IFileSystemStorageService {
       const teardown = toDisposable(() => {
         if (tornDown) return;
         tornDown = true;
-        entry!.count--;
-        if (entry!.count === 0) {
-          entry!.emitter.dispose();
+        entry.count--;
+        if (entry.count === 0) {
+          entry.emitter.dispose();
           this.watchers.delete(id);
         }
       });
@@ -145,7 +145,7 @@ export class InMemoryStorageService implements IFileSystemStorageService {
       if (disposables instanceof DisposableStore) {
         disposables.add(combined);
       } else if (disposables !== undefined) {
-        (disposables as IDisposable[]).push(combined);
+        (disposables).push(combined);
       }
       return combined;
     };

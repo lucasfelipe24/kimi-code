@@ -58,7 +58,7 @@ export function acpClientFromContext(client: AgentContext): AcpClient {
       // Explicit generics: the literal-method overload does not reduce for
       // this params shape (nullable optionals), so the call is pinned to the
       // typed `terminal/create` request/response here.
-      const { terminalId } = await client.request<CreateTerminalResponse, CreateTerminalRequest>(
+      const { terminalId } = await client.request<CreateTerminalResponse>(
         methods.client.terminal.create,
         params,
       );

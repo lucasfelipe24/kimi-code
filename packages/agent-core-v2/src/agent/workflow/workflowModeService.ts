@@ -58,7 +58,7 @@ export class WorkflowModeService extends Disposable implements IWorkflowModeServ
     const trigger = this.wire.getModel(WorkflowModel);
     if (trigger === null) return;
     const history = this.context.get();
-    const last = history[history.length - 1];
+    const last = history.at(-1);
     const willPop =
       last?.origin?.kind === 'injection' && last.origin.variant === 'workflow_mode';
     this.wire.dispatch(workflowModeExit({}));

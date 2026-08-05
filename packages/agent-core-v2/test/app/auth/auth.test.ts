@@ -260,7 +260,7 @@ describe('OAuthService', () => {
       }),
     );
 
-    await vi.waitFor(() => expect(svc.getFlow(OAUTH_PROVIDER)?.status).toBe('authenticated'));
+    await vi.waitFor(() =>{  expect(svc.getFlow(OAUTH_PROVIDER)?.status).toBe('authenticated'); });
   });
 
   it('provisions the managed provider through the provider service after login', async () => {
@@ -375,7 +375,7 @@ describe('OAuthService', () => {
     });
     const svc = createService();
     await svc.startLogin(OAUTH_PROVIDER);
-    await vi.waitFor(() => expect(svc.getFlow(OAUTH_PROVIDER)?.status).toBe('authenticated'));
+    await vi.waitFor(() =>{  expect(svc.getFlow(OAUTH_PROVIDER)?.status).toBe('authenticated'); });
 
     await svc.status(OAUTH_PROVIDER);
     expect(toolkit.getCachedAccessToken).toHaveBeenCalledWith(
@@ -456,7 +456,7 @@ describe('OAuthService', () => {
       provider: OAUTH_PROVIDER,
       status: 'pending',
     });
-    await vi.waitFor(() => expect(svc.getFlow(OAUTH_PROVIDER)?.status).toBe('authenticated'));
+    await vi.waitFor(() =>{  expect(svc.getFlow(OAUTH_PROVIDER)?.status).toBe('authenticated'); });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(configReplace).not.toHaveBeenCalledWith('defaultModel', expect.any(String));
   });
@@ -470,7 +470,7 @@ describe('OAuthService', () => {
     const svc = createService();
 
     await svc.startLogin(OAUTH_PROVIDER);
-    await vi.waitFor(() => expect(svc.getFlow(OAUTH_PROVIDER)?.status).toBe('authenticated'));
+    await vi.waitFor(() =>{  expect(svc.getFlow(OAUTH_PROVIDER)?.status).toBe('authenticated'); });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(providerSet).toHaveBeenCalledWith(
@@ -550,7 +550,7 @@ describe('OAuthService', () => {
     resolveLogin({ providerName: OAUTH_PROVIDER, ok: true });
     providerChangedEmitter.fire({ added: [], removed: [], changed: [OAUTH_PROVIDER] });
 
-    await vi.waitFor(() => expect(svc.getFlow(OAUTH_PROVIDER)?.status).toBe('cancelled'));
+    await vi.waitFor(() =>{  expect(svc.getFlow(OAUTH_PROVIDER)?.status).toBe('cancelled'); });
   });
 
   it('cancelLogin aborts a pending flow and marks it cancelled', async () => {
@@ -1449,7 +1449,7 @@ describe('AuthSummaryService', () => {
       },
     });
   });
-  afterEach(() => disposables.dispose());
+  afterEach(() =>{  disposables.dispose(); });
 
   function createSummary(): IAuthSummaryService {
     return ix.get(IAuthSummaryService);
@@ -1578,7 +1578,7 @@ describe('AuthLegacyService', () => {
       },
     });
   });
-  afterEach(() => disposables.dispose());
+  afterEach(() =>{  disposables.dispose(); });
 
   function createService(): IAuthLegacyService {
     return ix.get(IAuthLegacyService);

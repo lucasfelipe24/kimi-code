@@ -64,7 +64,7 @@ function makeHost(options: { hasSession?: boolean } = {}) {
       theme: currentTheme,
       ui: {
         children,
-        clear: vi.fn(() => children.splice(0, children.length)),
+        clear: vi.fn(() => children.splice(0)),
         addChild: vi.fn((child: unknown) => children.push(child)),
         setFocus: vi.fn(),
         requestRender: vi.fn(),

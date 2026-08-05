@@ -81,7 +81,7 @@ export class ExtraAgentProfileLoaderService
             this.log.warn(message, error);
           },
         ),
-        (message) => this.log.warn(message),
+        (message) =>{  this.log.warn(message); },
       ),
       (context) => this.user.getDefaultProfile().renderSystemPrompt(context),
     );

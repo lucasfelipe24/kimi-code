@@ -116,7 +116,7 @@ export function SearchView({ onOpenResult }: { onOpenResult: (hit: SearchHit) =>
           className="w-96 rounded border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-[13px] text-neutral-100 outline-none focus:border-sky-600"
           placeholder="Search messages across all sessions…"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) =>{  setInput(e.target.value); }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
@@ -127,7 +127,7 @@ export function SearchView({ onOpenResult }: { onOpenResult: (hit: SearchHit) =>
         <select
           className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-[12px] text-neutral-300 outline-none"
           value={role}
-          onChange={(e) => setRole(e.target.value as RoleFilter)}
+          onChange={(e) =>{  setRole(e.target.value as RoleFilter); }}
           title="Document role"
         >
           <option value="all">all roles</option>
@@ -138,7 +138,7 @@ export function SearchView({ onOpenResult }: { onOpenResult: (hit: SearchHit) =>
         <select
           className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-[12px] text-neutral-300 outline-none disabled:opacity-40"
           value={sort}
-          onChange={(e) => setSort(e.target.value as SortOrder)}
+          onChange={(e) =>{  setSort(e.target.value as SortOrder); }}
           title={exact ? 'Exact match always sorts by newest first' : 'Sort order'}
           disabled={exact}
         >
@@ -154,7 +154,7 @@ export function SearchView({ onOpenResult }: { onOpenResult: (hit: SearchHit) =>
             type="checkbox"
             className="accent-sky-600"
             checked={exact}
-            onChange={(e) => setExact(e.target.checked)}
+            onChange={(e) =>{  setExact(e.target.checked); }}
           />
           exact match
         </label>
@@ -229,7 +229,7 @@ function HitCard({ hit, onOpen }: { hit: SearchHit; onOpen: (hit: SearchHit) => 
     <button
       type="button"
       className="w-full rounded-lg border border-neutral-800 bg-neutral-900/40 px-3 py-2 text-left transition-colors hover:border-sky-800 hover:bg-neutral-900"
-      onClick={() => onOpen(hit)}
+      onClick={() =>{  onOpen(hit); }}
       title="Open in chat"
     >
       <div className="mb-1 flex flex-wrap items-center gap-2">

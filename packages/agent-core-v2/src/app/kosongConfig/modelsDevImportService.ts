@@ -230,10 +230,10 @@ export class ModelsDevImportService implements IModelsDevImportService {
         userAgent: await this.outboundUserAgent(),
         signal: AbortSignal.timeout(UPSTREAM_FETCH_TIMEOUT_MS),
       });
-    } catch (err) {
+    } catch (error) {
       throw new Error2(
         codes.REGISTRY_IMPORT_INVALID,
-        `custom registry at ${url} cannot be imported: ${truncateUpstreamMessage(err)}`,
+        `custom registry at ${url} cannot be imported: ${truncateUpstreamMessage(error)}`,
       );
     }
     if (Object.keys(entries).length === 0) {

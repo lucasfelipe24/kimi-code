@@ -33,7 +33,7 @@ import { createRequire } from 'node:module';
 
 import { Project, SyntaxKind } from 'ts-morph';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __dirname = import.meta.dirname;
 const PKG = join(__dirname, '..'); // packages/agent-core-v2
 const SRC = join(PKG, 'src');
 const TMP = join(PKG, '.contract-types-tmp');
@@ -71,8 +71,8 @@ try {
     cwd: PKG,
     stdio: 'pipe',
   });
-} catch (err) {
-  const code = err && typeof err === 'object' && 'status' in err ? err.status : 'unknown';
+} catch (error) {
+  const code = error && typeof error === 'object' && 'status' in error ? error.status : 'unknown';
   log(`tsc exited ${String(code)} (non-fatal; declarations are still emitted)`);
 }
 

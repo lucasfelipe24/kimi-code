@@ -139,7 +139,7 @@ export class SessionMetadata extends Disposable implements ISessionMetadata {
         lastPrompt: this.data.lastPrompt,
         createdAt: this.data.createdAt,
         updatedAt: this.data.updatedAt,
-        archived: this.data.archived === true,
+        archived:  this.data.archived,
         custom: this.data.custom,
       }),
     );

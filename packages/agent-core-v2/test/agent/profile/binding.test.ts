@@ -129,7 +129,7 @@ describe('AgentProfileService.bind', () => {
     const svc = ctx.get(IAgentProfileService);
 
     const bound = svc.bind({ profile: DEFAULT_AGENT_PROFILE_NAME, model: MOCK_MODEL });
-    setTimeout(() => deferred.freeze(), 20);
+    setTimeout(() =>{  deferred.freeze(); }, 20);
     await bound;
 
     expect(svc.data().modelAlias).toBe(MOCK_MODEL);
@@ -794,7 +794,7 @@ describe('AgentToolPolicyService.setSessionDisabledTools', () => {
       .replace(TOOLS_SECTION, { disabled: ['Skill'] }, ConfigTarget.Memory);
 
     expect(toolPolicy.isToolActive('Skill')).toBe(false);
-    await vi.waitFor(() => expect(profile.getSystemPrompt()).not.toContain(skillMarker));
+    await vi.waitFor(() =>{  expect(profile.getSystemPrompt()).not.toContain(skillMarker); });
   });
 });
 

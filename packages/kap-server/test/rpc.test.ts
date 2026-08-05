@@ -513,7 +513,7 @@ describe('server-v2 /api/v1/debug RPC', () => {
         expect.objectContaining({ id: 'rpc-plugin', state: 'ok' }),
       ]);
 
-      const info = await call<{ id: string }>('POST', rpc('core', IPluginService, 'getPluginInfo'), { id: 'rpc-plugin' });
+      const info = await call('POST', rpc('core', IPluginService, 'getPluginInfo'), { id: 'rpc-plugin' });
       expect(info.body.code).toBe(0);
       expect(info.body.data.id).toBe('rpc-plugin');
 

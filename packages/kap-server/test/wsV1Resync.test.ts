@@ -45,7 +45,7 @@ function openConn(url: string, token: string): Promise<Conn> {
     const ws = new WebSocket(url, [`kimi-code.bearer.${token}`]);
     const frames: Frame[] = [];
     const waiters: Array<(f: Frame) => void> = [];
-    const closed = new Promise<void>((res) => ws.on('close', () => res()));
+    const closed = new Promise<void>((res) => ws.on('close', () =>{  res(); }));
     ws.on('message', (data) => {
       let frame: Frame;
       try {
@@ -57,7 +57,7 @@ function openConn(url: string, token: string): Promise<Conn> {
       if (w) w(frame);
       else frames.push(frame);
     });
-    ws.once('open', () =>
+    ws.once('open', () =>{ 
       resolve({
         ws,
         frames,
@@ -103,7 +103,7 @@ function openConn(url: string, token: string): Promise<Conn> {
             arm();
             waiters.push(waiter);
           }),
-      }),
+      }); },
     );
     ws.once('error', reject);
   });

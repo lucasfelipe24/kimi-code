@@ -806,7 +806,7 @@ describe('agent profile loaders + session catalog', () => {
           });
         });
         const timedOut = new Promise<never>((_resolve, reject) => {
-          setTimeout(() => reject(new Error('watch-driven refresh timed out')), 10000);
+          setTimeout(() =>{  reject(new Error('watch-driven refresh timed out')); }, 10000);
         });
         // Let the watcher finish its initial scan before the change lands.
         await new Promise((resolve) => setTimeout(resolve, 300));

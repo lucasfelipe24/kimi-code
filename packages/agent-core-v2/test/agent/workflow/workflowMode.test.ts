@@ -45,7 +45,7 @@ describe('WorkflowModeService', () => {
     ix.set(IWorkflowModeService, new SyncDescriptor(WorkflowModeService));
   });
 
-  afterEach(() => disposables.dispose());
+  afterEach(() =>{  disposables.dispose(); });
 
   it('enter / exit toggle isActive and emit agent.status.updated via wire', () => {
     const workflow = ix.get(IWorkflowModeService);
@@ -77,7 +77,7 @@ describe('WorkflowModeService', () => {
 
   it('exit is a no-op when not active', () => {
     const workflow = ix.get(IWorkflowModeService);
-    expect(() => workflow.exit()).not.toThrow();
+    expect(() =>{  workflow.exit(); }).not.toThrow();
     expect(workflow.isActive).toBe(false);
   });
 

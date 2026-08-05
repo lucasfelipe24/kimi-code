@@ -200,7 +200,7 @@ export class MemoryTool implements IMemoryTool {
       name: memory.name,
       description: memory.description,
       type: memory.type,
-      scope: memory.origin as MemoryScope,
+      scope: memory.origin,
       updatedAt: memory.updatedAt,
     }));
     return { output: JSON.stringify({ memories: projected }, null, 2) };

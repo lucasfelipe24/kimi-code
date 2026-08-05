@@ -77,7 +77,7 @@ export function createKlientFromChannel(
     if (!validate) return source;
 
     // Wrap the iterable to validate each chunk.
-    const contract = procedure as StreamingProcedureContract;
+    const contract = procedure;
     return {
       [Symbol.asyncIterator]() {
         const iter = source[Symbol.asyncIterator]();

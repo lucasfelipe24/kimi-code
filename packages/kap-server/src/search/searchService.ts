@@ -751,7 +751,7 @@ class RowTopK {
 
   /** The kept rows in final rank order. */
   sorted(): MatchedRow[] {
-    return this.a.sort((x, y) => compareRows(this.q, x, y));
+    return this.a.toSorted((x, y) => compareRows(this.q, x, y));
   }
 }
 
@@ -2005,7 +2005,7 @@ export class GlobalSearchService implements IGlobalSearchService {
       items,
       hasMore,
       pageToken: hasMore
-        ? encodePageToken(q, source, boundaryOf(q, pageRows[pageRows.length - 1]!), generation)
+        ? encodePageToken(q, source, boundaryOf(q, pageRows.at(-1)!), generation)
         : undefined,
       incomplete,
       indexState,

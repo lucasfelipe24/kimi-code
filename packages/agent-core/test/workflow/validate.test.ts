@@ -25,13 +25,13 @@ function scriptWithMeta(meta: unknown, body = 'return 1;'): string {
 describe('validateWorkflowName', () => {
   it('accepts kebab-case names', () => {
     for (const name of ['a', 'deep-research', 'x1-y2-z3', 'a'.repeat(64)]) {
-      expect(() => validateWorkflowName(name)).not.toThrow();
+      expect(() =>{  validateWorkflowName(name); }).not.toThrow();
     }
   });
 
   it('rejects invalid names', () => {
     for (const name of ['', 'Upper', 'has_underscore', '-lead', 'trail-', 'a--b', 'ção', 'a'.repeat(65), '../evil']) {
-      expect(() => validateWorkflowName(name)).toThrow(WorkflowValidationError);
+      expect(() =>{  validateWorkflowName(name); }).toThrow(WorkflowValidationError);
     }
   });
 });

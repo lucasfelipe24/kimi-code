@@ -833,11 +833,11 @@ describe('Session secondary-model live config', () => {
   it('rejects a dangling pointer with the wrapped secondary-model error', async () => {
     const session = await makeSession(SECONDARY_BASE_CONFIG);
     try {
-      expect(() =>
+      expect(() =>{ 
         session.setSecondaryModelConfig({
           ...SECONDARY_BASE_CONFIG,
           secondaryModel: { model: 'missing-model' },
-        }),
+        }); },
       ).toThrow(/\[secondary_model\]\.model/);
       expect(session.kimiConfig?.secondaryModel).toBeUndefined();
     } finally {
@@ -848,7 +848,7 @@ describe('Session secondary-model live config', () => {
   it('rejects when the complete config has no persisted secondary recipe', async () => {
     const session = await makeSession(SECONDARY_BASE_CONFIG);
     try {
-      expect(() => session.setSecondaryModelConfig(SECONDARY_BASE_CONFIG)).toThrow(/persist/);
+      expect(() =>{  session.setSecondaryModelConfig(SECONDARY_BASE_CONFIG); }).toThrow(/persist/);
     } finally {
       await session.close();
     }
@@ -857,7 +857,7 @@ describe('Session secondary-model live config', () => {
   it('rejects when the session has no config', async () => {
     const session = await makeSession();
     try {
-      expect(() => session.setSecondaryModelConfig(SECONDARY_POINTER_CONFIG)).toThrow(/no config/);
+      expect(() =>{  session.setSecondaryModelConfig(SECONDARY_POINTER_CONFIG); }).toThrow(/no config/);
     } finally {
       await session.close();
     }

@@ -382,7 +382,7 @@ beforeAll(async () => {
   // M_KIMI needs a `provider` reference to KIMI_PROVIDER so the engine
   // resolves kimi provider traits (uploadVideo). The facade's addProvider()
   // doesn't support provider-linkage, so call modelService directly.
-  await app!.accessor.get(IModelService).set(M_KIMI, {
+  await app.accessor.get(IModelService).set(M_KIMI, {
     model: 'kimi-k2-matrix',
     provider: KIMI_PROVIDER,
     protocol: 'openai',
@@ -412,7 +412,7 @@ afterAll(async () => {
   app?.dispose();
   for (const socket of sockets) socket.destroy();
   await new Promise<void>((resolve) => {
-    server.close(() => resolve());
+    server.close(() =>{  resolve(); });
   });
   await rm(homeDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 25 });
   await rm(workRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 25 });

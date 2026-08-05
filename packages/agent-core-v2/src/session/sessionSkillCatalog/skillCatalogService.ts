@@ -58,7 +58,7 @@ export class SessionSkillCatalogService
       }),
     );
     this.remerge();
-    this.ready = this.data.ready.then(() => this.remerge());
+    this.ready = this.data.ready.then(() =>{  this.remerge(); });
   }
 
   private get contributions(): Map<

@@ -287,7 +287,7 @@ export function createGlobalFacade(scoped: ScopedCaller, scopedStream: ScopedStr
       const scalars = Object.fromEntries(
         ENV_SCALAR_PROPERTIES.map((prop, index) => [prop, values[index]]),
       );
-      const identity = values[values.length - 1] as { version: string };
+      const identity = values.at(-1) as { version: string };
       return { ...scalars, clientVersion: identity.version } as unknown as KlientEnvInfo;
     });
     return envPromise;

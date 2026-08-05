@@ -124,7 +124,7 @@ beforeEach(() => {
   disposables = new DisposableStore();
 });
 
-afterEach(() => disposables.dispose());
+afterEach(() =>{  disposables.dispose(); });
 
 function createService(
   requester: ModelRequester,

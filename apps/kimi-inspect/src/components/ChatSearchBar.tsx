@@ -86,7 +86,7 @@ export function ChatSearchBar({
         className="w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-[13px] text-neutral-100 outline-none focus:border-sky-600"
         placeholder="Search this session… (Enter to search, Esc to close)"
         value={input}
-        onChange={(e) => setInput(e.target.value)}
+        onChange={(e) =>{  setInput(e.target.value); }}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.preventDefault();

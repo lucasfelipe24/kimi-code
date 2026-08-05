@@ -108,7 +108,7 @@ export class SessionExternalHooksService
         await next();
       }),
     );
-    this._register(subagents.onDidStopAgentTask((ctx) => this.notifySubagentStop(ctx)));
+    this._register(subagents.onDidStopAgentTask((ctx) =>{  this.notifySubagentStop(ctx); }));
 
     // Arm the heartbeat only once the configured-hook index has loaded and
     // only when the event has hooks at all, so sessions without a
@@ -116,9 +116,9 @@ export class SessionExternalHooksService
     // hook-index reload (plugin reload) so late-registered heartbeat hooks
     // still arm, and removed ones disarm.
     void this.runner.ready
-      .then(() => this.syncHeartbeat())
+      .then(() =>{  this.syncHeartbeat(); })
       .catch(() => undefined);
-    this._register(this.runner.onDidReload(() => this.syncHeartbeat()));
+    this._register(this.runner.onDidReload(() =>{  this.syncHeartbeat(); }));
   }
 
   private readonly heartbeat = this._register(new IntervalTimer({ unref: true }));
@@ -126,7 +126,7 @@ export class SessionExternalHooksService
   private syncHeartbeat(): void {
     try {
       if (this.runner.hasHooksFor('SessionHeartbeat')) {
-        this.heartbeat.cancelAndSet(() => this.tickHeartbeat(), HEARTBEAT_INTERVAL_MS);
+        this.heartbeat.cancelAndSet(() =>{  this.tickHeartbeat(); }, HEARTBEAT_INTERVAL_MS);
       } else {
         this.heartbeat.cancel();
       }

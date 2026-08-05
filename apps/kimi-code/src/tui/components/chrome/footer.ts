@@ -293,7 +293,7 @@ export class FooterComponent implements Component {
       const order: readonly string[] = configured ?? DEFAULT_STATUS_LINE_ITEMS;
       const left: string[] = [];
       for (const slot of order) {
-        const pieces = slots[slot as keyof typeof slots];
+        const pieces = slots[slot];
         if (pieces !== undefined) left.push(...pieces);
       }
 

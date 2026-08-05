@@ -884,10 +884,10 @@ describe('onBeforeExecuteTool veto semantics', () => {
 
     expect(captured).toBeDefined();
     const closed = captured!;
-    expect(() => closed.waitUntil(async () => undefined)).toThrow(
+    expect(() =>{  closed.waitUntil(async () => undefined); }).toThrow(
       'waitUntil can NOT be called asynchronously',
     );
-    expect(() => closed.veto({ output: 'x', isError: true })).toThrow(
+    expect(() =>{  closed.veto({ output: 'x', isError: true }); }).toThrow(
       'veto can NOT be called asynchronously',
     );
   });
@@ -897,7 +897,7 @@ describe('onWillExecuteTool', () => {
   it('awaits registered waitUntil work before executing the tool', async () => {
     const tool = new TestTool('echo');
     registry.register(tool);
-    const gate = deferred<void>();
+    const gate = deferred();
     executor.onWillExecuteTool((event) => {
       event.waitUntil(gate.promise);
     });

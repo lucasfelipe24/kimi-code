@@ -286,8 +286,8 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
     }
 
     const controller = new AbortController();
-    this.runAbort.value = { dispose: () => controller.abort() };
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    this.runAbort.value = { dispose: () =>{  controller.abort(); } };
+    const timer = setTimeout(() =>{  controller.abort(); }, this.timeoutMs);
     // Anchor the consumed length logically so a shrink/clear+append mid-request
     // rebases it (via context.spliced) instead of the completion writing back a
     // stale numeric cursor and swallowing the new content.

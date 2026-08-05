@@ -35,7 +35,7 @@ import { tmpDir, rmrf, waitFor, deferred } from './helpers.js';
 
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
-  while (cleanups.length) await cleanups.pop()!();
+  while (cleanups.length > 0) await cleanups.pop()!();
 });
 
 async function openTmp(name: string): Promise<string> {
@@ -44,7 +44,7 @@ async function openTmp(name: string): Promise<string> {
   return dir;
 }
 
-type AnyDb = MiniDb<unknown>;
+type AnyDb = MiniDb;
 
 async function closeAll(...dbs: (AnyDb | undefined)[]): Promise<void> {
   for (const db of dbs) await db?.close().catch(() => {});
@@ -119,12 +119,12 @@ describe('skiplist bulkLoad', () => {
     const entries: { key: number; val: string }[] = [];
     for (let i = 0; i < 5000; i++) entries.push({ key: i * 2, val: `v${i}` });
     const bulk = SkipList.bulkLoad(entries, { compareKey: cmpNumber, compareVal: cmpString });
-    const inc = new SkipList<number, string>({ compareKey: cmpNumber, compareVal: cmpString });
+    const inc = new SkipList<number>({ compareKey: cmpNumber, compareVal: cmpString });
     for (const e of entries) inc.insert(e.key, e.val);
     expect(bulk.length).toBe(inc.length);
     expect(bulk.toArray()).toEqual(inc.toArray());
     for (const probe of [0, 1, 42, 2499, 4999]) {
-      const e = entries[probe]!;
+      const e = entries[probe];
       expect(bulk.getRank(e.key, e.val)).toBe(inc.getRank(e.key, e.val));
     }
     expect(bulk.getByRank(0)).toEqual(inc.getByRank(0));
@@ -180,13 +180,13 @@ describe('gen-codec', () => {
     expect(parsed.crc32).toBe(info.crc32);
     const out = [...readStoreImage(parsed.payload)];
     expect(out.map((r) => r.kstr)).toEqual(records.map((r) => r.kstr));
-    expect(out[0]!.ref).toEqual(records[0]!.ref);
-    expect(out[1]!.ref).toEqual(records[1]!.ref);
-    expect(out[1]!.expireAt).toBe(records[1]!.expireAt);
-    expect(out[1]!.dt).toEqual({ ts: 7 });
-    expect(out[2]!.ref).toEqual(records[2]!.ref);
-    expect((out[3]!.ref as { value: Buffer }).value.toString('utf8')).toBe('utf8 value ✓');
-    expect(Buffer.from(out[3]!.kstr, 'binary').toString('utf8')).toBe('é-key-键');
+    expect(out[0].ref).toEqual(records[0].ref);
+    expect(out[1].ref).toEqual(records[1].ref);
+    expect(out[1].expireAt).toBe(records[1].expireAt);
+    expect(out[1].dt).toEqual({ ts: 7 });
+    expect(out[2].ref).toEqual(records[2].ref);
+    expect((out[3].ref as { value: Buffer }).value.toString('utf8')).toBe('utf8 value ✓');
+    expect(Buffer.from(out[3].kstr, 'binary').toString('utf8')).toBe('é-key-键');
   });
 
   test('a single-byte flip anywhere makes the crc check fail', async () => {
@@ -197,7 +197,7 @@ describe('gen-codec', () => {
     const buf = await fs.readFile(path.join(dir, 'store'));
     for (const pos of [0, 5, buf.length - 5]) {
       const bad = Buffer.from(buf);
-      bad[pos] = bad[pos]! ^ 0xff;
+      bad[pos] = bad[pos] ^ 0xff;
       expect(() => parseGenerationBuffer(bad, 'MDGS', 4)).toThrow(GenerationCorruptError);
     }
     // Wrong magic / unsupported version are structured errors too.
@@ -263,11 +263,11 @@ describe('gen-codec', () => {
       },
     ]);
     const cmp = readCompoundIndexImage(parseGenerationBuffer(await fs.readFile(path.join(dir, 'cmp')), 'MDCI', 1).payload);
-    expect(cmp[0]!.groups[0]).toEqual({ group: 't1', entries: [{ order: 5, pk: 'a' }, { order: 6, pk: 'b' }] });
-    expect(cmp[0]!.groups[1]).toEqual({ group: 42, entries: [{ order: 1, pk: 'z' }] });
-    expect(cmp[0]!.groups[2]).toEqual({ group: null, entries: [] });
-    expect(cmp[0]!.groups[3]).toEqual({ group: true, entries: [{ order: 2, pk: 'y' }] });
-    expect(cmp[1]!.orderType).toBe('string');
+    expect(cmp[0].groups[0]).toEqual({ group: 't1', entries: [{ order: 5, pk: 'a' }, { order: 6, pk: 'b' }] });
+    expect(cmp[0].groups[1]).toEqual({ group: 42, entries: [{ order: 1, pk: 'z' }] });
+    expect(cmp[0].groups[2]).toEqual({ group: null, entries: [] });
+    expect(cmp[0].groups[3]).toEqual({ group: true, entries: [{ order: 2, pk: 'y' }] });
+    expect(cmp[1].orderType).toBe('string');
 
     await writeTextDocsImage(path.join(dir, 'docs'), {
       keys: ['a', undefined, 'c'],
@@ -569,7 +569,7 @@ describe('generation fault matrix', () => {
       if (g.tmp) continue;
       const p = path.join(dir, 'generations', g.id, 'store');
       const buf = await fs.readFile(p);
-      buf[buf.length - 5] = buf[buf.length - 5]! ^ 0xff; // last payload byte before the crc
+      buf[buf.length - 5] = buf.at(-5)! ^ 0xff; // last payload byte before the crc
       await fs.writeFile(p, buf);
     }
 
@@ -597,7 +597,7 @@ describe('generation fault matrix', () => {
       await db.close();
       const p = path.join(dir, 'generations', genId, file);
       const buf = await fs.readFile(p);
-      buf[Math.floor(buf.length / 2)] = buf[Math.floor(buf.length / 2)]! ^ 0xff;
+      buf[Math.floor(buf.length / 2)] = buf[Math.floor(buf.length / 2)] ^ 0xff;
       await fs.writeFile(p, buf);
 
       db = await MiniDb.open<Record<string, unknown>>({ dir, valueCodec: 'json' });
@@ -857,8 +857,8 @@ describe('generation fault matrix', () => {
     const fh = (wal as unknown as { fh: Fh | null }).fh!;
     const origWritev = fh.writev.bind(fh);
     let fired = false;
-    const entered = deferred<void>();
-    const proceed = deferred<void>();
+    const entered = deferred();
+    const proceed = deferred();
     (fh as { writev: unknown }).writev = async (bufs: readonly Uint8Array[]) => {
       if (fired) return origWritev(bufs);
       fired = true;
@@ -870,7 +870,7 @@ describe('generation fault matrix', () => {
       (fh as { writev: unknown }).writev = origWritev;
     });
     const flushCalls = vi.spyOn(WAL.prototype, 'flush');
-    cleanups.push(() => flushCalls.mockRestore());
+    cleanups.push(() =>{  flushCalls.mockRestore(); });
 
     const ghostSet = db.set('ghost', { kind: 't1', score: 1, ts: 2, text: 'ghost doc' });
     await entered.promise; // the batch is in flight; the commit is still pending
@@ -908,7 +908,7 @@ describe('stage 6: maintenance shutdown semantics', () => {
     // that point the build is inside its publishing critical section.
     const { barrier } = await import('./helpers.js');
     const gate = barrier(fs, 'rename', 1);
-    const buildP = db.rebuildGeneration().catch((e) => e);
+    const buildP = db.rebuildGeneration().catch((error) => error);
     await gate.entered; // provably inside publishGeneration's first rename
 
     let closed = false;
@@ -943,7 +943,7 @@ describe('stage 6: maintenance shutdown semantics', () => {
     const first = db.rebuildGeneration().catch(() => {});
     const second = db.rebuildGeneration().then(
       () => 'completed',
-      (e) => e,
+      (error) => error,
     );
     await db.close();
     await first;

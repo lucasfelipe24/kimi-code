@@ -218,7 +218,7 @@ export class GenFileWriter {
     version: number,
   ) {
     const w = new ByteWriter(8);
-    for (let i = 0; i < 4; i++) w.u8(magic.charCodeAt(i));
+    for (let i = 0; i < 4; i++) w.u8(magic.codePointAt(i));
     w.u32(version);
     const head = w.buf.subarray(0, w.off);
     this.chunks.push(Buffer.from(head));
@@ -230,9 +230,9 @@ export class GenFileWriter {
     const fh = await fs.open(path, 'w');
     try {
       return new GenFileWriter(fh, magic, version);
-    } catch (e) {
+    } catch (error) {
       await fh.close().catch(() => {});
-      throw e;
+      throw error;
     }
   }
 
@@ -249,7 +249,7 @@ export class GenFileWriter {
 
   private async flush(): Promise<void> {
     if (this.chunks.length === 0) return;
-    const bufs = this.chunks.splice(0, this.chunks.length);
+    const bufs = this.chunks.splice(0);
     this.queued = 0;
     for (const b of bufs) this.crc = crc32(b, this.crc);
     // Index-based consumption walk: a flush can carry tens of thousands of
@@ -321,8 +321,8 @@ export async function readGenerationFile(path: string, magic: string, version: n
   let buf: Buffer;
   try {
     buf = await fs.readFile(path);
-  } catch (e) {
-    throw new GenerationCorruptError(`generation file unreadable: ${(e as NodeJS.ErrnoException).code ?? String(e)}`);
+  } catch (error) {
+    throw new GenerationCorruptError(`generation file unreadable: ${(error as NodeJS.ErrnoException).code ?? String(error)}`);
   }
   return parseGenerationBuffer(buf, magic, version);
 }
@@ -331,7 +331,7 @@ export async function readGenerationFile(path: string, magic: string, version: n
 export function parseGenerationBuffer(buf: Buffer, magic: string, version: number): VerifiedGenerationFile {
   if (buf.length < 8 + 4) throw new GenerationCorruptError('generation file too short');
   for (let i = 0; i < 4; i++) {
-    if (buf.readUInt8(i) !== magic.charCodeAt(i)) throw new GenerationCorruptError(`bad magic (want ${magic})`);
+    if (buf.readUInt8(i) !== magic.codePointAt(i)) throw new GenerationCorruptError(`bad magic (want ${magic})`);
   }
   if (buf.readUInt32LE(4) !== version) throw new GenerationCorruptError(`unsupported file version (want ${version})`);
   const stored = buf.readUInt32LE(buf.length - 4);
@@ -370,12 +370,12 @@ export async function readGenerationFileCheckedAsync(
   let buf: Buffer;
   try {
     buf = await fs.readFile(path);
-  } catch (e) {
-    throw new GenerationCorruptError(`generation file unreadable: ${(e as NodeJS.ErrnoException).code ?? String(e)}`);
+  } catch (error) {
+    throw new GenerationCorruptError(`generation file unreadable: ${(error as NodeJS.ErrnoException).code ?? String(error)}`);
   }
   if (buf.length < 8 + 4) throw new GenerationCorruptError('generation file too short');
   for (let i = 0; i < 4; i++) {
-    if (buf.readUInt8(i) !== magic.charCodeAt(i)) throw new GenerationCorruptError(`bad magic (want ${magic})`);
+    if (buf.readUInt8(i) !== magic.codePointAt(i)) throw new GenerationCorruptError(`bad magic (want ${magic})`);
   }
   if (buf.readUInt32LE(4) !== version) throw new GenerationCorruptError(`unsupported file version (want ${version})`);
   const stored = buf.readUInt32LE(buf.length - 4);
@@ -490,9 +490,9 @@ export async function writeStoreImage(
     }
     const info = await w.finish();
     return { ...info, count };
-  } catch (e) {
+  } catch (error) {
     await w.abort();
-    throw e;
+    throw error;
   }
 }
 
@@ -544,7 +544,7 @@ export interface DtImageColumn {
 export async function writeDtIndexImage(path: string, cols: DtImageColumn[]): Promise<{ bytes: number; crc32: number }> {
   const w = await GenFileWriter.open(path, DT_MAGIC, DT_VERSION);
   try {
-    await w.writeRecord((b) => b.u32(cols.length));
+    await w.writeRecord((b) =>{  b.u32(cols.length); });
     for (const c of cols) {
       await w.writeRecord((b) => {
         b.text(c.name);
@@ -558,9 +558,9 @@ export async function writeDtIndexImage(path: string, cols: DtImageColumn[]): Pr
       }
     }
     return await w.finish();
-  } catch (e) {
+  } catch (error) {
     await w.abort();
-    throw e;
+    throw error;
   }
 }
 
@@ -601,7 +601,7 @@ export async function writeSecondaryIndexImage(
 ): Promise<{ bytes: number; crc32: number }> {
   const w = await GenFileWriter.open(path, SECONDARY_MAGIC, SECONDARY_VERSION);
   try {
-    await w.writeRecord((b) => b.u32(indexes.length));
+    await w.writeRecord((b) =>{  b.u32(indexes.length); });
     for (const idx of indexes) {
       await w.writeRecord((b) => {
         b.text(idx.name);
@@ -611,17 +611,17 @@ export async function writeSecondaryIndexImage(
       });
       if (idx.type === 'equality') {
         const values = idx.equality ?? [];
-        await w.writeRecord((b) => b.u64(values.length));
+        await w.writeRecord((b) =>{  b.u64(values.length); });
         for (const v of values) {
           await w.writeRecord((b) => {
             b.text(v.scalarKey);
             b.u64(v.pks.length);
           });
-          for (const pk of v.pks) await w.writeRecord((b) => b.key(pk));
+          for (const pk of v.pks) await w.writeRecord((b) =>{  b.key(pk); });
         }
       } else {
         const entries = idx.range ?? [];
-        await w.writeRecord((b) => b.u64(entries.length));
+        await w.writeRecord((b) =>{  b.u64(entries.length); });
         for (const e of entries) {
           await w.writeRecord((b) => {
             b.f64(e.value);
@@ -631,9 +631,9 @@ export async function writeSecondaryIndexImage(
       }
     }
     return await w.finish();
-  } catch (e) {
+  } catch (error) {
     await w.abort();
-    throw e;
+    throw error;
   }
 }
 
@@ -700,7 +700,7 @@ function writeGroupValue(b: ByteWriter, v: CompoundImageGroupValue): void {
   } else if (typeof v === 'string') {
     b.u8(GTAG_STRING);
     b.text(v);
-  } else if (v === false) {
+  } else if (!v) {
     b.u8(GTAG_FALSE);
   } else {
     b.u8(GTAG_TRUE);
@@ -723,7 +723,7 @@ export async function writeCompoundIndexImage(
 ): Promise<{ bytes: number; crc32: number }> {
   const w = await GenFileWriter.open(path, COMPOUND_MAGIC, COMPOUND_VERSION);
   try {
-    await w.writeRecord((b) => b.u32(indexes.length));
+    await w.writeRecord((b) =>{  b.u32(indexes.length); });
     for (const idx of indexes) {
       await w.writeRecord((b) => {
         b.text(idx.name);
@@ -747,9 +747,9 @@ export async function writeCompoundIndexImage(
       }
     }
     return await w.finish();
-  } catch (e) {
+  } catch (error) {
     await w.abort();
-    throw e;
+    throw error;
   }
 }
 
@@ -810,9 +810,9 @@ export async function writeTextDictionaryImage(
       });
     }
     return await w.finish();
-  } catch (e) {
+  } catch (error) {
     await w.abort();
-    throw e;
+    throw error;
   }
 }
 
@@ -870,7 +870,7 @@ export async function writeTextDocsImage(path: string, image: TextDocsImage): Pr
         b.u32(image.docLens[i] ?? 0);
       });
     }
-    for (const id of image.removed) await w.writeRecord((b) => b.u32(id));
+    for (const id of image.removed) await w.writeRecord((b) =>{  b.u32(id); });
     for (const d of image.delta) {
       await w.writeRecord((b) => {
         b.term(d.term);
@@ -884,9 +884,9 @@ export async function writeTextDocsImage(path: string, image: TextDocsImage): Pr
       }
     }
     return await w.finish();
-  } catch (e) {
+  } catch (error) {
     await w.abort();
-    throw e;
+    throw error;
   }
 }
 

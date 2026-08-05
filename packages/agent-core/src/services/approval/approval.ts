@@ -57,7 +57,7 @@ import type {
   ApprovalRequest as ProtocolApprovalRequest,
   ApprovalResponse as ProtocolApprovalResponse,
 } from '@moonshot-ai/protocol';
-import type {} from '@moonshot-ai/protocol'; // type-only marker — keep protocol dep referenced
+ // type-only marker — keep protocol dep referenced
 
 // Re-export ApprovalResponse for service-side consumers so they don't have to
 // also depend on agent-core directly.

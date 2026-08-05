@@ -112,7 +112,7 @@ describe('SessionTerminalService', () => {
       },
     });
   });
-  afterEach(() => disposables.dispose());
+  afterEach(() =>{  disposables.dispose(); });
 
   it('creates a terminal and resolves cwd through the workspace', async () => {
     const svc = ix.get(ISessionTerminalService);
@@ -268,7 +268,7 @@ describe('HostTerminalService (App scope)', () => {
       },
     });
   });
-  afterEach(() => disposables.dispose());
+  afterEach(() =>{  disposables.dispose(); });
 
   it('spawns a PTY through node-pty and forwards events', async () => {
     const { spawn } = await import('node-pty');

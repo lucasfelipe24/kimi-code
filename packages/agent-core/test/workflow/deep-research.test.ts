@@ -81,7 +81,7 @@ function stubHost(options: StubOptions = {}): { host: WorkflowHost; calls: Workf
       if (label.startsWith('search:')) {
         if (options.hangSearch === true) {
           await new Promise<never>((_, reject) => {
-            signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+            signal.addEventListener('abort', () =>{  reject(new Error('aborted')); }, { once: true });
           });
         }
         const angle = label.slice('search:'.length);

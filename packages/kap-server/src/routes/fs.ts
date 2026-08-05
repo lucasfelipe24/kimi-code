@@ -271,8 +271,8 @@ export function registerFsRoutes(app: FsRouteHost, core: Scope): void {
             await handleReveal(core, session_id, req, reply);
             return;
         }
-      } catch (err) {
-        sendMappedError(reply, req, err);
+      } catch (error) {
+        sendMappedError(reply, req, error);
       }
     },
   );
@@ -319,8 +319,8 @@ export function registerFsRoutes(app: FsRouteHost, core: Scope): void {
       try {
         const data = await fs.search(searchRequest);
         reply.send(okEnvelope(data, req.id));
-      } catch (err) {
-        sendMappedError(reply, req, err);
+      } catch (error) {
+        sendMappedError(reply, req, error);
       }
     },
   );
@@ -377,8 +377,8 @@ export function registerFsRoutes(app: FsRouteHost, core: Scope): void {
       let resolved: Awaited<ReturnType<IWorkspaceFsService['resolveDownload']>>;
       try {
         resolved = await resolveFs(core, session_id).resolveDownload(relPath);
-      } catch (err) {
-        sendMappedError(reply, req, err);
+      } catch (error) {
+        sendMappedError(reply, req, error);
         return;
       }
 
@@ -420,7 +420,7 @@ export function registerFsRoutes(app: FsRouteHost, core: Scope): void {
             // best-effort
           }
         });
-        return r.send(stream) as unknown as void;
+        return r.send(stream) as void;
       }
 
       r.code(200).header('content-length', String(resolved.size));
@@ -436,7 +436,7 @@ export function registerFsRoutes(app: FsRouteHost, core: Scope): void {
           // best-effort
         }
       });
-      return r.send(stream) as unknown as void;
+      return r.send(stream) as void;
     },
   );
   app.get(
@@ -590,15 +590,15 @@ async function handleOpenIn(core: Scope, sessionId: string, req: Req, reply: Rep
         isDirectory: resolved.isDirectory,
       }),
     );
-  } catch (err) {
+  } catch (error) {
     requestLog(req)?.warn(
-      { session_id: sessionId, app_id: body.app_id, err },
+      { session_id: sessionId, app_id: body.app_id, error },
       'fs open-in launch failed',
     );
     reply.send(
       errEnvelope(
         ErrorCode.INTERNAL_ERROR,
-        `failed to open in ${body.app_id}: ${err instanceof Error ? err.message : String(err)}`,
+        `failed to open in ${body.app_id}: ${error instanceof Error ? error.message : String(error)}`,
         req.id,
       ),
     );
@@ -707,6 +707,6 @@ function buildValidationEnvelope(
 
 function sanitizeFilename(rel: string): string {
   const segs = rel.split('/');
-  const base = segs[segs.length - 1] ?? rel;
-  return base.replace(/"/g, '\\"');
+  const base = segs.at(-1) ?? rel;
+  return base.replaceAll(/"/g, '\\"');
 }

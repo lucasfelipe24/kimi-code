@@ -27,7 +27,7 @@ import { tmpDir, rmrf, waitFor } from './helpers.js';
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
   resetTextBuildWorkerRuntime();
-  while (cleanups.length) await cleanups.pop()!();
+  while (cleanups.length > 0) await cleanups.pop()!();
 });
 
 async function openTmp(name: string): Promise<string> {
@@ -152,16 +152,16 @@ describe('worker orchestration (thread hosting)', () => {
     expect(ra.scannedLiveKeys).toBe(1500);
     expect(rb.scannedLiveKeys).toBe(1500);
     for (let i = 0; i < ra.indexes.length; i++) {
-      const a = ra.indexes[i]!;
-      const b = rb.indexes[i]!;
+      const a = ra.indexes[i];
+      const b = rb.indexes[i];
       expect(a.name).toBe(b.name);
       expect(a.liveCount).toBe(b.liveCount);
       expect(a.dictTerms).toBe(b.dictTerms);
       expect(a.postingsInfo).toEqual(b.postingsInfo);
       expect(a.dictionaryInfo).toEqual(b.dictionaryInfo);
       expect(a.baseDocsInfo).toEqual(b.baseDocsInfo);
-      await verifyFileCrcAsync(specA.indexes[i]!.postingsPath, a.postingsInfo);
-      await verifyFileCrcAsync(specB.indexes[i]!.postingsPath, b.postingsInfo);
+      await verifyFileCrcAsync(specA.indexes[i].postingsPath, a.postingsInfo);
+      await verifyFileCrcAsync(specB.indexes[i].postingsPath, b.postingsInfo);
     }
     await fs.rm(tmpA, { recursive: true });
     expect(fsSync.existsSync(tmpA)).toBe(false);
@@ -417,9 +417,9 @@ describe('build core (segmented external merge)', () => {
     const segs = small.indexes.map((r) => r.segmentsFlushed);
     expect(Math.max(...segs)).toBeGreaterThan(0);
     for (let i = 0; i < big.indexes.length; i++) {
-      expect(small.indexes[i]!.postingsInfo).toEqual(big.indexes[i]!.postingsInfo);
-      expect(small.indexes[i]!.dictionaryInfo).toEqual(big.indexes[i]!.dictionaryInfo);
-      expect(small.indexes[i]!.baseDocsInfo).toEqual(big.indexes[i]!.baseDocsInfo);
+      expect(small.indexes[i].postingsInfo).toEqual(big.indexes[i].postingsInfo);
+      expect(small.indexes[i].dictionaryInfo).toEqual(big.indexes[i].dictionaryInfo);
+      expect(small.indexes[i].baseDocsInfo).toEqual(big.indexes[i].baseDocsInfo);
     }
     // Segment files were cleaned up after the merge.
     expect((await fs.readdir(tmpSmall)).filter((f) => f.includes('.seg-'))).toEqual([]);
@@ -518,7 +518,7 @@ describe('MiniDb worker build integration', () => {
     expect(db.stats.generationIndexRebuilds).toBe(0);
     expect(db.size).toBe(5000 + ops);
     expect(db.search('ft', 'hello').length).toBeGreaterThan(0);
-    expect(db.search('ft', 'concurrent').length).toBe(ops > 50 ? 50 : ops);
+    expect(db.search('ft', 'concurrent').length).toBe(Math.min(50, ops));
     expect(db.search('tri', 'hello world').length).toBeGreaterThan(0);
     await db.close();
   }, 60000);
@@ -646,7 +646,7 @@ describe('MiniDb worker build integration', () => {
     // into the writer's directory.
     const writer = await MiniDb.open<Record<string, unknown>>({ dir, valueCodec: 'json', indexGenerations: false });
     await seedTextDb(writer, 5000);
-    const filesBefore = (await fs.readdir(dir)).sort();
+    const filesBefore = (await fs.readdir(dir)).toSorted();
 
     const reader = await MiniDb.open<Record<string, unknown>>({ dir, valueCodec: 'json', onLockFail: 'readonly' });
     expect(reader.readOnly).toBe(true);
@@ -667,11 +667,11 @@ describe('MiniDb worker build integration', () => {
     expect(reader.search('ft', '中途').map((h) => h.key)).toEqual(['mid']);
     // The writer's directory is untouched: the reader's base postings live in
     // its private scratch dir NEXT TO the db dir.
-    expect((await fs.readdir(dir)).sort()).toEqual(filesBefore);
+    expect((await fs.readdir(dir)).toSorted()).toEqual(filesBefore);
     const scratchRoot = `${dir}.ro-scratch`;
     const scratchEntries = await fs.readdir(scratchRoot);
     expect(scratchEntries.length).toBe(1);
-    const postings = await fs.readdir(path.join(scratchRoot, scratchEntries[0]!));
+    const postings = await fs.readdir(path.join(scratchRoot, scratchEntries[0]));
     expect(postings.some((f) => f.startsWith('db.text-ft') && f.endsWith('.postings'))).toBe(true);
     // close() drops the scratch dir (handles released first).
     await reader.close();

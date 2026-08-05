@@ -235,7 +235,7 @@ export class AgentSwarmTool implements IAgentSwarmTool {
       tasks,
     });
     return renderSwarmResults(
-      results.map(({ task, ...result }) => ({ spec: task.data as AgentSwarmSpec, ...result })),
+      results.map(({ task, ...result }) => ({ spec: task.data, ...result })),
     );
   }
 }

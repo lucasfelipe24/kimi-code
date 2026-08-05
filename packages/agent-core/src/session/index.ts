@@ -859,7 +859,7 @@ export class Session {
       } else {
         // Resume in flight: push the update once the agent materializes (the
         // rejection is owned by the resume caller, not by this tap).
-        void entry.then(({ agent }) => agent.updateKimiConfig(next)).catch(() => {});
+        void entry.then(({ agent }) =>{  agent.updateKimiConfig(next); }).catch(() => {});
       }
     }
   }

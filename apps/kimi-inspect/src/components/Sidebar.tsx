@@ -289,7 +289,7 @@ export function Sidebar({
                 ? 'bg-neutral-800 font-medium text-neutral-100'
                 : 'text-neutral-500 hover:text-neutral-300'
             }`}
-            onClick={() => updatePrefs({ view: v.id })}
+            onClick={() =>{  updatePrefs({ view: v.id }); }}
           >
             {v.label}
           </button>
@@ -321,7 +321,7 @@ export function Sidebar({
               className={`truncate ${sortable ? 'cursor-pointer select-none hover:text-neutral-300' : ''} ${
                 activeSort ? 'text-neutral-300' : ''
               }`}
-              onClick={sortable ? () => onSortClick(c.id) : undefined}
+              onClick={sortable ? () =>{  onSortClick(c.id); } : undefined}
               title={sortable ? 'Click to change sort' : undefined}
             >
               {c.label}
@@ -405,7 +405,7 @@ function SessionRows({
             workspaceNames={workspaceNames}
             active={s.id === activeSessionId}
             activity={activityOf(s.id)}
-            onClick={() => onSelect(s.id)}
+            onClick={() =>{  onSelect(s.id); }}
           />
         ))}
       </>
@@ -435,7 +435,7 @@ function SessionRows({
               workspaceNames={workspaceNames}
               active={s.id === activeSessionId}
               activity={activityOf(s.id)}
-              onClick={() => onSelect(s.id)}
+              onClick={() =>{  onSelect(s.id); }}
             />
           ))}
         </div>
@@ -505,7 +505,7 @@ function SessionRow({
             href={s.git.pullRequest.url}
             target="_blank"
             rel="noreferrer"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) =>{  e.stopPropagation(); }}
           >
             #{s.git.pullRequest.number}
           </a>
@@ -543,8 +543,8 @@ function useDropdown(): { open: boolean; toggle: () => void; close: () => void }
   const [open, setOpen] = useState(false);
   return {
     open,
-    toggle: () => setOpen((v) => !v),
-    close: () => setOpen(false),
+    toggle: () =>{  setOpen((v) => !v); },
+    close: () =>{  setOpen(false); },
   };
 }
 
@@ -626,7 +626,7 @@ function ColumnMenu({
                 <input
                   type="checkbox"
                   checked={visible.includes(c.id)}
-                  onChange={() => onToggle(c.id)}
+                  onChange={() =>{  onToggle(c.id); }}
                 />
                 {c.label}
               </label>

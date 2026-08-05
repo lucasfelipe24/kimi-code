@@ -6,7 +6,7 @@ import { defineConfig } from 'vite';
 
 import { depGraphPlugin } from './plugin/virtual-dep-graph';
 
-const here = dirname(fileURLToPath(import.meta.url));
+const here = import.meta.dirname;
 
 export default defineConfig({
   root: resolve(here, 'web'),

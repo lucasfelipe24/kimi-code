@@ -180,7 +180,7 @@ const perAngle = await pipeline(
       result = await agent(
         'You are a web searcher.\n\n' +
           'Research question: "' + QUESTION + '"\n' +
-          'Your angle: **' + angle.label + '** — ' + (angle.rationale || '') + '\n' +
+          'Your angle: **' + angle.label + '** — ' + (angle.rationale ?? '') + '\n' +
           'Search query: `' + angle.query + '`\n\n' +
           '## Task\n' +
           'Use WebSearch with the query above (refine it if needed). Return the 4-6 most relevant results, ' +
@@ -188,8 +188,8 @@ const perAngle = await pipeline(
           'Include a short snippet explaining why each result matters.',
         { label: 'search:' + angle.label, phase: 'Search', schema: SEARCH_SCHEMA },
       );
-    } catch (e) {
-      log('search failed: ' + angle.label + ' — ' + (e && e.message ? e.message : e));
+    } catch (error) {
+      log('search failed: ' + angle.label + ' — ' + (error && error.message ? error.message : error));
       return null;
     }
     if (!result) return null;
@@ -199,7 +199,7 @@ const perAngle = await pipeline(
   (searchResult) => {
     const sorted = searchResult.results
       .slice()
-      .sort((a, b) => relevanceRank[a.relevance] - relevanceRank[b.relevance]);
+      .toSorted((a, b) => relevanceRank[a.relevance] - relevanceRank[b.relevance]);
     const novel = [];
     for (const r of sorted) {
       const key = normURL(r.url);
@@ -247,8 +247,8 @@ const perAngle = await pipeline(
               sourceQuality: extracted.sourceQuality,
             })),
           };
-        } catch (e) {
-          log('fetch failed: ' + source.url + ' — ' + (e && e.message ? e.message : e));
+        } catch (error) {
+          log('fetch failed: ' + source.url + ' — ' + (error && error.message ? error.message : error));
           return {
             url: source.url,
             title: source.title,
@@ -296,7 +296,7 @@ const importanceRank = { central: 0, supporting: 1, tangential: 2 };
 const qualityRank = { primary: 0, secondary: 1, blog: 2, forum: 3, unreliable: 4 };
 const ranked = allClaims
   .slice()
-  .sort(
+  .toSorted(
     (a, b) =>
       importanceRank[a.importance] - importanceRank[b.importance] ||
       qualityRank[a.sourceQuality] - qualityRank[b.sourceQuality],
@@ -381,7 +381,7 @@ const evidenceBlock = confirmed
   .map((c, i) => {
     const best = c.verdicts
       .filter((v) => !v.refuted)
-      .sort((a, b) => confidenceRank[a.confidence] - confidenceRank[b.confidence])[0];
+      .toSorted((a, b) => confidenceRank[a.confidence] - confidenceRank[b.confidence])[0];
     return (
       '### [' + i + '] ' + c.claim + '\n' +
       'Vote: ' + (c.verdicts.length - c.refutedVotes) + '-' + c.refutedVotes +
@@ -411,8 +411,8 @@ try {
       '5. Note caveats and 2-4 open questions that emerged.',
     { label: 'synthesize', schema: REPORT_SCHEMA },
   );
-} catch (e) {
-  log('synthesize failed: ' + (e && e.message ? e.message : e));
+} catch (error) {
+  log('synthesize failed: ' + (error && error.message ? error.message : error));
 }
 
 if (!report) {

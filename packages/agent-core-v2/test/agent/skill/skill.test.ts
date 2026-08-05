@@ -95,7 +95,7 @@ describe('AgentSkillService', () => {
     ix.set(ISessionSkillCatalog, skillCatalog);
     ix.set(IAgentSkillService, new SyncDescriptor(AgentSkillService));
   });
-  afterEach(() => disposables.dispose());
+  afterEach(() =>{  disposables.dispose(); });
 
   it('activate prompts with the rendered skill for a known skill', async () => {
     const svc = ix.get(IAgentSkillService);
@@ -188,7 +188,7 @@ describe('SkillTool', () => {
     } satisfies ISessionSkillCatalog);
     ix.set(IAgentSkillService, new SyncDescriptor(AgentSkillService));
   });
-  afterEach(() => disposables.dispose());
+  afterEach(() =>{  disposables.dispose(); });
 
   function toolContext(args: { readonly skill: string; readonly args?: string }) {
     return {

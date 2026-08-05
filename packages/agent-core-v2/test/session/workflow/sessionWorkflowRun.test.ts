@@ -233,7 +233,7 @@ describe('WorkflowRunService', () => {
       },
     });
   });
-  afterEach(() => disposables.dispose());
+  afterEach(() =>{  disposables.dispose(); });
 
   it('starts a run by catalog name and returns runId/taskId immediately', async () => {
     const runs = ix.get(IWorkflowRunService);

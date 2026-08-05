@@ -177,8 +177,8 @@ export function registerMemoryRoutes(app: MemoryRouteHost, core: Scope): void {
         const created = await memoryAccessForActor(catalog, 'main').create(body);
         requestLog(req)?.info({ workspace_id, memory_id: created.id }, 'memory created');
         reply.send(okEnvelope(toWireMemory(created), req.id));
-      } catch (err) {
-        sendMappedError(reply, req.id, err);
+      } catch (error) {
+        sendMappedError(reply, req.id, error);
       }
     },
   );
@@ -225,8 +225,8 @@ export function registerMemoryRoutes(app: MemoryRouteHost, core: Scope): void {
         const updated = await memoryAccessForActor(catalog, 'main').update(scope, memory_id, patch);
         requestLog(req)?.info({ workspace_id, memory_id }, 'memory updated');
         reply.send(okEnvelope(toWireMemory(updated), req.id));
-      } catch (err) {
-        sendMappedError(reply, req.id, err);
+      } catch (error) {
+        sendMappedError(reply, req.id, error);
       }
     },
   );
@@ -263,8 +263,8 @@ export function registerMemoryRoutes(app: MemoryRouteHost, core: Scope): void {
         await memoryAccessForActor(catalog, 'main').forget(scope, memory_id);
         requestLog(req)?.info({ workspace_id, memory_id }, 'memory forgotten');
         reply.send(okEnvelope({ deleted: true as const }, req.id));
-      } catch (err) {
-        sendMappedError(reply, req.id, err);
+      } catch (error) {
+        sendMappedError(reply, req.id, error);
       }
     },
   );

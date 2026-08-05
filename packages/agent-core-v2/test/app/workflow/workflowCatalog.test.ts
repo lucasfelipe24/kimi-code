@@ -77,7 +77,7 @@ describe('WorkflowCatalogService', () => {
       },
     });
   });
-  afterEach(() => disposables.dispose());
+  afterEach(() =>{  disposables.dispose(); });
 
   it('discovers the builtin workflows on first load', async () => {
     const catalog = ix.get(IWorkflowCatalogService);

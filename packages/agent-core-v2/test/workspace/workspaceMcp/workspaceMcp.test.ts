@@ -73,7 +73,7 @@ describe('WorkspaceMcpService', () => {
       _serviceBrand: undefined,
       ready: Promise.resolve(),
       servers: () => current,
-      tunables: () => tunablesFn() as McpTunables,
+      tunables: () => tunablesFn(),
       onDidChange: configChanges.event,
     };
   }

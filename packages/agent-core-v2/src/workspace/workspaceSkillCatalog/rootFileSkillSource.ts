@@ -107,7 +107,7 @@ export class WorkspaceRootSkillSource extends Disposable implements IWorkspaceRo
     resources.add(handle);
     resources.add(
       handle.onDidChange(() => {
-        this.watchDebounce.cancelAndSet(() => this.onDidChangeEmitter.fire(), WATCH_DEBOUNCE_MS);
+        this.watchDebounce.cancelAndSet(() =>{  this.onDidChangeEmitter.fire(); }, WATCH_DEBOUNCE_MS);
       }),
     );
     try {

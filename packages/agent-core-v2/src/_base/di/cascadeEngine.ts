@@ -629,7 +629,7 @@ export class CascadeEngine {
       // fixpoint — activating one unit may satisfy the next.
       const enginesInOrder = [...this._tree.engines]
         .filter((engine) => !engine._disposed)
-        .sort((a, b) => a._scope.cascadeDepth - b._scope.cascadeDepth);
+        .toSorted((a, b) => a._scope.cascadeDepth - b._scope.cascadeDepth);
       for (;;) {
         let progress = false;
         for (const engine of enginesInOrder) {

@@ -190,7 +190,7 @@ async function saveWorkflowRun(
   input: string,
 ): Promise<void> {
   const useUserScope = input.split(/\s+/).includes('--user');
-  const prefix = input.replace(/--user\b/g, '').trim();
+  const prefix = input.replaceAll(/--user\b/g, '').trim();
   if (prefix === '') {
     host.showError(USAGE);
     return;

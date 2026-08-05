@@ -795,7 +795,7 @@ export class KimiTUI {
     void this.refreshPluginCommands(this.session);
     this.pluginAutoInstaller ??= new PluginAutoInstaller({
       getSession: () => this.session,
-      warn: (message) => this.showStatus(message, 'warning'),
+      warn: (message) =>{  this.showStatus(message, 'warning'); },
     });
     void this.pluginAutoInstaller.ensureInstalled();
   }
@@ -1172,7 +1172,7 @@ export class KimiTUI {
       renderMode: 'plain',
       content: '',
     };
-    const outputComponent = new ShellRunComponent(() => this.state.ui.requestRender());
+    const outputComponent = new ShellRunComponent(() =>{  this.state.ui.requestRender(); });
     this.shellOutputStreams.set(commandId, { entry: outputEntry, component: outputComponent });
     this.state.transcriptEntries.push(outputEntry);
     markTranscriptComponent(outputComponent, outputEntry);

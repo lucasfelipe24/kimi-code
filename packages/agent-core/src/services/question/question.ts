@@ -56,7 +56,7 @@ import type {
   QuestionRequest as ProtocolQuestionRequest,
   QuestionResponse as ProtocolQuestionResponse,
 } from '@moonshot-ai/protocol';
-import type {} from '@moonshot-ai/protocol'; // type-only marker — keep protocol dep referenced
+ // type-only marker — keep protocol dep referenced
 
 // Re-export for service-side consumers.
 export type { QuestionRequest, QuestionResult };

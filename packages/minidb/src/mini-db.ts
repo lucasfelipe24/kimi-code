@@ -152,7 +152,7 @@ export class MiniDb<V = unknown> {
    *  (walRecoveryChain/walRecoveryIdle/walRecoveryCovers); these views keep
    *  the close / catch-up / backup call sites unchanged. */
   private readonly walGroups = new WalGroupTracker({
-    restoreGroupKey: (pk, prev) => this.restoreGroupKey(pk, prev),
+    restoreGroupKey: (pk, prev) =>{  this.restoreGroupKey(pk, prev); },
     writeDisabled: () => this.writeDisabled,
     recoverWalInPlace: (wal) => this.recoverWalInPlace(wal),
   });
@@ -246,8 +246,8 @@ export class MiniDb<V = unknown> {
     readOnly: () => this.readOnly,
     codecName: () => this.codecName,
     store: () => this.store,
-    ensureOpen: () => this.ensureOpen(),
-    ensureWritable: () => this.ensureWritable(),
+    ensureOpen: () =>{  this.ensureOpen(); },
+    ensureWritable: () =>{  this.ensureWritable(); },
     decode: (b) => this.decode(b),
     readValueAsync: (kstr) => this.readValueAsync(kstr),
     textRecords: () => this.textRecords(),
@@ -272,13 +272,13 @@ export class MiniDb<V = unknown> {
   private readonly backupDeps: BackupDeps = {
     dir: () => this.dir,
     stats: this.stats,
-    ensureOpen: () => this.ensureOpen(),
+    ensureOpen: () =>{  this.ensureOpen(); },
     compacting: () => this.compacting,
     compactDone: () => this._compactDone,
     readOnly: () => this.readOnly,
     compact: () => this.compact(),
     pauseWrites: () => this.writeOps.pause(),
-    resumeWrites: () => this.writeOps.resume(),
+    resumeWrites: () =>{  this.writeOps.resume(); },
     serializeBackups: (fn) => this.serializeBackups(fn),
     walRecoveryChain: () => this.walRecoveryChain,
     flushWal: () => this.wal.flush(),
@@ -296,7 +296,7 @@ export class MiniDb<V = unknown> {
     stats: this.stats,
     decode: (b) => this.decode(b),
     readValueAsync: (kstr) => this.readValueAsync(kstr),
-    ensureOpen: () => this.ensureOpen(),
+    ensureOpen: () =>{  this.ensureOpen(); },
   });
 
   /** The generation machinery facet (generation-builder.ts): the load/build
@@ -337,10 +337,10 @@ export class MiniDb<V = unknown> {
     liveRecords: () => this.liveRecords(),
     liveRecordsRaw: () => this._liveRecordsRaw(),
     textRecords: () => this.textRecords(),
-    seedAccessFromStore: () => this.seedAccessFromStore(),
-    applyRecoveredOp: (op) => this.applyRecoveredOp(op),
-    ensureOpen: () => this.ensureOpen(),
-    ensureWritable: () => this.ensureWritable(),
+    seedAccessFromStore: () =>{  this.seedAccessFromStore(); },
+    applyRecoveredOp: (op) =>{  this.applyRecoveredOp(op); },
+    ensureOpen: () =>{  this.ensureOpen(); },
+    ensureWritable: () =>{  this.ensureWritable(); },
     boundedTextBuild: (name, ti, def, checkpoint) => this.boundedTextBuild(name, ti, def, checkpoint),
     noteBuildFailure: () => {
       this.lastGenBuildFailureAt = Date.now();
@@ -370,9 +370,9 @@ export class MiniDb<V = unknown> {
     encode: (v) => this.encode(v),
     decode: (b) => this.decode(b),
     indexable: (v): v is Record<string, unknown> => this.indexable(v),
-    ensureOpen: () => this.ensureOpen(),
-    ensureWritable: () => this.ensureWritable(),
-    maybeAutoCompact: () => this.maybeAutoCompact(),
+    ensureOpen: () =>{  this.ensureOpen(); },
+    ensureWritable: () =>{  this.ensureWritable(); },
+    maybeAutoCompact: () =>{  this.maybeAutoCompact(); },
   });
 
   /** The secondary + compound index admin facet (index-admin.ts). The
@@ -385,8 +385,8 @@ export class MiniDb<V = unknown> {
     textRegistry: this.textRegistry,
     store: () => this.store,
     codecName: () => this.codecName,
-    ensureOpen: () => this.ensureOpen(),
-    ensureWritable: () => this.ensureWritable(),
+    ensureOpen: () =>{  this.ensureOpen(); },
+    ensureWritable: () =>{  this.ensureWritable(); },
     decode: (b) => this.decode(b),
     indexable: (v): v is Record<string, unknown> => this.indexable(v),
     stats: this.stats,
@@ -407,14 +407,14 @@ export class MiniDb<V = unknown> {
     memoryGuard: this.memoryGuard,
     decode: (b) => this.decode(b),
     indexable: (v): v is Record<string, unknown> => this.indexable(v),
-    ensureOpen: () => this.ensureOpen(),
+    ensureOpen: () =>{  this.ensureOpen(); },
   });
 
   /** The private methods the lifecycle functions (lifecycle.ts) call back
    *  into; the fields they touch are read/written through the LifecycleHost
    *  view directly (see the non-private markers above). */
   private readonly lifecycleHooks: LifecycleHooks = {
-    onStoreExpire: (k, rec) => this.onStoreExpire(k, rec),
+    onStoreExpire: (k, rec) =>{  this.onStoreExpire(k, rec); },
     loadIndexDefinitions: () => this.loadIndexDefinitions(),
     loadCompoundIndexDefinitions: () => this.loadCompoundIndexDefinitions(),
     loadTextIndexDefinitions: () => this.loadTextIndexDefinitions(),
@@ -422,7 +422,7 @@ export class MiniDb<V = unknown> {
     rebuildAllIndexes: () => this.rebuildAllIndexes(),
     submitCompaction: () => this.submitCompaction(),
     buildGeneration: (trigger) => this.buildGeneration(trigger),
-    seedAccessFromStore: () => this.seedAccessFromStore(),
+    seedAccessFromStore: () =>{  this.seedAccessFromStore(); },
     closeAllTextIndexes: () => {
       for (const ti of this.text.values()) ti.close();
     },
@@ -617,8 +617,8 @@ export class MiniDb<V = unknown> {
         const snapAnchor = fsSync.statSync(path.join(this.dir, SNAPSHOT_FILE));
         snapshotDev = snapAnchor.dev;
         snapshotIno = snapAnchor.ino;
-      } catch (e) {
-        if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       }
       const checkpoint: TextBuildCheckpoint = {
         walOffset: walAnchor.size,
@@ -795,8 +795,8 @@ export class MiniDb<V = unknown> {
           const snapAnchor = fsSync.statSync(path.join(this.dir, SNAPSHOT_FILE));
           snapDev = snapAnchor.dev;
           snapIno = snapAnchor.ino;
-        } catch (e) {
-          if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
         }
       } else {
         sealedOffset = checkpoint.walOffset;
@@ -805,9 +805,9 @@ export class MiniDb<V = unknown> {
         snapDev = checkpoint.snapshotDev;
         snapIno = checkpoint.snapshotIno;
       }
-    } catch (e) {
+    } catch (error) {
       ti.abortRebase();
-      throw e;
+      throw error;
     }
 
     // In-place builds land artifacts in a per-index tmp dir inside the db
@@ -900,9 +900,9 @@ export class MiniDb<V = unknown> {
       });
       if (!handle.inline) this.stats.textWorkerBuilds++;
       return handle.inline ? 'inline' : 'worker';
-    } catch (e) {
+    } catch (error) {
       ti.abortRebase();
-      throw e;
+      throw error;
     } finally {
       slotRelease?.();
       if (tmpDir !== null) {
@@ -959,7 +959,7 @@ export class MiniDb<V = unknown> {
     this.access.delete(k);
     this.dt.del(k);
     this.compound.remove(k);
-    if (this.indexes.size) this.indexes.remove(k, undefined);
+    if (this.indexes.size > 0) this.indexes.remove(k, undefined);
     for (const ti of this.text.values()) ti.remove(k);
   }
 
@@ -1048,8 +1048,8 @@ export class MiniDb<V = unknown> {
       // un-acked tail, so skipping the truncate is the correct recovery.
       const st = await fs.stat(this.walPath);
       if (poison.failedAtOffset <= st.size) await fs.truncate(this.walPath, poison.failedAtOffset);
-    } catch (err) {
-      this.writeDisabled = err;
+    } catch (error) {
+      this.writeDisabled = error;
       return;
     }
     await this.wal.refreshSize();
@@ -1129,7 +1129,7 @@ export class MiniDb<V = unknown> {
     return this.store.size;
   }
   async mset(entries: readonly (readonly [string, V])[]): Promise<void> {
-    if (!entries.length) return;
+    if (entries.length === 0) return;
     await this.batch(entries.map(([key, value]) => ({ op: 'set' as const, key, value })));
   }
   mget(keys: readonly string[]): (V | undefined)[] {
@@ -1308,9 +1308,9 @@ export class MiniDb<V = unknown> {
     } else {
       try {
         const existing = await fs.readdir(destDir);
-        if (existing.length) throw new Error(`restore destination is not empty: ${destDir}`);
-      } catch (e) {
-        if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+        if (existing.length > 0) throw new Error(`restore destination is not empty: ${destDir}`);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       }
     }
     await fs.mkdir(destDir, { recursive: true });
@@ -1358,7 +1358,7 @@ export class MiniDb<V = unknown> {
     const ri = this.recoveryInfo;
     const anchor = this.walTail ?? (ri && ri.walIno ? { dev: ri.walDev, ino: ri.walIno, size: ri.walScanEnd } : null);
     if (!anchor || offset !== anchor.size) return null;
-    const res = catchUpWal(this.walPath, offset, anchor, (f, fd) => this.applyRecoveredFrame(f, fd));
+    const res = catchUpWal(this.walPath, offset, anchor, (f, fd) =>{  this.applyRecoveredFrame(f, fd); });
     if (res) this.walTail = { dev: anchor.dev, ino: anchor.ino, size: res.offset };
     return res;
   }

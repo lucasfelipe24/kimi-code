@@ -568,7 +568,7 @@ describe('FullCompaction', () => {
     const cancelled = ctx.once('compaction.cancelled');
 
     await ctx.rpc.beginCompaction({});
-    await vi.waitFor(() => expect(ctx.context.get().some((message) => message.origin?.kind === 'compaction_summary')).toBe(true));
+    await vi.waitFor(() =>{  expect(ctx.context.get().some((message) => message.origin?.kind === 'compaction_summary')).toBe(true); });
     await ctx.rpc.cancelCompaction({});
     await cancelled;
 

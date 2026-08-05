@@ -379,7 +379,7 @@ export class TextIndex {
         });
         dict = res.dict;
         this.postingsFileInfo = { bytes: res.bytes, crc32: res.crc32 };
-      } catch (e) {
+      } catch (error) {
         if (oldPf !== null && !oldPf.open) {
           try {
             this.pf = PostingsFile.open(targetPath);
@@ -387,7 +387,7 @@ export class TextIndex {
             /* old handle unrecoverable; the next successful build fixes it */
           }
         }
-        throw e;
+        throw error;
       }
       // The rename happened — the old postings are replaced on disk, so from
       // here the swap commits to the new index. A failed reopen (EMFILE & co.)
@@ -518,9 +518,9 @@ export class TextIndex {
     let newPf: PostingsFile;
     try {
       newPf = PostingsFile.open(base.postingsPath);
-    } catch (e) {
+    } catch (error) {
       disarm();
-      throw e;
+      throw error;
     }
     // A memory-base index (read-only opens, which must not write into a live
     // writer's db dir) ADOPTS the worker's disk base here — the file lives at
@@ -688,11 +688,11 @@ export class TextIndex {
           for (const [id, f] of arr) m.set(id, f);
           result = { map: m, capped: false };
         }
-      } catch (e) {
+      } catch (error) {
         // A base commit landing mid-read also CLOSES the previous handle
         // under us ('postings file is closed') — same straddle, same retry.
         if (this.baseEpoch !== epoch && attempt < 2) continue;
-        throw e;
+        throw error;
       }
       if (this.baseEpoch === epoch) {
         if (cacheable !== null) this.cachePut(term, cacheable);
@@ -791,7 +791,7 @@ export class TextIndex {
       if (lists.some((m) => m.size === 0)) return { hits: [], visits, truncated };
       lists.sort((a, b) => a.size - b.size);
       candidates = new Set(lists[0]!.keys());
-      for (let i = 1; i < lists.length && candidates.size; i++) {
+      for (let i = 1; i < lists.length && candidates.size > 0; i++) {
         for (const id of candidates) if (!lists[i]!.has(id)) candidates.delete(id);
       }
     }
@@ -835,7 +835,7 @@ export class TextIndex {
   searchBounded(query: string, opts: SearchOptions = {}): BoundedSearchResult {
     this.ensureBaseAvailable();
     const qtokens = this.queryTerms(query);
-    if (!qtokens.length) return { hits: [], visits: 0, truncated: false };
+    if (qtokens.length === 0) return { hits: [], visits: 0, truncated: false };
     const op = opts.op ?? 'AND';
     const limit = opts.limit ?? 50;
 
@@ -845,7 +845,7 @@ export class TextIndex {
     // unbudgeted result.
     const terms = qtokens
       .map((t) => ({ t, df: this.estimatedDf(t) }))
-      .sort((a, b) => a.df - b.df);
+      .toSorted((a, b) => a.df - b.df);
 
     let remaining = opts.maxVisits ?? Number.POSITIVE_INFINITY;
     let visits = 0;
@@ -869,13 +869,13 @@ export class TextIndex {
   async searchBoundedAsync(query: string, opts: SearchOptions = {}): Promise<BoundedSearchResult> {
     this.ensureBaseAvailable();
     const qtokens = this.queryTerms(query);
-    if (!qtokens.length) return { hits: [], visits: 0, truncated: false };
+    if (qtokens.length === 0) return { hits: [], visits: 0, truncated: false };
     const op = opts.op ?? 'AND';
     const limit = opts.limit ?? 50;
 
     const terms = qtokens
       .map((t) => ({ t, df: this.estimatedDf(t) }))
-      .sort((a, b) => a.df - b.df);
+      .toSorted((a, b) => a.df - b.df);
 
     let remaining = opts.maxVisits ?? Number.POSITIVE_INFINITY;
     let visits = 0;

@@ -85,7 +85,7 @@ describe('AgentWorkflowReviewService', () => {
       },
     });
   });
-  afterEach(() => disposables.dispose());
+  afterEach(() =>{  disposables.dispose(); });
 
   it('registers an onBeforeExecuteTool listener on construction', () => {
     ix.get(IAgentWorkflowReviewService);

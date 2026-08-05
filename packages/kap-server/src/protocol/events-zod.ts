@@ -398,7 +398,7 @@ export const kimiErrorCodeSchema = z.enum([
   'internal',
 ]);
 
-export const kimiErrorPayloadSchema: z.ZodType<unknown> = z.lazy(
+export const kimiErrorPayloadSchema: z.ZodType = z.lazy(
   () => kimiErrorPayloadObjectSchema,
 );
 

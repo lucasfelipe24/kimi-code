@@ -66,7 +66,7 @@ describe('WorkflowTool', () => {
       },
     });
   });
-  afterEach(() => disposables.dispose());
+  afterEach(() =>{  disposables.dispose(); });
 
   it('is gated by the dynamic-workflows flag through the contribution when-predicate', () => {
     const contribution = getAgentToolContributions().find(

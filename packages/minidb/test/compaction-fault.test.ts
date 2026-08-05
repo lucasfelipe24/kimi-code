@@ -169,7 +169,7 @@ function mockFsWithFaults(faults: {
   const open = (async (p: PathLike, flags?: string | number, mode?: string | number) => {
     const err = faults.open?.(String(p), flags);
     if (err) throw err;
-    return fs.open(p, flags as string | number | undefined, mode as never);
+    return fs.open(p, flags, mode as never);
   }) as typeof fs.open;
   const mocked = { ...fs, rename, open };
   vi.doMock('node:fs/promises', () => ({ ...mocked, default: mocked }));
@@ -183,7 +183,7 @@ function mockFsWithFaults(faults: {
 function mockFsWithDirSyncFault(dir: string, failOnCalls: ReadonlySet<number>): void {
   let dirOpens = 0;
   const open = (async (p: PathLike, flags?: string | number, mode?: string | number) => {
-    const h = await fs.open(p, flags as string | number | undefined, mode as never);
+    const h = await fs.open(p, flags, mode as never);
     if (String(p) === dir && flags === 'r') {
       dirOpens++;
       if (failOnCalls.has(dirOpens)) {

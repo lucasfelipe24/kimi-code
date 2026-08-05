@@ -337,7 +337,7 @@ async function probeBoundaries(): Promise<void> {
   // leak across probes (assert() guards narrow `number` to a literal).
   const requests = (): number => requestCount;
   await new Promise<void>((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve());
+    server.listen(0, '127.0.0.1', () =>{  resolve(); });
   });
   const port = (server.address() as AddressInfo).port;
   const baseUrl = `http://127.0.0.1:${String(port)}`;
@@ -371,7 +371,7 @@ async function probeBoundaries(): Promise<void> {
   try {
     // 1) happy path — the requester's event envelope on top of the raw stream.
     resetCounts();
-    handler = (_req, res) => writePong(res);
+    handler = (_req, res) =>{  writePong(res); };
     const ok = await collect(makeRequester(staticKey('sk-probe')));
     assert(ok.text === 'pong', 'happy path assembles streamed text');
     assert(ok.events.includes('usage'), 'happy path emits a usage event');
@@ -383,7 +383,7 @@ async function probeBoundaries(): Promise<void> {
     // 2) 401 with a static key: ChatProvider wraps to APIStatusError(401), the
     // requester translates to provider.auth_error. No replay (canRefresh=false).
     resetCounts();
-    handler = (_req, res) => writeJsonError(res, 401, 'invalid api key');
+    handler = (_req, res) =>{  writeJsonError(res, 401, 'invalid api key'); };
     try {
       await collect(makeRequester(staticKey('sk-bad')));
       throw new Error('expected a failure');
@@ -419,7 +419,7 @@ async function probeBoundaries(): Promise<void> {
     // 4) 401 that survives a forced refresh: the provider rejected the account
     // — surfaced as provider.auth_error, not a re-login prompt.
     resetCounts();
-    handler = (_req, res) => writeJsonError(res, 401, 'account disabled');
+    handler = (_req, res) =>{  writeJsonError(res, 401, 'account disabled'); };
     try {
       await collect(makeRequester(refreshable));
       throw new Error('expected a failure');
@@ -432,7 +432,7 @@ async function probeBoundaries(): Promise<void> {
 
     // 5) 429 with Retry-After: typed rate-limit error carrying the server backoff.
     resetCounts();
-    handler = (_req, res) => writeJsonError(res, 429, 'too many requests', { 'retry-after': '2' });
+    handler = (_req, res) =>{  writeJsonError(res, 429, 'too many requests', { 'retry-after': '2' }); };
     try {
       await collect(makeRequester(staticKey('sk-probe')));
       throw new Error('expected a failure');
@@ -446,8 +446,8 @@ async function probeBoundaries(): Promise<void> {
 
     // 6) 400 context overflow: routed to its own recovery-owned code.
     resetCounts();
-    handler = (_req, res) =>
-      writeJsonError(res, 400, 'This model\'s maximum context length is 8192 tokens.');
+    handler = (_req, res) =>{ 
+      writeJsonError(res, 400, 'This model\'s maximum context length is 8192 tokens.'); };
     try {
       await collect(makeRequester(staticKey('sk-probe')));
       throw new Error('expected a failure');
@@ -478,13 +478,13 @@ async function probeBoundaries(): Promise<void> {
     resetCounts();
     const dead = createServer();
     await new Promise<void>((resolve) => {
-    dead.listen(0, '127.0.0.1', () => resolve());
+    dead.listen(0, '127.0.0.1', () =>{  resolve(); });
   });
     const deadPort = (dead.address() as AddressInfo).port;
     await new Promise<void>((resolve) => {
-    dead.close(() => resolve());
+    dead.close(() =>{  resolve(); });
   });
-    handler = (_req, res) => writePong(res); // unused — nothing listens there
+    handler = (_req, res) =>{  writePong(res); }; // unused — nothing listens there
     try {
       await collect(makeRequester(staticKey('sk-probe'), `http://127.0.0.1:${String(deadPort)}`));
       throw new Error('expected a failure');
@@ -496,7 +496,7 @@ async function probeBoundaries(): Promise<void> {
 
     // 9) empty stream (immediate [DONE]): generate() throws APIEmptyResponseError.
     resetCounts();
-    handler = (_req, res) => writeSse(res, []);
+    handler = (_req, res) =>{  writeSse(res, []); };
     try {
       await collect(makeRequester(staticKey('sk-probe')));
       throw new Error('expected a failure');
@@ -549,7 +549,7 @@ async function probeBoundaries(): Promise<void> {
     // 12) tool call happy path: header chunk + fragmented arguments, and the
     // outbound request carries the tool declaration.
     resetCounts();
-    handler = (_req, res) =>
+    handler = (_req, res) =>{ 
       writeSse(res, [
         sseToolDelta([
           {
@@ -563,7 +563,7 @@ async function probeBoundaries(): Promise<void> {
         sseToolDelta([{ index: 0, function: { arguments: 'Hangzhou"}' } }]),
         sseToolDelta([], 'tool_calls'),
         SSE_USAGE,
-      ]);
+      ]); };
     const toolOk = await collect(makeRequester(staticKey('sk-probe')), undefined, TOOL_INPUT);
     const wireTools = (lastRequestBody as { tools?: { function?: { name?: string } }[] }).tools;
     assert(
@@ -588,7 +588,7 @@ async function probeBoundaries(): Promise<void> {
     // 13) parallel tool calls with interleaved argument fragments: per-index
     // buffering must keep the two calls apart.
     resetCounts();
-    handler = (_req, res) =>
+    handler = (_req, res) =>{ 
       writeSse(res, [
         sseToolDelta([
           { index: 0, id: 'call_a', type: 'function', function: { name: 'tool_a', arguments: '' } },
@@ -602,7 +602,7 @@ async function probeBoundaries(): Promise<void> {
         sseToolDelta([{ index: 1, function: { arguments: '2}' } }]),
         sseToolDelta([], 'tool_calls'),
         SSE_USAGE,
-      ]);
+      ]); };
     const parallel = await collect(makeRequester(staticKey('sk-probe')), undefined, TOOL_INPUT);
     assert(parallel.toolCalls.length === 2, 'two parallel tool calls assembled');
     assert(
@@ -623,7 +623,7 @@ async function probeBoundaries(): Promise<void> {
     // arguments string — invalid JSON sails through both layers and only fails
     // later at tool dispatch. A boundary neither layer owns, by design.
     resetCounts();
-    handler = (_req, res) =>
+    handler = (_req, res) =>{ 
       writeSse(res, [
         sseToolDelta([
           {
@@ -636,7 +636,7 @@ async function probeBoundaries(): Promise<void> {
         sseToolDelta([{ index: 0, function: { arguments: '{not json' } }]),
         sseToolDelta([], 'tool_calls'),
         SSE_USAGE,
-      ]);
+      ]); };
     const malformedArgs = await collect(makeRequester(staticKey('sk-probe')), undefined, TOOL_INPUT);
     assert(
       malformedArgs.toolCalls[0]?.arguments === '{not json',
@@ -653,7 +653,7 @@ async function probeBoundaries(): Promise<void> {
     // interleaved index-less calls would silently cross-merge — the wire layer
     // trusts the provider's indices and does not guard that.
     resetCounts();
-    handler = (_req, res) =>
+    handler = (_req, res) =>{ 
       writeSse(res, [
         sseToolDelta([
           { id: 'call_1', type: 'function', function: { name: 'get_weather', arguments: '' } },
@@ -661,7 +661,7 @@ async function probeBoundaries(): Promise<void> {
         sseToolDelta([{ function: { arguments: '{"location":"HZ"}' } }]),
         sseToolDelta([], 'tool_calls'),
         SSE_USAGE,
-      ]);
+      ]); };
     const indexless = await collect(makeRequester(staticKey('sk-probe')), undefined, TOOL_INPUT);
     assert(
       indexless.toolCalls[0]?.arguments === '{"location":"HZ"}',
@@ -677,8 +677,8 @@ async function probeBoundaries(): Promise<void> {
     // recognizable as `isToolExchangeAdjacencyError` THROUGH the ChatProvider
     // wrap — the agent loop's strict-resend recovery keys on that predicate.
     resetCounts();
-    handler = (_req, res) =>
-      writeJsonError(res, 400, 'tool_call_id "call_1" is not found');
+    handler = (_req, res) =>{ 
+      writeJsonError(res, 400, 'tool_call_id "call_1" is not found'); };
     try {
       await collect(makeRequester(staticKey('sk-probe')), undefined, TOOL_HISTORY_INPUT);
       throw new Error('expected a failure');
@@ -695,7 +695,7 @@ async function probeBoundaries(): Promise<void> {
     // 17) request-side encoding of a tool exchange: assistant tool_calls and
     // the tool result must hit the wire in the provider's shape.
     resetCounts();
-    handler = (_req, res) => writePong(res);
+    handler = (_req, res) =>{  writePong(res); };
     await collect(makeRequester(staticKey('sk-probe')), undefined, TOOL_HISTORY_INPUT);
     const wireMessages = (lastRequestBody as { messages?: Record<string, unknown>[] }).messages;
     assert(
@@ -705,7 +705,8 @@ async function probeBoundaries(): Promise<void> {
       'assistant message carries wire tool_calls',
     );
     assert(
-      wireMessages?.some((m) => m['role'] === 'tool' && m['tool_call_id'] === 'call_1') === true,
+      
+      wireMessages?.some((m) => m['role'] === 'tool' && m['tool_call_id'] === 'call_1'),
       'tool result encoded as role=tool with tool_call_id',
     );
     report(
@@ -722,7 +723,7 @@ async function probeBoundaries(): Promise<void> {
       const timer = setInterval(() => {
         res.write(`data: ${sseChunk({ content: '.' }, null)}\n\n`);
       }, 25);
-      res.on('close', () => clearInterval(timer));
+      res.on('close', () =>{  clearInterval(timer); });
     };
     const ac = new AbortController();
     try {
@@ -740,7 +741,7 @@ async function probeBoundaries(): Promise<void> {
   } finally {
     server.closeAllConnections();
     await new Promise<void>((resolve) => {
-    server.close(() => resolve());
+    server.close(() =>{  resolve(); });
   });
   }
 

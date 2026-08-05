@@ -31,7 +31,7 @@ async function bench(label, fn, iters = 1) {
 // ---------------------------------------------------------------------------
 
 function percentile(sorted, p) {
-  if (!sorted.length) return NaN;
+  if (sorted.length === 0) return NaN;
   const idx = Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1);
   return sorted[Math.max(0, idx)];
 }
@@ -40,7 +40,7 @@ function percentile(sorted, p) {
  *  Built once with two text indexes; the definitions sidecar is trimmed
  *  between runs to emulate fewer defined indexes. */
 async function coldOpenScenario() {
-  const OPEN_N = Number(process.env.OPEN_N || 100_000);
+  const OPEN_N = Number(process.env.OPEN_N ?? 100_000);
   console.log(`\n  -- cold open, ${fmt(OPEN_N)} docs, 0/1/2 text indexes --`);
   const dir = await tmpDir();
   try {
@@ -87,7 +87,7 @@ async function coldOpenScenario() {
  *  searches run first (JIT/GC steady state); the reported number is the min
  *  of five — the ranking phase's cost, not first-run noise. */
 async function topKScenario() {
-  const TOPK_N = Number(process.env.TOPK_N || 1_000_000);
+  const TOPK_N = Number(process.env.TOPK_N ?? 1_000_000);
   console.log(`\n  -- full-text top-K, ${fmt(TOPK_N)} candidates --`);
   const dir = await tmpDir();
   try {
@@ -120,7 +120,7 @@ async function topKScenario() {
 
 /** Overwrite one document while the text delta holds many distinct terms. */
 async function deltaOverwriteScenario() {
-  const DELTA_TERMS = Number(process.env.DELTA_TERMS || 1_000_000);
+  const DELTA_TERMS = Number(process.env.DELTA_TERMS ?? 1_000_000);
   const DOCS = 1000;
   const perDoc = Math.ceil(DELTA_TERMS / DOCS);
   console.log(`\n  -- text delta overwrite, ~${fmt(DELTA_TERMS)} distinct delta terms (${DOCS} docs x ${fmt(perDoc)} words) --`);
@@ -151,7 +151,7 @@ async function deltaOverwriteScenario() {
     lat.sort((a, b) => a - b);
     console.log(
       `    overwrite 1 doc x100`.padEnd(24),
-      `p50 ${percentile(lat, 50).toFixed(2)} ms   p95 ${percentile(lat, 95).toFixed(2)} ms   max ${lat[lat.length - 1].toFixed(2)} ms`,
+      `p50 ${percentile(lat, 50).toFixed(2)} ms   p95 ${percentile(lat, 95).toFixed(2)} ms   max ${lat.at(-1).toFixed(2)} ms`,
     );
     await db.close();
   } finally {
@@ -161,7 +161,7 @@ async function deltaOverwriteScenario() {
 
 /** Unique batch validation cost vs unique-index owner count. */
 async function uniqueBatchScenario() {
-  const OWNERS = Number(process.env.UNIQUE_OWNERS || 100_000);
+  const OWNERS = Number(process.env.UNIQUE_OWNERS ?? 100_000);
   console.log(`\n  -- unique batch validation, ${fmt(OWNERS)} owners --`);
   const dir = await tmpDir();
   try {
@@ -187,7 +187,7 @@ async function uniqueBatchScenario() {
       lat.sort((a, b) => a - b);
       console.log(
         `    batch size=${String(size).padEnd(5)}`.padEnd(24),
-        `p50 ${percentile(lat, 50).toFixed(2)} ms   p95 ${percentile(lat, 95).toFixed(2)} ms   max ${lat[lat.length - 1].toFixed(2)} ms`,
+        `p50 ${percentile(lat, 50).toFixed(2)} ms   p95 ${percentile(lat, 95).toFixed(2)} ms   max ${lat.at(-1).toFixed(2)} ms`,
       );
     }
     await db.close();
@@ -198,8 +198,8 @@ async function uniqueBatchScenario() {
 
 /** Write pauses with a large live TTL set and maxMemoryBytes accounting on. */
 async function ttlWritePauseScenario() {
-  const TTL_N = Number(process.env.TTL_N || 100_000);
-  const WRITES = Number(process.env.TTL_WRITES || 2_000);
+  const TTL_N = Number(process.env.TTL_N ?? 100_000);
+  const WRITES = Number(process.env.TTL_WRITES ?? 2_000);
   console.log(`\n  -- TTL write pause, ${fmt(TTL_N)} live TTL records, ${fmt(WRITES)} writes --`);
   const dir = await tmpDir();
   try {
@@ -228,7 +228,7 @@ async function ttlWritePauseScenario() {
     lat.sort((a, b) => a - b);
     console.log(
       `    plain writes`.padEnd(24),
-      `p50 ${percentile(lat, 50).toFixed(2)} ms   p95 ${percentile(lat, 95).toFixed(2)} ms   max ${lat[lat.length - 1].toFixed(2)} ms`,
+      `p50 ${percentile(lat, 50).toFixed(2)} ms   p95 ${percentile(lat, 95).toFixed(2)} ms   max ${lat.at(-1).toFixed(2)} ms`,
     );
     await db.close();
   } finally {
@@ -237,8 +237,8 @@ async function ttlWritePauseScenario() {
 }
 
 async function main() {
-  const N = Number(process.env.N || 50_000);
-  const ITERS = Number(process.env.ITERS || 200);
+  const N = Number(process.env.N ?? 50_000);
+  const ITERS = Number(process.env.ITERS ?? 200);
   console.log(`\nminidb query benchmark  (N=${fmt(N)} docs, ${ITERS} iters each, node ${process.version})\n`);
 
   const dir = await tmpDir();
@@ -313,7 +313,7 @@ async function main() {
   console.log('\ndone.\n');
 }
 
-main().catch((e) => {
-  console.error(e);
+main().catch((error) => {
+  console.error(error);
   process.exit(1);
 });

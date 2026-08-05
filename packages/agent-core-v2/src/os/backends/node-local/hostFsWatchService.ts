@@ -116,7 +116,7 @@ class HostFsWatchHandle implements IHostFsWatchHandle {
       this.readiness.reject(error);
       onUnexpectedError(error);
     });
-    this.watcher.once('ready', () => this.readiness.resolve());
+    this.watcher.once('ready', () =>{  this.readiness.resolve(); });
     this.watcher.add(path);
   }
 
@@ -209,8 +209,8 @@ class SignalWatchHandle implements IHostFsWatchHandle {
       if (!this.disposed) this.emitter.fire(event);
     });
     void leg.ready.then(
-      () => this.readiness.resolve(),
-      (error: unknown) => this.readiness.reject(error),
+      () =>{  this.readiness.resolve(); },
+      (error: unknown) =>{  this.readiness.reject(error); },
     );
     this.chokidarLeg = leg;
   }

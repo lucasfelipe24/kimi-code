@@ -83,7 +83,7 @@ export function barrier<Owner extends object>(
   name: keyof Owner & string,
   when: number | ((call: number) => boolean) = 1,
 ): MethodBarrier {
-  const original = (owner as unknown as Record<string, AnyMethod>)[name]!;
+  const original = (owner as unknown as Record<string, AnyMethod>)[name];
   const matches = typeof when === 'number' ? (call: number) => call === when : when;
   const enteredD = deferred<number>();
   let released = false;
@@ -126,7 +126,7 @@ export function failCalls<Owner extends object>(
   error: unknown,
   when: number | ((call: number) => boolean) = 1,
 ): { readonly calls: number; restore(): void } {
-  const original = (owner as unknown as Record<string, AnyMethod>)[name]!;
+  const original = (owner as unknown as Record<string, AnyMethod>)[name];
   const matches = typeof when === 'number' ? (call: number) => call === when : when;
   let calls = 0;
   (owner as Record<string, unknown>)[name] = function (this: unknown, ...args: unknown[]) {

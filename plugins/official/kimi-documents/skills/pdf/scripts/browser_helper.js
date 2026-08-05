@@ -4,11 +4,11 @@
  * Used by html_to_pdf.js (runtime) and setup.sh (environment check).
  */
 
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const Module = require('module');
-const { execSync, spawnSync } = require('child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+const Module = require('node:module');
+const { execSync, spawnSync } = require('node:child_process');
 
 function loadPlaywright() {
   try {
@@ -50,7 +50,7 @@ function loadPlaywright() {
       }
     }
 
-    throw new Error('Playwright module not found. Install it or set PLAYWRIGHT_PATH.');
+    throw new Error('Playwright module not found. Install it or set PLAYWRIGHT_PATH.', { cause: error });
   }
 }
 
@@ -94,7 +94,7 @@ function resolveChromium(options = {}) {
     return {
       status: 'fallback',
       executablePath: fallback.path,
-      revision: fallback.revision || null,
+      revision: fallback.revision ?? null,
       expectedRevision,
       isFallback: true,
       source: fallback.source
@@ -104,7 +104,7 @@ function resolveChromium(options = {}) {
   if (!allowInstall) {
     return {
       status: 'missing',
-      executablePath: expectedPath || '',
+      executablePath: expectedPath ?? '',
       revision: null,
       expectedRevision,
       isFallback: false,
@@ -158,10 +158,10 @@ function findExistingChromium(expectedRevision) {
   });
 
   getBrowserCacheDirectories().forEach(dir => {
-    collectCacheExecutables(dir).forEach(entry => addCandidate(entry.path, entry.revision, 'cache'));
+    collectCacheExecutables(dir).forEach(entry =>{  addCandidate(entry.path, entry.revision, 'cache'); });
   });
 
-  collectSystemBrowsers().forEach(cmdPath => addCandidate(cmdPath, null, 'system'));
+  collectSystemBrowsers().forEach(cmdPath =>{  addCandidate(cmdPath, null, 'system'); });
 
   if (candidates.length === 0) {
     return null;
@@ -180,8 +180,8 @@ function findExistingChromium(expectedRevision) {
   candidates.sort((a, b) => {
     const diff = score(a) - score(b);
     if (diff !== 0) return diff;
-    const revA = a.revision || 0;
-    const revB = b.revision || 0;
+    const revA = a.revision ?? 0;
+    const revB = b.revision ?? 0;
     return revB - revA;
   });
 
@@ -368,7 +368,7 @@ function resolveSystemCommand(cmd) {
         .split(/\r?\n/)
         .map(line => line.trim())
         .find(Boolean);
-      return output || null;
+      return output ?? null;
     }
     return execSync(`command -v ${cmd}`, { stdio: ['ignore', 'pipe', 'ignore'] })
       .toString()
@@ -385,23 +385,23 @@ module.exports = {
 };
 
 if (require.main === module) {
-  const args = process.argv.slice(2);
-  const allowInstall = args.includes('--allow-install');
-  const jsonOutput = args.includes('--json');
+  const args = new Set(process.argv.slice(2));
+  const allowInstall = args.has('--allow-install');
+  const jsonOutput = args.has('--json');
 
   try {
     const info = resolveChromium({ allowInstall });
     if (jsonOutput) {
       console.log(JSON.stringify(info, null, 2));
     } else {
-      console.log(`${info.status}:${info.executablePath || ''}`);
+      console.log(`${info.status}:${info.executablePath ?? ''}`);
     }
     process.exit(info.status === 'missing' ? 2 : 0);
   } catch (error) {
     if (jsonOutput) {
-      console.error(JSON.stringify({ status: 'error', message: error.message || String(error) }));
+      console.error(JSON.stringify({ status: 'error', message: error.message ?? String(error) }));
     } else {
-      console.log(`error:${error.message || error}`);
+      console.log(`error:${error.message ?? error}`);
     }
     process.exit(3);
   }

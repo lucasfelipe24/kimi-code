@@ -135,7 +135,7 @@ export function recordAgentEvents() {
           event,
           start: cursor,
           resolve: ({ event: found, events: foundEvents, respond }) => {
-            resolve({ event: found, events: foundEvents, respond: (result) => respond(result) });
+            resolve({ event: found, events: foundEvents, respond: (result) =>{  respond(result); } });
           },
         });
       });

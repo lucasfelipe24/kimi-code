@@ -925,7 +925,7 @@ describe('WorkspaceSkillCatalogService', () => {
         });
       });
       const timedOut = new Promise<never>((_resolve, reject) => {
-        setTimeout(() => reject(new Error('watch-driven refresh timed out')), 10000);
+        setTimeout(() =>{  reject(new Error('watch-driven refresh timed out')); }, 10000);
       });
       await mkdir(join(workDir, '.agents', 'skills', 'watched-skill'), { recursive: true });
       await writeFile(

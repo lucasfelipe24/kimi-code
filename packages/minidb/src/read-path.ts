@@ -134,7 +134,7 @@ export class ReadPath<V> {
     this.deps.ensureOpen();
     const rows = this.deps.dt.range(col, { ...opts, count: opts.limit ?? opts.count });
     const out: (ScanEntry<V> & { dtValue: number })[] = [];
-    for (const { key, value: dtValue } of rows as DtRangeEntry[]) {
+    for (const { key, value: dtValue } of rows) {
       const value = this.deps.store().get(key);
       if (value === undefined) continue;
       const r = this.deps.store().map.get(key);

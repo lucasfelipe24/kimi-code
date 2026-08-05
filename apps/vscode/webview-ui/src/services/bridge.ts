@@ -43,14 +43,14 @@ class Bridge {
   private webviewId: string;
 
   constructor() {
-    this.webviewId = document.body.getAttribute("data-webviewid") || `unknown_${Date.now()}`;
+    this.webviewId = document.body.dataset.webviewid ?? `unknown_${Date.now()}`;
 
     if (typeof acquireVsCodeApi === "function") {
       this.vscode = acquireVsCodeApi();
     } else {
       console.warn("[Kimi Bridge] Running outside VS Code, using mock");
       this.vscode = {
-        postMessage: (msg) => console.log("[Kimi Mock]", msg),
+        postMessage: (msg) =>{  console.log("[Kimi Mock]", msg); },
         getState: () => undefined,
         setState: () => {},
       };
@@ -77,7 +77,7 @@ class Bridge {
 
     if (msg.event) {
       const handlers = this.eventHandlers.get(msg.event);
-      handlers?.forEach((h) => h(msg.data));
+      handlers?.forEach((h) =>{  h(msg.data); });
     }
   };
 

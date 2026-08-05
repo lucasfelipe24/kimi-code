@@ -227,7 +227,7 @@ async function executeSlashCommand(host: SlashCommandHost, input: string): Promi
     pluginCommandMap: host.pluginCommandMap,
     isStreaming: host.state.appState.streamingPhase !== 'idle',
     isCompacting: host.state.appState.isCompacting,
-    engineV2: host.engineV2 === true,
+    engineV2:  host.engineV2,
   });
 
   switch (intent.kind) {

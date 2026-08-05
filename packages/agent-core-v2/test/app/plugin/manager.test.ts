@@ -120,7 +120,7 @@ describe('PluginManager', () => {
       expect(record.source).toBe('zip-url');
       expect(manager.get('zip-plugin')?.manifest?.name).toBe('zip-plugin');
     } finally {
-      await new Promise<void>((resolve, reject) => server.close((err) => (err === undefined ? resolve() : reject(err))));
+      await new Promise<void>((resolve, reject) => server.close((err) =>{ err === undefined ? resolve() : reject(err); }));
       await rm(sourceRoot, { recursive: true, force: true });
       await rm(zipPath, { force: true });
     }

@@ -144,8 +144,8 @@ export class WorkspaceFsService implements IWorkspaceFsService {
     let topStat: HostFileStat;
     try {
       topStat = await this.hostFs.stat(abs);
-    } catch (err) {
-      throw mapFsError(err, req.path);
+    } catch (error) {
+      throw mapFsError(error, req.path);
     }
     if (!topStat.isDirectory) {
       throw new Error2(ErrorCodes.FS_PATH_NOT_FOUND, `path not found: ${req.path}`, {
@@ -178,9 +178,9 @@ export class WorkspaceFsService implements IWorkspaceFsService {
       let names: readonly string[];
       try {
         names = (await this.hostFs.readdir(this.absOf(entry.relPath))).map((e) => e.name);
-      } catch (err) {
+      } catch (error) {
         if (entry.relPath === (rel === '.' ? '' : rel)) {
-          throw mapFsError(err, req.path);
+          throw mapFsError(error, req.path);
         }
         continue;
       }
@@ -236,8 +236,8 @@ export class WorkspaceFsService implements IWorkspaceFsService {
     let st: HostFileStat;
     try {
       st = await this.hostFs.stat(abs);
-    } catch (err) {
-      throw mapFsError(err, req.path);
+    } catch (error) {
+      throw mapFsError(error, req.path);
     }
     if (st.isDirectory) {
       throw new Error2(ErrorCodes.FS_IS_DIRECTORY, `path is a directory: ${req.path}`, {
@@ -316,9 +316,9 @@ export class WorkspaceFsService implements IWorkspaceFsService {
           });
           results[p] = sub.items;
           if (sub.truncated) truncatedPaths.push(p);
-        } catch (err) {
-          if (err instanceof Error2 && err.code === ErrorCodes.FS_PATH_ESCAPES) throw err;
-          partialErrors[p] = toWireError(err);
+        } catch (error) {
+          if (error instanceof Error2 && error.code === ErrorCodes.FS_PATH_ESCAPES) throw error;
+          partialErrors[p] = toWireError(error);
         }
       }),
     );
@@ -335,8 +335,8 @@ export class WorkspaceFsService implements IWorkspaceFsService {
     let st: HostFileStat;
     try {
       st = await this.hostFs.lstat(abs);
-    } catch (err) {
-      throw mapFsError(err, req.path);
+    } catch (error) {
+      throw mapFsError(error, req.path);
     }
     const name = rel === '.' ? basename(this.workDir) : basename(abs);
     return buildFsEntry(rel, name, st, true);
@@ -370,8 +370,8 @@ export class WorkspaceFsService implements IWorkspaceFsService {
     const rel = this.toRel(abs);
     try {
       await this.hostFs.mkdir(abs, { recursive: req.recursive });
-    } catch (err) {
-      const code = errnoCode(err);
+    } catch (error) {
+      const code = errnoCode(error);
       if (code === 'EEXIST') {
         throw new Error2(ErrorCodes.FS_ALREADY_EXISTS, `path already exists: ${req.path}`, {
           details: { path: req.path },
@@ -382,7 +382,7 @@ export class WorkspaceFsService implements IWorkspaceFsService {
           details: { path: req.path },
         });
       }
-      throw err;
+      throw error;
     }
     const st = await this.hostFs.lstat(abs);
     return buildFsEntry(rel, basename(abs), st, false);
@@ -394,8 +394,8 @@ export class WorkspaceFsService implements IWorkspaceFsService {
     let st: HostFileStat;
     try {
       st = await this.hostFs.lstat(abs);
-    } catch (err) {
-      throw mapFsError(err, relPath);
+    } catch (error) {
+      throw mapFsError(error, relPath);
     }
     return { absolute: abs, relative: rel, isDirectory: st.isDirectory };
   }
@@ -406,8 +406,8 @@ export class WorkspaceFsService implements IWorkspaceFsService {
     let st: HostFileStat;
     try {
       st = await this.hostFs.stat(abs);
-    } catch (err) {
-      throw mapFsError(err, relPath);
+    } catch (error) {
+      throw mapFsError(error, relPath);
     }
     if (st.isDirectory) {
       throw new Error2(ErrorCodes.FS_IS_DIRECTORY, `path is a directory: ${relPath}`, {
@@ -490,7 +490,7 @@ export class WorkspaceFsService implements IWorkspaceFsService {
   async grep(req: FsGrepRequest): Promise<FsGrepResponse> {
     const startedAt = Date.now();
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), GREP_TIMEOUT_MS);
+    const timer = setTimeout(() =>{  controller.abort(); }, GREP_TIMEOUT_MS);
     timer.unref?.();
     try {
       const resolution = await this.resolveRg();
@@ -557,7 +557,7 @@ export class WorkspaceFsService implements IWorkspaceFsService {
       killed = true;
       void proc.kill('SIGKILL');
     };
-    const onAbort = (): void => kill();
+    const onAbort = (): void =>{  kill(); };
     if (signal.aborted) kill();
     else signal.addEventListener('abort', onAbort, { once: true });
 
@@ -757,9 +757,9 @@ export class WorkspaceFsService implements IWorkspaceFsService {
     for (let i = 0; i < 256; i++) {
       try {
         const real = await this.hostFs.realpath(current);
-        return tail.length === 0 ? real : join(real, ...tail.reverse());
-      } catch (err) {
-        if (!isMissingPathError(err)) throw err;
+        return tail.length === 0 ? real : join(real, ...tail.toReversed());
+      } catch (error) {
+        if (!isMissingPathError(error)) throw error;
         const parent = dirname(current);
         if (parent === current) return abs;
         tail.push(basename(current));
@@ -906,7 +906,7 @@ class RgJsonAccumulator {
     const buf = this.fileBuf.get(p);
     if (buf === undefined) return;
     if (buf.matches.length > 0 && buf.pending.length > 0) {
-      const last = buf.matches[buf.matches.length - 1]!;
+      const last = buf.matches.at(-1)!;
       last.after = buf.pending.slice(0, this.req.context_lines);
     }
     if (buf.matches.length > 0) {

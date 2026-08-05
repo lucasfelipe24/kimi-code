@@ -68,7 +68,7 @@ export class WorkspaceMemoryCatalogService
     super();
     this.workspaceId = workspace.workspaceId;
     this.mutations = mutationAccess(store);
-    this._register(this.trust.onDidChange(() => this.changeEmitter.fire()));
+    this._register(this.trust.onDidChange(() =>{  this.changeEmitter.fire(); }));
     this.ready = this.trust.ready;
   }
 

@@ -25,7 +25,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.extensionUri,
     context,
     () => outputChannel?.show(),
-    (message) => log(message),
+    (message) =>{  log(message); },
   );
   context.subscriptions.push(provider, outputChannel);
 
@@ -61,7 +61,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (changedKeys.includes("yoloMode")) {
         void provider
           ?.setYoloModeForActiveSessions(VSCodeSettings.yoloMode)
-          .catch((error) => logError("Unable to update session permission", error));
+          .catch((error) =>{  logError("Unable to update session permission", error); });
       }
     }),
     vscode.window.registerWebviewViewProvider("kimi.webview", provider, {
@@ -170,13 +170,13 @@ async function offerLegacyMigration(
       ? null
       : "Some legacy Kimi data could not be inspected. Use “Kimi Code: Migrate Legacy Data” to retry.";
   if (discovery.prompt === null) {
-    if (reauthNotice !== null && !globalState.get<boolean>(LEGACY_REAUTH_NOTICE_KEY, false)) {
+    if (reauthNotice !== null && !globalState.get(LEGACY_REAUTH_NOTICE_KEY, false)) {
       await vscode.window.showWarningMessage(reauthNotice);
       await globalState.update(LEGACY_REAUTH_NOTICE_KEY, true);
     }
     if (
       discovery.warnings.length > 0 &&
-      !globalState.get<boolean>(LEGACY_WARNING_NOTICE_KEY, false)
+      !globalState.get(LEGACY_WARNING_NOTICE_KEY, false)
     ) {
       const action = await vscode.window.showWarningMessage(
         warningNotice ?? "Some legacy Kimi data could not be inspected.",

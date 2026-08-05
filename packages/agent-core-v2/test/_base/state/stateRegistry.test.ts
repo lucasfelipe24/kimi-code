@@ -50,13 +50,13 @@ describe('StateRegistry', () => {
   it('rejects duplicate registration', () => {
     const registry = new StateRegistry();
     registry.register(countKey);
-    expect(() => registry.register(countKey)).toThrow(BugIndicatingError);
+    expect(() =>{  registry.register(countKey); }).toThrow(BugIndicatingError);
   });
 
   it('rejects get and set on an unregistered key', () => {
     const registry = new StateRegistry();
     expect(() => registry.get(countKey)).toThrow(BugIndicatingError);
-    expect(() => registry.set(countKey, 1)).toThrow(BugIndicatingError);
+    expect(() =>{  registry.set(countKey, 1); }).toThrow(BugIndicatingError);
   });
 
   it('notifies onDidChange only for the key that was set', () => {
@@ -201,7 +201,7 @@ describe('state services (scoped)', () => {
     host = createScopedTestHost();
   });
 
-  afterEach(() => host.dispose());
+  afterEach(() =>{  host.dispose(); });
 
   function createChain() {
     const workspace = host.child(LifecycleScope.Workspace, 'w1');

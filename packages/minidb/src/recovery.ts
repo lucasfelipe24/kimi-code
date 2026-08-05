@@ -237,9 +237,9 @@ function statIdentity(p: string): FileIdentity | null {
   try {
     const st = fsSync.statSync(p);
     return { dev: st.dev, ino: st.ino, size: st.size };
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    throw e;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
   }
 }
 
@@ -300,12 +300,12 @@ export async function recover({
     let pass: RecoverPassResult;
     try {
       pass = await recoverPass({ snapPath, walPath, store, mode, truncate, valueMode, signal });
-    } catch (e) {
+    } catch (error) {
       // A cancelled scan may have applied a prefix of the pass's frames:
       // discard the partial application so the error never carries state
       // into a caller that retries with the same Store.
-      if ((e as Error).name === 'AbortError') resetStore(store);
-      throw e;
+      if ((error as Error).name === 'AbortError') resetStore(store);
+      throw error;
     }
     if (pass.consistent && (!attachValueReader || attachValueReader(pass.anchors))) {
       pass.info.generationRetries = attempt;
@@ -393,7 +393,7 @@ async function recoverPass({
       walFrames = r.frames.length;
       walCorrupt = r.corruptRanges;
       walScanEnd = r.eofOffset;
-      const last = r.corruptRanges[r.corruptRanges.length - 1];
+      const last = r.corruptRanges.at(-1);
       if (last && last[1] === st.size) {
         // A torn/corrupt tail is normally truncated so the next writer appends
         // cleanly. In read-only mode (truncate = false) we must never mutate the
@@ -463,9 +463,9 @@ export function catchUpWal(
   let fd: number;
   try {
     fd = fsSync.openSync(walPath, 'r');
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    throw e;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
   }
   try {
     const st = fsSync.fstatSync(fd);

@@ -39,7 +39,7 @@ function MainContent({ onAuthAction }: { onAuthAction: () => void }) {
   useEffect(() => {
     const unsubs = [
       bridge.on(Events.MCPServersChanged, setMCPServers),
-      bridge.on(Events.ExtensionConfigChanged, ({ config }: { config: ExtensionConfig }) => setExtensionConfig(config)),
+      bridge.on(Events.ExtensionConfigChanged, ({ config }: { config: ExtensionConfig }) =>{  setExtensionConfig(config); }),
       bridge.on(Events.FocusInput, () => document.querySelector<HTMLTextAreaElement>("textarea")?.focus()),
       bridge.on(Events.NewConversation, () => {
         void startNewConversation().catch((error: unknown) => {
@@ -47,7 +47,7 @@ function MainContent({ onAuthAction }: { onAuthAction: () => void }) {
         });
       }),
     ];
-    return () => unsubs.forEach((u) => u());
+    return () =>{  unsubs.forEach((u) => u()); };
   }, [setMCPServers, setExtensionConfig, startNewConversation]);
 
   useEffect(() => {
@@ -61,7 +61,7 @@ function MainContent({ onAuthAction }: { onAuthAction: () => void }) {
       }
     };
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    return () =>{  window.removeEventListener("keydown", handler); };
   }, [extensionConfig.enableNewConversationShortcut, startNewConversation]);
 
   return (

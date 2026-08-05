@@ -15,7 +15,7 @@ export function KimiMascot({ className }: { className?: string }) {
       attributeFilter: ["class"],
     });
 
-    return () => observer.disconnect();
+    return () =>{  observer.disconnect(); };
   }, []);
 
   const imageName = isDark ? "kimi-banner-dark.svg" : "kimi-banner-light.svg";

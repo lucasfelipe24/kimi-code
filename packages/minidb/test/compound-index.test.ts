@@ -149,10 +149,10 @@ async function compoundSidecarNames(dir: string): Promise<string[]> {
   try {
     return (JSON.parse(await fs.readFile(path.join(dir, 'db.compound-indexes.json'), 'utf8')) as { name: string }[])
       .map((d) => d.name)
-      .sort();
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return [];
-    throw e;
+      .toSorted();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
   }
 }
 
@@ -170,7 +170,7 @@ test('concurrent createCompoundIndex calls are serialized: zero failures; memory
       results.map((r) => (r.status === 'rejected' ? String(r.reason) : r.status)),
       ['fulfilled', 'fulfilled', 'fulfilled'],
     );
-    const memory = db.listCompoundIndexes().map((x) => x.name).sort();
+    const memory = db.listCompoundIndexes().map((x) => x.name).toSorted();
     assert.deepEqual(memory, ['byWsCreated', 'byWsUpdated']);
     assert.deepEqual(await compoundSidecarNames(dir), memory);
     // Both staged rebuilds saw the pre-existing document.
@@ -178,7 +178,7 @@ test('concurrent createCompoundIndex calls are serialized: zero failures; memory
     assert.deepEqual(db.compoundRange('byWsCreated', 'W1').map((r) => r.key), ['a']);
     await db.close();
     db = await MiniDb.open({ dir, valueCodec: 'json', fsyncPolicy: 'no', autoCompact: false });
-    assert.deepEqual(db.listCompoundIndexes().map((x) => x.name).sort(), memory);
+    assert.deepEqual(db.listCompoundIndexes().map((x) => x.name).toSorted(), memory);
     await db.close();
   } finally {
     await fs.rm(dir, { recursive: true, force: true });

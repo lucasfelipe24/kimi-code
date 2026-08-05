@@ -46,7 +46,7 @@ export interface LockPoolOptions {
   /** Cluster-wide read-only: withWriter rejects, withReader never uses cached writers. */
   readOnly: boolean;
   /** Apply cluster-wide index definitions to a freshly opened writer. */
-  applyDefs: (db: MiniDb<unknown>) => Promise<void>;
+  applyDefs: (db: MiniDb) => Promise<void>;
 }
 
 interface WriterEntry {
@@ -133,7 +133,7 @@ export class ShardLockPool {
 
   /** Run fn against the shard's writer, opening it (with lock retry) if this
    *  process does not hold it yet. The writer cannot be evicted while busy. */
-  async withWriter<T>(shardId: number, dir: string, fn: (db: MiniDb<unknown>) => T | Promise<T>): Promise<T> {
+  async withWriter<T>(shardId: number, dir: string, fn: (db: MiniDb) => T | Promise<T>): Promise<T> {
     if (this.opts.readOnly) throw new Error('ClusterDb is open in read-only mode');
     if (!this.writerOps.enter()) throw new Error('ClusterDb is closed');
     try {
@@ -160,7 +160,7 @@ export class ShardLockPool {
   /** Run fn against the best available read view of the shard: the cached
    *  writer when this process holds the shard (current and lock-free), else a
    *  fingerprint-revalidated read-only instance. */
-  async withReader<T>(shardId: number, dir: string, fn: (db: MiniDb<unknown>) => T | Promise<T>): Promise<T> {
+  async withReader<T>(shardId: number, dir: string, fn: (db: MiniDb) => T | Promise<T>): Promise<T> {
     if (!this.readerOps.enter()) throw new Error('ClusterDb is closed');
     try {
       if (!this.opts.readOnly) {
@@ -249,9 +249,9 @@ export class ShardLockPool {
         this.stats.writerOpens++;
         try {
           await this.opts.applyDefs(handle.db);
-        } catch (e) {
+        } catch (error) {
           await handle.close().catch(() => {});
-          throw e;
+          throw error;
         }
         const entry: WriterEntry = {
           handle,
@@ -276,10 +276,10 @@ export class ShardLockPool {
         }
         this.writers.set(shardId, entry);
         return entry;
-      } catch (e) {
+      } catch (error) {
         // Apply-time failures (e.g. a unique index that does not backfill) are
         // permanent; only lock contention is retried, until the deadline.
-        if (!(e instanceof LockError) || Date.now() + delay > deadline) throw e;
+        if (!(error instanceof LockError) || Date.now() + delay > deadline) throw error;
         this.stats.lockWaits++;
         await sleep(delay + Math.floor(Math.random() * delay));
         delay = Math.min(delay * 2, 250);
@@ -372,8 +372,8 @@ export class ShardLockPool {
         };
         this.readers.set(shardId, entry);
         return entry;
-      } catch (e) {
-        lastErr = e;
+      } catch (error) {
+        lastErr = error;
         await sleep(25);
       }
     }

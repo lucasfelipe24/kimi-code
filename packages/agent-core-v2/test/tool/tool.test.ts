@@ -1640,7 +1640,7 @@ describe('Agent tool execution contract', () => {
       runCompletion: (_agentId, _request, options) => {
         const next = completions.shift();
         if (next === undefined) throw new Error('unexpected run');
-        options.signal.addEventListener('abort', () => next.reject(options.signal.reason), {
+        options.signal.addEventListener('abort', () =>{  next.reject(options.signal.reason); }, {
           once: true,
         });
         return next.promise;
@@ -1691,7 +1691,7 @@ describe('Agent tool execution contract', () => {
       runCompletion: (_agentId, _request, options) => {
         const next = completions.shift();
         if (next === undefined) throw new Error('unexpected run');
-        options.signal.addEventListener('abort', () => next.reject(options.signal.reason), {
+        options.signal.addEventListener('abort', () =>{  next.reject(options.signal.reason); }, {
           once: true,
         });
         return next.promise;
@@ -1895,7 +1895,7 @@ describe('Agent tool execution contract', () => {
       createAgentIds: ['agent-child'],
       runCompletion: (_agentId, _request, options) =>
         new Promise((_resolve, reject) => {
-          options.signal.addEventListener('abort', () => reject(options.signal.reason), {
+          options.signal.addEventListener('abort', () =>{  reject(options.signal.reason); }, {
             once: true,
           });
         }),
@@ -2137,8 +2137,8 @@ describe('AgentSwarm tool execution contract', () => {
   it('runs item-based swarms through the session swarm service and renders XML results', async () => {
     const runSwarm = vi.fn(
       async (
-        args: SessionSwarmRunArgs<unknown>,
-      ): Promise<readonly SessionSwarmRunResult<unknown>[]> => {
+        args: SessionSwarmRunArgs,
+      ): Promise<readonly SessionSwarmRunResult[]> => {
         return args.tasks.map((task, index) => ({
           task,
           agentId: `agent-explore-${String(index + 1)}`,
@@ -2385,8 +2385,8 @@ describe('AgentSwarm tool execution contract', () => {
     );
     const runSwarm = vi.fn(
       async (
-        args: SessionSwarmRunArgs<unknown>,
-      ): Promise<readonly SessionSwarmRunResult<unknown>[]> => {
+        args: SessionSwarmRunArgs,
+      ): Promise<readonly SessionSwarmRunResult[]> => {
         return args.tasks.map((task, index) => ({
           task,
           agentId: task.kind === 'resume' ? task.resumeAgentId : `agent-new-${String(index + 1)}`,
@@ -2505,8 +2505,8 @@ describe('AgentSwarm tool execution contract', () => {
   it('reports failed subagents inside the XML result without failing the tool', async () => {
     const runSwarm = vi.fn(
       async (
-        args: SessionSwarmRunArgs<unknown>,
-      ): Promise<readonly SessionSwarmRunResult<unknown>[]> => [
+        args: SessionSwarmRunArgs,
+      ): Promise<readonly SessionSwarmRunResult[]> => [
         {
           task: args.tasks[0]!,
           agentId: 'agent-coder-1',
@@ -2554,8 +2554,8 @@ describe('AgentSwarm tool execution contract', () => {
   it('omits the resume hint when incomplete subagents have no agent ids', async () => {
     const runSwarm = vi.fn(
       async (
-        args: SessionSwarmRunArgs<unknown>,
-      ): Promise<readonly SessionSwarmRunResult<unknown>[]> => [
+        args: SessionSwarmRunArgs,
+      ): Promise<readonly SessionSwarmRunResult[]> => [
         {
           task: args.tasks[0]!,
           status: 'failed' as const,
@@ -2601,8 +2601,8 @@ describe('AgentSwarm tool execution contract', () => {
   it('reports partial aborted subagents inside the XML result', async () => {
     const runSwarm = vi.fn(
       async (
-        args: SessionSwarmRunArgs<unknown>,
-      ): Promise<readonly SessionSwarmRunResult<unknown>[]> => [
+        args: SessionSwarmRunArgs,
+      ): Promise<readonly SessionSwarmRunResult[]> => [
         {
           task: args.tasks[0]!,
           agentId: 'agent-coder-1',

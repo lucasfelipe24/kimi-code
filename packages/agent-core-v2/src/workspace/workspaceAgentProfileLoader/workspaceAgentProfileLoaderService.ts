@@ -68,7 +68,7 @@ export class WorkspaceAgentProfileLoaderService
       this.log.warn(message, error);
     });
     return profilesFromDiscovery(
-      await discoverAgentFiles(this.fs, roots, (message) => this.log.warn(message)),
+      await discoverAgentFiles(this.fs, roots, (message) =>{  this.log.warn(message); }),
       (context) => this.user.getDefaultProfile().renderSystemPrompt(context),
     );
   }
@@ -77,7 +77,7 @@ export class WorkspaceAgentProfileLoaderService
     const { projectRoot, candidates } = await projectAgentRootCandidates(
       this.fs,
       this.workspace.cwd,
-      (message) => this.log.warn(message),
+      (message) =>{  this.log.warn(message); },
     );
     const handle = this.fsWatch.watch(projectRoot, {
       ignored: subtreeWatchFilter(projectRoot, candidates),

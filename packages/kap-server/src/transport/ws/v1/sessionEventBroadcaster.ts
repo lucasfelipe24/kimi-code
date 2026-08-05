@@ -255,7 +255,7 @@ export class SessionEventBroadcaster {
     this.maxBufferSize = opts.maxBufferSize ?? DEFAULT_MAX_BUFFER_SIZE;
     this.coreEventSubscription = opts.core.accessor
       .get(IEventService)
-      .subscribe((event) => this.onCoreEvent(event));
+      .subscribe((event) =>{  this.onCoreEvent(event); });
   }
 
   /**
@@ -853,8 +853,8 @@ export class SessionEventBroadcaster {
         session: payload.session,
         agentId: 'main',
         sessionId: payload.sessionId,
-      } as Event).catch((error: unknown) =>
-        this.logDispatchError(payload.sessionId, 'event.session.created', error),
+      } as Event).catch((error: unknown) =>{ 
+        this.logDispatchError(payload.sessionId, 'event.session.created', error); },
       );
       return;
     }
@@ -876,8 +876,8 @@ export class SessionEventBroadcaster {
         ...payload,
         agentId: 'main',
         sessionId,
-      } as Event).catch((error: unknown) =>
-        this.logDispatchError(sessionId, 'session.meta.updated', error),
+      } as Event).catch((error: unknown) =>{ 
+        this.logDispatchError(sessionId, 'session.meta.updated', error); },
       );
       return;
     }
@@ -893,8 +893,8 @@ export class SessionEventBroadcaster {
         warnings: payload.warnings,
         agentId: 'main',
         sessionId: GLOBAL_SESSION_ID,
-      } as Event).catch((error: unknown) =>
-        this.logDispatchError(GLOBAL_SESSION_ID, 'event.config.warning', error),
+      } as Event).catch((error: unknown) =>{ 
+        this.logDispatchError(GLOBAL_SESSION_ID, 'event.config.warning', error); },
       );
     }
   }
@@ -903,7 +903,7 @@ export class SessionEventBroadcaster {
     const state = await this.ensureGlobalState();
     state.queue = state.queue
       .then(() => this.dispatch(state, event, isVolatileEventType(event.type)))
-      .catch((error: unknown) => this.logDispatchDropped(state.sessionId, event.type, error));
+      .catch((error: unknown) =>{  this.logDispatchDropped(state.sessionId, event.type, error); });
   }
 
   /**
@@ -928,7 +928,7 @@ export class SessionEventBroadcaster {
     if (state === undefined) return;
     state.queue = state.queue
       .then(() => this.dispatch(state, event, isVolatileEventType(event.type)))
-      .catch((error: unknown) => this.logDispatchDropped(state.sessionId, event.type, error));
+      .catch((error: unknown) =>{  this.logDispatchDropped(state.sessionId, event.type, error); });
   }
 
   /**
@@ -1044,7 +1044,7 @@ export class SessionEventBroadcaster {
       }),
     ];
 
-    return { dispose: () => disposables.forEach((disposable) => disposable.dispose()) };
+    return { dispose: () =>{  disposables.forEach((disposable) => disposable.dispose()); } };
   }
 
   private onAgentEvent(sessionId: string, agentId: string, event: DomainEvent): void {
@@ -1071,7 +1071,7 @@ export class SessionEventBroadcaster {
         } as unknown as Event;
         state.queue = state.queue
           .then(() => this.dispatch(state, wireEvent, true))
-          .catch((error: unknown) => this.logDispatchDropped(state.sessionId, wireEvent.type, error));
+          .catch((error: unknown) =>{  this.logDispatchDropped(state.sessionId, wireEvent.type, error); });
       }
       return;
     }
@@ -1090,7 +1090,7 @@ export class SessionEventBroadcaster {
     const volatile = isVolatileSignal(event.type);
     state.queue = state.queue
       .then(() => this.dispatch(state, wireEvent, volatile))
-      .catch((error: unknown) => this.logDispatchDropped(state.sessionId, wireEvent.type, error));
+      .catch((error: unknown) =>{  this.logDispatchDropped(state.sessionId, wireEvent.type, error); });
     // v1 wire compat: fan the legacy `background.task.*` spelling out next to
     // the native `task.*` event (see `legacyTaskEvent`) so unchanged v1 clients
     // keep working while v2-shaped clients ignore the alias. Same volatility as
@@ -1099,7 +1099,7 @@ export class SessionEventBroadcaster {
     if (legacy !== undefined) {
       state.queue = state.queue
         .then(() => this.dispatch(state, legacy, volatile))
-        .catch((error: unknown) => this.logDispatchDropped(state.sessionId, legacy.type, error));
+        .catch((error: unknown) =>{  this.logDispatchDropped(state.sessionId, legacy.type, error); });
     }
   }
 
@@ -1152,7 +1152,7 @@ export class SessionEventBroadcaster {
   private enqueueDurable(state: SessionState, event: Event): void {
     state.queue = state.queue
       .then(() => this.dispatch(state, event, false))
-      .catch((error: unknown) => this.logDispatchDropped(state.sessionId, event.type, error));
+      .catch((error: unknown) =>{  this.logDispatchDropped(state.sessionId, event.type, error); });
   }
 
   /**
@@ -1177,8 +1177,8 @@ export class SessionEventBroadcaster {
           false,
         ),
       )
-      .catch((error: unknown) =>
-        this.logDispatchDropped(state.sessionId, 'event.session.work_changed', error),
+      .catch((error: unknown) =>{ 
+        this.logDispatchDropped(state.sessionId, 'event.session.work_changed', error); },
       );
   }
 

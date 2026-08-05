@@ -443,9 +443,9 @@ describe('normalizeAgentProfile', () => {
     _clearAgentProfileContributionsForTests();
     try {
       registerAgentProfile({ name: 'kept', systemPrompt: () => 'text' });
-      expect(() =>
+      expect(() =>{ 
         // @ts-expect-error runtime guard for inputs that escape the type union
-        registerAgentProfile({ name: 'empty' }),
+        registerAgentProfile({ name: 'empty' }); },
       ).toThrow(/must define systemPrompt or renderSystemPrompt/);
       expect(getAgentProfileContributions().map((profile) => profile.name)).toEqual(['kept']);
     } finally {

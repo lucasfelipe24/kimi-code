@@ -135,7 +135,7 @@ export class AgentMemoryRecallService extends Disposable implements IAgentMemory
     const abortPromise = new Promise<never>((_, reject) => {
       deadline.signal.addEventListener(
         'abort',
-        () => reject(deadline.timedOut() ? LOOKUP_TIMEOUT : deadline.signal.reason),
+        () =>{  reject(deadline.timedOut() ? LOOKUP_TIMEOUT : deadline.signal.reason); },
         { once: true },
       );
     });
@@ -239,7 +239,7 @@ export class AgentMemoryRecallService extends Disposable implements IAgentMemory
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<typeof TIMEOUT>((resolve) => {
-      timer = setTimeout(() => resolve(TIMEOUT), this.rerankTimeoutMs);
+      timer = setTimeout(() =>{  resolve(TIMEOUT); }, this.rerankTimeoutMs);
     });
 
     const rerankPromise = (async (): Promise<readonly EffectiveMemory[]> => {

@@ -124,7 +124,7 @@ describe('projector tool-exchange normalization', () => {
     projector = ix.get(IAgentContextProjectorService);
   });
 
-  afterEach(() => disposables.dispose());
+  afterEach(() =>{  disposables.dispose(); });
 
   function project(history: readonly ContextMessage[]): readonly Message[] {
     return projector.project(history);

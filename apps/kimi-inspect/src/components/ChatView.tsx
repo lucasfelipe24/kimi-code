@@ -74,7 +74,7 @@ import { ChatSearchBar } from './ChatSearchBar';
 const noopSubscribe = () => () => {};
 
 /** Active session id for deeply nested interaction views (approve/answer buttons). */
-const SessionContext = createContext<string>('');
+const SessionContext = createContext('');
 
 /**
  * A navigation request into the chat timeline (e.g. from a search hit). The
@@ -462,8 +462,8 @@ export function ChatView({
   // The flash highlight clears itself after a short moment.
   useEffect(() => {
     if (flash === null) return;
-    const timer = setTimeout(() => setFlash(null), 2400);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() =>{  setFlash(null); }, 2400);
+    return () =>{  clearTimeout(timer); };
   }, [flash]);
 
   useLayoutEffect(() => {
@@ -706,7 +706,7 @@ export function ChatView({
               className="min-h-[40px] flex-1 resize-y rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-[13px] text-neutral-100 outline-none focus:border-sky-600"
               placeholder="Send a prompt to the active agent… (Enter to send, Shift+Enter for newline)"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) =>{  setInput(e.target.value); }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -1196,10 +1196,10 @@ function InteractionEntityView({
       {interaction.response !== undefined ? <JsonView data={interaction.response} /> : null}
       {pending && interaction.interactionKind === 'approval' ? (
         <div className="mt-2 flex gap-2">
-          <ActionButton onClick={() => decide('approved')} disabled={busy}>
+          <ActionButton onClick={() =>{  decide('approved'); }} disabled={busy}>
             Approve
           </ActionButton>
-          <ActionButton onClick={() => decide('rejected')} danger disabled={busy}>
+          <ActionButton onClick={() =>{  decide('rejected'); }} danger disabled={busy}>
             Reject
           </ActionButton>
         </div>
@@ -1222,7 +1222,7 @@ function InteractionEntityView({
                       }`}
                       title={option.description}
                       disabled={busy}
-                      onClick={() => toggleOption(question, option.label)}
+                      onClick={() =>{  toggleOption(question, option.label); }}
                     >
                       {option.label}
                     </button>

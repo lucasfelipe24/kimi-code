@@ -35,7 +35,7 @@
 			try {
 				Object.keys("primitive");
 				return true;
-			} catch (e) {
+			} catch (error) {
 		 return false;
 		}
 		};
@@ -105,8 +105,8 @@
 			assign = function (key) {
 				try {
 					dest[key] = src[key];
-				} catch (e) {
-					if (!error) error = e;
+				} catch (error) {
+					error ??= error;
 				}
 			};
 			for (i = 1; i < length; ++i) {
@@ -388,7 +388,7 @@
 	 */
 	class Hook {
 		constructor(context){
-			this.context = context || this;
+			this.context = context ?? this;
 			this.hooks = [];
 		}
 
@@ -473,7 +473,7 @@
 			return;
 		}
 		let rect;
-		if (typeof element.getBoundingClientRect !== "undefined") {
+		if (element.getBoundingClientRect !== undefined) {
 			rect = element.getBoundingClientRect();
 		} else {
 			let range = document.createRange();
@@ -488,7 +488,7 @@
 			return;
 		}
 		let rect;
-		if (typeof element.getClientRects !== "undefined") {
+		if (element.getClientRects !== undefined) {
 			rect = element.getClientRects();
 		} else {
 			let range = document.createRange();
@@ -504,11 +504,11 @@
 	 * @returns {string} uuid
 	 */
 	function UUID() {
-		var d = new Date().getTime();
+		var d = Date.now();
 		if (typeof performance !== "undefined" && typeof performance.now === "function") {
 			d += performance.now(); //use high-precision timer if available
 		}
-		return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+		return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replaceAll(/[xy]/g, function (c) {
 			var r = (d + Math.random() * 16) % 16 | 0;
 			d = Math.floor(d / 16);
 			return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
@@ -527,7 +527,7 @@
 	 * Allows # and .
 	 */
 	function querySelectorEscape(value) {
-		if (arguments.length == 0) {
+		if (arguments.length === 0) {
 			throw new TypeError("`CSS.escape` requires an argument.");
 		}
 		var string = String(value);
@@ -536,9 +536,9 @@
 		var index = -1;
 		var codeUnit;
 		var result = "";
-		var firstCodeUnit = string.charCodeAt(0);
+		var firstCodeUnit = string.codePointAt(0);
 		while (++index < length) {
-			codeUnit = string.charCodeAt(index);
+			codeUnit = string.codePointAt(index);
 
 
 
@@ -641,7 +641,7 @@
 	const requestIdleCallback = typeof window !== "undefined" && ("requestIdleCallback" in window ? window.requestIdleCallback : window.requestAnimationFrame);
 
 	function CSSValueToString(obj) {
-		return obj.value + (obj.unit || "");
+		return obj.value + (obj.unit ?? "");
 	}
 
 	function isElement(node) {
@@ -659,7 +659,7 @@
 
 			yield node;
 
-			if (node.childNodes.length) {
+			if (node.childNodes.length > 0) {
 				node = node.firstChild;
 			} else if (node.nextSibling) {
 				if (limiter && node === limiter) {
@@ -792,13 +792,13 @@
 							// Adjust rowspan value
 							duplicatedColumn.rowSpan = column.rowSpan - previousRowDistance;
 							// Add the column to the row
-							node.appendChild(duplicatedColumn);
+							node.append(duplicatedColumn);
 						} else {
 							// Fill the gap with the initial columns (if exists)
 							const initialColumn = initialColumns[k++];
 							// The initial column can be undefined if the newly created table has less columns than the original table
 							if (initialColumn) {
-								node.appendChild(initialColumn);
+								node.append(initialColumn);
 							}
 						}
 					}
@@ -819,29 +819,29 @@
 			ancestor = ancestors[i];
 			parent = ancestor.cloneNode(false);
 		
-			parent.setAttribute("data-split-from", parent.getAttribute("data-ref"));
+			parent.dataset.splitFrom = parent.getAttribute("data-ref");
 			// ancestor.setAttribute("data-split-to", parent.getAttribute("data-ref"));
 
 			if (parent.hasAttribute("id")) {
 				let dataID = parent.getAttribute("id");
-				parent.setAttribute("data-id", dataID);
+				parent.dataset.id = dataID;
 				parent.removeAttribute("id");
 			}
 
 			// This is handled by css :not, but also tidied up here
-			if (parent.hasAttribute("data-break-before")) {
-				parent.removeAttribute("data-break-before");
+			if (Object.hasOwn(parent.dataset, "breakBefore")) {
+				delete parent.dataset.breakBefore;
 			}
 
-			if (parent.hasAttribute("data-previous-break-after")) {
-				parent.removeAttribute("data-previous-break-after");
+			if (Object.hasOwn(parent.dataset, "previousBreakAfter")) {
+				delete parent.dataset.previousBreakAfter;
 			}
 
-			if (added.length) {
-				let container = added[added.length-1];
-				container.appendChild(parent);
+			if (added.length > 0) {
+				let container = added.at(-1);
+				container.append(parent);
 			} else {
-				fragment.appendChild(parent);
+				fragment.append(parent);
 			}
 			added.push(parent);
 
@@ -911,9 +911,9 @@
 	*/
 
 	function needsBreakBefore(node) {
-		if( typeof node !== "undefined" &&
-				typeof node.dataset !== "undefined" &&
-				typeof node.dataset.breakBefore !== "undefined" &&
+		if( node !== undefined &&
+				node.dataset !== undefined &&
+				node.dataset.breakBefore !== undefined &&
 				(node.dataset.breakBefore === "always" ||
 				 node.dataset.breakBefore === "page" ||
 				 node.dataset.breakBefore === "left" ||
@@ -928,9 +928,9 @@
 	}
 
 	function needsPreviousBreakAfter(node) {
-		if( typeof node !== "undefined" &&
-				typeof node.dataset !== "undefined" &&
-				typeof node.dataset.previousBreakAfter !== "undefined" &&
+		if( node !== undefined &&
+				node.dataset !== undefined &&
+				node.dataset.previousBreakAfter !== undefined &&
 				(node.dataset.previousBreakAfter === "always" ||
 				 node.dataset.previousBreakAfter === "page" ||
 				 node.dataset.previousBreakAfter === "left" ||
@@ -945,21 +945,21 @@
 	}
 
 	function needsPageBreak(node, previousSignificantNode) {
-		if (typeof node === "undefined" || !previousSignificantNode || isIgnorable(node)) {
+		if (node === undefined || !previousSignificantNode || isIgnorable(node)) {
 			return false;
 		}
 		if (node.dataset && node.dataset.undisplayed) {
 			return false;
 		}
 		let previousSignificantNodePage = previousSignificantNode.dataset ? previousSignificantNode.dataset.page : undefined;
-		if (typeof previousSignificantNodePage === "undefined") {
+		if (previousSignificantNodePage === undefined) {
 			const nodeWithNamedPage = getNodeWithNamedPage(previousSignificantNode);
 			if (nodeWithNamedPage) {
 				previousSignificantNodePage = nodeWithNamedPage.dataset.page;
 			}
 		}
 		let currentNodePage = node.dataset ? node.dataset.page : undefined;
-		if (typeof currentNodePage === "undefined") {
+		if (currentNodePage === undefined) {
 			const nodeWithNamedPage = getNodeWithNamedPage(node, previousSignificantNode);
 			if (nodeWithNamedPage) {
 				currentNodePage = nodeWithNamedPage.dataset.page;
@@ -1024,7 +1024,7 @@
 	function isContainer(node) {
 		let container;
 
-		if (typeof node.tagName === "undefined") {
+		if (node.tagName === undefined) {
 			return true;
 		}
 
@@ -1096,16 +1096,16 @@
 	}
 
 	function findElement(node, doc, forceQuery) {
-		const ref = node.getAttribute("data-ref");
+		const ref = node.dataset.ref;
 		return findRef(ref, doc, forceQuery);
 	}
 
 	function findRef(ref, doc, forceQuery) {
 		if (!forceQuery && doc.indexOfRefs && doc.indexOfRefs[ref]) {
 			return doc.indexOfRefs[ref];
-		} else {
-			return doc.querySelector(`[data-ref='${ref}']`);
 		}
+			return doc.querySelector(`[data-ref='${ref}']`);
+		
 	}
 
 	function validNode(node) {
@@ -1153,7 +1153,7 @@
 		if (isElement(node)) {
 			return true;
 		} else if (isText(node) &&
-				node.textContent.trim().length) {
+				node.textContent.trim().length > 0) {
 			return true;
 		}
 		return false;
@@ -1305,8 +1305,8 @@
 
 	function filterTree(content, func, what) {
 		const treeWalker = document.createTreeWalker(
-			content || this.dom,
-			what || NodeFilter.SHOW_ALL,
+			content ?? this.dom,
+			what ?? NodeFilter.SHOW_ALL,
 			func ? { acceptNode: func } : null,
 			false
 		);
@@ -1429,9 +1429,9 @@
 				this.hooks.beforeRenderResult = new Hook();
 			}
 
-			this.settings = options || {};
+			this.settings = options ?? {};
 
-			this.maxChars = this.settings.maxChars || MAX_CHARS_PER_BREAK;
+			this.maxChars = this.settings.maxChars ?? MAX_CHARS_PER_BREAK;
 			this.forceRenderBreak = false;
 		}
 
@@ -1449,7 +1449,7 @@
 
 			let length = 0;
 
-			let prevBreakToken = breakToken || new BreakToken(start);
+			let prevBreakToken = breakToken ?? new BreakToken(start);
 
 			this.hooks && this.hooks.onPageLayout.trigger(wrapper, prevBreakToken, this);
 
@@ -1463,7 +1463,7 @@
 					this.hooks && this.hooks.layout.trigger(wrapper, this);
 
 					let imgs = wrapper.querySelectorAll("img");
-					if (imgs.length) {
+					if (imgs.length > 0) {
 						await this.waitForImages(imgs);
 					}
 
@@ -1488,7 +1488,7 @@
 					this.hooks && this.hooks.layout.trigger(wrapper, this);
 
 					let imgs = wrapper.querySelectorAll("img");
-					if (imgs.length) {
+					if (imgs.length > 0) {
 						await this.waitForImages(imgs);
 					}
 
@@ -1566,7 +1566,7 @@
 					this.hooks && this.hooks.layout.trigger(wrapper, this);
 
 					let imgs = wrapper.querySelectorAll("img");
-					if (imgs.length) {
+					if (imgs.length > 0) {
 						await this.waitForImages(imgs);
 					}
 
@@ -1602,7 +1602,7 @@
 			);
 			let breakHooks = this.hooks.onBreakToken.triggerSync(newBreakToken, undefined, node, this);
 			breakHooks.forEach((newToken) => {
-				if (typeof newToken != "undefined") {
+				if (newToken !== undefined) {
 					newBreakToken = newToken;
 				}
 			});
@@ -1648,39 +1648,37 @@
 				let parent = findElement(node.parentNode, dest);
 				// Rebuild chain
 				if (parent) {
-					parent.appendChild(clone);
+					parent.append(clone);
 				} else if (rebuild) {
 					let fragment = rebuildAncestors(node);
 					parent = findElement(node.parentNode, fragment);
 					if (!parent) {
-						dest.appendChild(clone);
+						dest.append(clone);
 					} else if (breakToken && isText(breakToken.node) && breakToken.offset > 0) {
 						clone.textContent = clone.textContent.substring(breakToken.offset);
-						parent.appendChild(clone);
+						parent.append(clone);
 					} else {
-						parent.appendChild(clone);
+						parent.append(clone);
 					}
 
-					dest.appendChild(fragment);
+					dest.append(fragment);
 				} else {
-					dest.appendChild(clone);
+					dest.append(clone);
 				}
 
 
 			} else {
-				dest.appendChild(clone);
+				dest.append(clone);
 			}
 
 			if (clone.dataset && clone.dataset.ref) {
-				if (!dest.indexOfRefs) {
-					dest.indexOfRefs = {};
-				}
+				dest.indexOfRefs ??= {};
 				dest.indexOfRefs[clone.dataset.ref] = clone;
 			}
 
 			let nodeHooks = this.hooks.renderNode.triggerSync(clone, node, this);
 			nodeHooks.forEach((newNode) => {
-				if (typeof newNode != "undefined") {
+				if (newNode !== undefined) {
 					clone = newNode;
 				}
 			});
@@ -1796,9 +1794,7 @@
 				} else {
 					renderedNode = findElement(container, rendered);
 
-					if (!renderedNode) {
-						renderedNode = findElement(prevValidNode(container), rendered);
-					}
+					renderedNode ??= findElement(prevValidNode(container), rendered);
 
 					parent = findElement(renderedNode, source);
 					index = indexOfTextNode(temp, parent);
@@ -1814,9 +1810,7 @@
 			} else {
 				renderedNode = findElement(container.parentNode, rendered);
 
-				if (!renderedNode) {
-					renderedNode = findElement(prevValidNode(container.parentNode), rendered);
-				}
+				renderedNode ??= findElement(prevValidNode(container.parentNode), rendered);
 
 				parent = findElement(renderedNode, source);
 				index = indexOfTextNode(container, parent);
@@ -1847,7 +1841,7 @@
 
 			let overflowHooks = this.hooks.onOverflow.triggerSync(overflow, rendered, bounds, this);
 			overflowHooks.forEach((newOverflow) => {
-				if (typeof newOverflow != "undefined") {
+				if (newOverflow !== undefined) {
 					overflow = newOverflow;
 				}
 			});
@@ -1857,7 +1851,7 @@
 				// breakToken is nullable
 				let breakHooks = this.hooks.onBreakToken.triggerSync(breakToken, overflow, rendered, this);
 				breakHooks.forEach((newToken) => {
-					if (typeof newToken != "undefined") {
+					if (newToken !== undefined) {
 						breakToken = newToken;
 					}
 				});
@@ -1959,7 +1953,7 @@
 							if (table && rowspan) {
 								let columnCount = 0;
 								for (const cell of Array.from(table.rows[0].cells)) {
-									columnCount += parseInt(cell.getAttribute("colspan") || "1");
+									columnCount += parseInt(cell.getAttribute("colspan") ?? "1");
 								}
 								if (tableRow.cells.length !== columnCount) {
 									let previousRow = tableRow.previousElementSibling;
@@ -1967,7 +1961,7 @@
 									while (previousRow !== null) {
 										previousRowColumnCount = 0;
 										for (const cell of Array.from(previousRow.cells)) {
-											previousRowColumnCount += parseInt(cell.getAttribute("colspan") || "1");
+											previousRowColumnCount += parseInt(cell.getAttribute("colspan") ?? "1");
 										}
 										if (previousRowColumnCount === columnCount) {
 											break;
@@ -1993,7 +1987,7 @@
 							break;
 						}
 
-						if (isText(node) && node.textContent.trim().length) {
+						if (isText(node) && node.textContent.trim().length > 0) {
 							range = document.createRange();
 							range.selectNode(node);
 							break;
@@ -2002,7 +1996,7 @@
 					}
 
 					if (!range && isText(node) &&
-						node.textContent.trim().length &&
+						node.textContent.trim().length > 0 &&
 						!breakInsideAvoidParentNode(node.parentNode)) {
 
 						let rects = getClientRects(node);
@@ -2165,7 +2159,7 @@
 		hyphenateAtBreak(startContainer, breakLetter) {
 			if (isText(startContainer)) {
 				let startText = startContainer.textContent;
-				let prevLetter = startText[startText.length - 1];
+				let prevLetter = startText.at(-1);
 
 				// Add a hyphen if previous character is a letter or soft hyphen
 				if (
@@ -2173,7 +2167,7 @@
 					(!breakLetter && /^\w|\u00AD$/.test(prevLetter))
 				) {
 					startContainer.parentNode.classList.add("pagedjs_hyphen");
-					startContainer.textContent += this.settings.hyphenGlyph || "\u2011";
+					startContainer.textContent += this.settings.hyphenGlyph ?? "\u2011";
 				}
 			}
 		}
@@ -2209,7 +2203,7 @@
 
 			this.hooks = hooks;
 
-			this.settings = options || {};
+			this.settings = options ?? {};
 
 			// this.element = this.create(this.pageTemplate);
 		}
@@ -2225,7 +2219,7 @@
 				index = Array.prototype.indexOf.call(this.pagesArea.children, after.nextElementSibling);
 				page = this.pagesArea.children[index];
 			} else {
-				this.pagesArea.appendChild(clone);
+				this.pagesArea.append(clone);
 				page = this.pagesArea.lastChild;
 			}
 
@@ -2255,7 +2249,7 @@
 		createWrapper() {
 			let wrapper = document.createElement("div");
 
-			this.area.appendChild(wrapper);
+			this.area.append(wrapper);
 
 			this.wrapper = wrapper;
 
@@ -2528,13 +2522,13 @@
 			let node = treeWalker.nextNode();
 			while(node) {
 
-				if (!node.hasAttribute("data-ref")) {
+				if (!Object.hasOwn(node.dataset, "ref")) {
 					let uuid = UUID();
-					node.setAttribute("data-ref", uuid);
+					node.dataset.ref = uuid;
 				}
 
 				if (node.id) {
-					node.setAttribute("data-id", node.id);
+					node.dataset.id = node.id;
 				}
 
 				// node.setAttribute("data-children", node.childNodes.length);
@@ -2575,7 +2569,7 @@
 		enqueue() {
 			var deferred, promise;
 			var queued;
-			var task = [].shift.call(arguments);
+			var task = Array.prototype.shift.call(arguments);
 			var args = arguments;
 
 			// Handle single args without context
@@ -2610,7 +2604,7 @@
 			this._q.push(queued);
 
 			// Wait to start queue flush
-			if (this.paused == false && !this.running) {
+			if (!this.paused && !this.running) {
 				this.run();
 			}
 
@@ -2624,7 +2618,7 @@
 		dequeue(){
 			var inwait, task, result;
 
-			if(this._q.length && !this.paused) {
+			if(this._q.length > 0 && !this.paused) {
 				inwait = this._q.shift();
 				task = inwait.task;
 				if(task){
@@ -2639,11 +2633,11 @@
 						}.bind(this), function() {
 							inwait.deferred.reject.apply(this.context, arguments);
 						}.bind(this));
-					} else {
+					}
 						// Task resolves immediately
 						inwait.deferred.resolve.apply(this.context, result);
 						return inwait.promise;
-					}
+					
 
 
 
@@ -2662,7 +2656,7 @@
 
 		// Run All Immediately
 		dump(){
-			while(this._q.length) {
+			while(this._q.length > 0) {
 				this.dequeue();
 			}
 		}
@@ -2680,7 +2674,7 @@
 
 			this.tick.call(window, () => {
 
-				if(this._q.length) {
+				if(this._q.length > 0) {
 
 					this.dequeue()
 						.then(function(){
@@ -2695,7 +2689,7 @@
 			});
 
 			// Unpause
-			if(this.paused == true) {
+			if(this.paused) {
 				this.paused = false;
 			}
 
@@ -2712,7 +2706,7 @@
 				return this.running;
 			}
 
-			if(this._q.length) {
+			if(this._q.length > 0) {
 				this.running = this.dequeue()
 					.then(function(){
 						this.running = undefined;
@@ -2841,7 +2835,7 @@
 		constructor(content, renderTo, options) {
 			// this.preview = preview;
 
-			this.settings = options || {};
+			this.settings = options ?? {};
 
 			this.hooks = {};
 			this.hooks.beforeParsed = new Hook(this);
@@ -2882,9 +2876,9 @@
 			this.pagesArea.classList.add("pagedjs_pages");
 
 			if (renderTo) {
-				renderTo.appendChild(this.pagesArea);
+				renderTo.append(this.pagesArea);
 			} else {
-				document.querySelector("body").appendChild(this.pagesArea);
+				document.querySelector("body").append(this.pagesArea);
 			}
 
 			this.pageTemplate = document.createElement("template");
@@ -2990,7 +2984,7 @@
 			return new Promise(resolve => {
 				requestIdleCallback(async () => {
 					if (this.stopped) {
-						return resolve({ done: true, canceled: true });
+						 resolve({ done: true, canceled: true });; return;
 					}
 					let result = await renderer.next();
 					if (this.stopped) {
@@ -3009,9 +3003,9 @@
 			let result = await renderer.next();
 			if (this.stopped) {
 				return { done: true, canceled: true };
-			} else {
-				return result;
 			}
+				return result;
+			
 		}
 
 		async handleBreaks(node, force) {
@@ -3028,14 +3022,14 @@
 			}
 
 			if (node &&
-					typeof node.dataset !== "undefined" &&
-					typeof node.dataset.previousBreakAfter !== "undefined") {
+					node.dataset !== undefined &&
+					node.dataset.previousBreakAfter !== undefined) {
 				previousBreakAfter = node.dataset.previousBreakAfter;
 			}
 
 			if (node &&
-					typeof node.dataset !== "undefined" &&
-					typeof node.dataset.breakBefore !== "undefined") {
+					node.dataset !== undefined &&
+					node.dataset.breakBefore !== undefined) {
 				breakBefore = node.dataset.breakBefore;
 			}
 
@@ -3070,7 +3064,7 @@
 		}
 
 		async *layout(content, startAt) {
-			let breakToken = startAt || false;
+			let breakToken = startAt ?? false;
 			let tokens = [];
 
 			while (breakToken !== undefined && (true)) {
@@ -3096,9 +3090,9 @@
 						let err = new OverflowContentError("Layout repeated", [breakToken.node]);
 						console.error("Layout repeated at: ", breakToken.node);
 						return err;
-					} else {
-						tokens.push(newToken);
 					}
+						tokens.push(newToken);
+					
 				}
 
 				await this.hooks.afterPageLayout.trigger(page.element, page, breakToken, this);
@@ -3151,7 +3145,7 @@
 		}
 
 		addPage(blank) {
-			let lastPage = this.pages[this.pages.length - 1];
+			let lastPage = this.pages.at(-1);
 			// Create a new page from the template
 			let page = new Page(this.pagesArea, this.pageTemplate, blank, this.hooks, this.settings);
 
@@ -3183,7 +3177,7 @@
 					// Remove pages
 					this.removePages(index);
 
-					if (this.rendered === true) {
+					if (this.rendered) {
 						this.rendered = false;
 
 						this.q.enqueue(async () => {
@@ -3252,7 +3246,7 @@
 		*/
 
 		async clonePage(originalPage) {
-			let lastPage = this.pages[this.pages.length - 1];
+			let lastPage = this.pages.at(-1);
 
 			let page = new Page(this.pagesArea, this.pageTemplate, false, this.hooks);
 
@@ -3283,15 +3277,15 @@
 				if (fontFace.status !== "loaded") {
 					let fontLoaded = fontFace.load().then((r) => {
 						return fontFace.family;
-					}, (r) => {
+					}, (error) => {
 						console.warn("Failed to preload font-family:", fontFace.family);
 						return fontFace.family;
 					});
 					fontPromises.push(fontLoaded);
 				}
 			});
-			return Promise.all(fontPromises).catch((err) => {
-				console.warn(err);
+			return Promise.all(fontPromises).catch((error) => {
+				console.warn(error);
 			});
 		}
 
@@ -3896,7 +3890,7 @@
 
 	    Object.defineProperty(error, 'stack', {
 	        get: function() {
-	            return (errorStack.stack || '').replace(/^(.+\n){1,3}/, name + ': ' + message + '\n');
+	            return (errorStack.stack ?? '').replace(/^(.+\n){1,3}/, name + ': ' + message + '\n');
 	        }
 	    });
 
@@ -3930,7 +3924,7 @@
 	    var cutLeft = 0;
 
 	    // column correction according to replaced tab before column
-	    column += (TAB_REPLACEMENT.length - 1) * (lines[line - 1].substr(0, column - 1).match(/\t/g) || []).length;
+	    column += (TAB_REPLACEMENT.length - 1) * (lines[line - 1].substr(0, column - 1).match(/\t/g) ?? []).length;
 
 	    if (column > MAX_LINE_LENGTH) {
 	        cutLeft = column - OFFSET_CORRECTION + 3;
@@ -3939,7 +3933,7 @@
 
 	    for (var i = startLine; i <= endLine; i++) {
 	        if (i >= 0 && i < lines.length) {
-	            lines[i] = lines[i].replace(/\t/g, TAB_REPLACEMENT);
+	            lines[i] = lines[i].replaceAll(/\t/g, TAB_REPLACEMENT);
 	            lines[i] =
 	                (cutLeft > 0 && lines[i].length > cutLeft ? '\u2026' : '') +
 	                lines[i].substr(cutLeft, MAX_LINE_LENGTH - 2) +
@@ -4285,7 +4279,7 @@
 	var isValidEscape$1 = charCodeDef.isValidEscape;
 
 	function getCharCode(source, offset) {
-	    return offset < source.length ? source.charCodeAt(offset) : 0;
+	    return offset < source.length ? source.codePointAt(offset) : 0;
 	}
 
 	function getNewlineLength$1(source, offset, code) {
@@ -4297,7 +4291,7 @@
 	}
 
 	function cmpChar$5(testStr, offset, referenceCode) {
-	    var code = testStr.charCodeAt(offset);
+	    var code = testStr.codePointAt(offset);
 
 	    // code.toLowerCase() for A..Z
 	    if (isUppercaseLetter(code)) {
@@ -4317,8 +4311,8 @@
 	    }
 
 	    for (var i = start; i < end; i++) {
-	        var testCode = testStr.charCodeAt(i);
-	        var referenceCode = referenceStr.charCodeAt(i - start);
+	        var testCode = testStr.codePointAt(i);
+	        var referenceCode = referenceStr.codePointAt(i - start);
 
 	        // testCode.toLowerCase() for A..Z
 	        if (isUppercaseLetter(testCode)) {
@@ -4335,7 +4329,7 @@
 
 	function findWhiteSpaceStart$1(source, offset) {
 	    for (; offset >= 0; offset--) {
-	        if (!isWhiteSpace$1(source.charCodeAt(offset))) {
+	        if (!isWhiteSpace$1(source.codePointAt(offset))) {
 	            break;
 	        }
 	    }
@@ -4345,7 +4339,7 @@
 
 	function findWhiteSpaceEnd$1(source, offset) {
 	    for (; offset < source.length; offset++) {
-	        if (!isWhiteSpace$1(source.charCodeAt(offset))) {
+	        if (!isWhiteSpace$1(source.codePointAt(offset))) {
 	            break;
 	        }
 	    }
@@ -4355,7 +4349,7 @@
 
 	function findDecimalNumberEnd(source, offset) {
 	    for (; offset < source.length; offset++) {
-	        if (!isDigit$4(source.charCodeAt(offset))) {
+	        if (!isDigit$4(source.codePointAt(offset))) {
 	            break;
 	        }
 	    }
@@ -4397,7 +4391,7 @@
 	    // Let result initially be an empty string.
 	    // Repeatedly consume the next input code point from the stream:
 	    for (; offset < source.length; offset++) {
-	        var code = source.charCodeAt(offset);
+	        var code = source.codePointAt(offset);
 
 	        // name code point
 	        if (isName$1(code)) {
@@ -4422,25 +4416,25 @@
 
 	// §4.3.12. Consume a number
 	function consumeNumber$5(source, offset) {
-	    var code = source.charCodeAt(offset);
+	    var code = source.codePointAt(offset);
 
 	    // 2. If the next input code point is U+002B PLUS SIGN (+) or U+002D HYPHEN-MINUS (-),
 	    // consume it and append it to repr.
 	    if (code === 0x002B || code === 0x002D) {
-	        code = source.charCodeAt(offset += 1);
+	        code = source.codePointAt(offset += 1);
 	    }
 
 	    // 3. While the next input code point is a digit, consume it and append it to repr.
 	    if (isDigit$4(code)) {
 	        offset = findDecimalNumberEnd(source, offset + 1);
-	        code = source.charCodeAt(offset);
+	        code = source.codePointAt(offset);
 	    }
 
 	    // 4. If the next 2 input code points are U+002E FULL STOP (.) followed by a digit, then:
-	    if (code === 0x002E && isDigit$4(source.charCodeAt(offset + 1))) {
+	    if (code === 0x002E && isDigit$4(source.codePointAt(offset + 1))) {
 	        // 4.1 Consume them.
 	        // 4.2 Append them to repr.
-	        code = source.charCodeAt(offset += 2);
+	        code = source.codePointAt(offset += 2);
 
 	        // 4.3 Set type to "number".
 	        // TODO
@@ -4454,12 +4448,12 @@
 	    // or U+0065 LATIN SMALL LETTER E (e), ... , followed by a digit, then:
 	    if (cmpChar$5(source, offset, 101 /* e */)) {
 	        var sign = 0;
-	        code = source.charCodeAt(offset + 1);
+	        code = source.codePointAt(offset + 1);
 
 	        // ... optionally followed by U+002D HYPHEN-MINUS (-) or U+002B PLUS SIGN (+) ...
 	        if (code === 0x002D || code === 0x002B) {
 	            sign = 1;
-	            code = source.charCodeAt(offset + 2);
+	            code = source.codePointAt(offset + 2);
 	        }
 
 	        // ... followed by a digit
@@ -4484,7 +4478,7 @@
 	function consumeBadUrlRemnants$1(source, offset) {
 	    // Repeatedly consume the next input code point from the stream:
 	    for (; offset < source.length; offset++) {
-	        var code = source.charCodeAt(offset);
+	        var code = source.codePointAt(offset);
 
 	        // U+0029 RIGHT PARENTHESIS ())
 	        // EOF
@@ -4642,13 +4636,13 @@
 	        if (offset) {
 	            return (
 	                this.lookupType(offset) === TYPE$G.Delim &&
-	                this.source.charCodeAt(this.lookupOffset(offset)) === code
+	                this.source.codePointAt(this.lookupOffset(offset)) === code
 	            );
 	        }
 
 	        return (
 	            this.tokenType === TYPE$G.Delim &&
-	            this.source.charCodeAt(this.tokenStart) === code
+	            this.source.codePointAt(this.tokenStart) === code
 	        );
 	    },
 
@@ -4877,7 +4871,7 @@
 	function locateMismatch(matchResult, node) {
 	    const tokens = matchResult.tokens;
 	    const longestMatch = matchResult.longestMatch;
-	    const mismatchNode = longestMatch < tokens.length ? tokens[longestMatch].node || null : null;
+	    const mismatchNode = longestMatch < tokens.length ? tokens[longestMatch].node ?? null : null;
 	    const badNode = mismatchNode !== node ? mismatchNode : null;
 	    let mismatchOffset = 0;
 	    let mismatchLength = 0;
@@ -4906,12 +4900,12 @@
 	    }
 
 	    if (longestMatch === tokens.length || entries > 1) { // last
-	        start = fromLoc(badNode || node, 'end') || buildLoc(defaultLoc, css);
+	        start = fromLoc(badNode ?? node, 'end') ?? buildLoc(defaultLoc, css);
 	        end = buildLoc(start);
 	    } else {
-	        start = fromLoc(badNode, 'start') ||
-	            buildLoc(fromLoc(node, 'start') || defaultLoc, css.slice(0, mismatchOffset));
-	        end = fromLoc(badNode, 'end') ||
+	        start = fromLoc(badNode, 'start') ??
+	            buildLoc(fromLoc(node, 'start') ?? defaultLoc, css.slice(0, mismatchOffset));
+	        end = fromLoc(badNode, 'end') ??
 	            buildLoc(start, css.substr(mismatchOffset, mismatchLength));
 	    }
 
@@ -4985,7 +4979,7 @@
 
 	    Object.assign(error, start);
 	    error.loc = {
-	        source: (node && node.loc && node.loc.source) || '<unknown>',
+	        source: (node && node.loc && node.loc.source) ?? '<unknown>',
 	        start,
 	        end
 	    };
@@ -5004,21 +4998,21 @@
 	var HYPHENMINUS$5 = 45; // '-'.charCodeAt()
 
 	function isCustomProperty$1(str, offset) {
-	    offset = offset || 0;
+	    offset = offset ?? 0;
 
 	    return str.length - offset >= 2 &&
-	           str.charCodeAt(offset) === HYPHENMINUS$5 &&
-	           str.charCodeAt(offset + 1) === HYPHENMINUS$5;
+	           str.codePointAt(offset) === HYPHENMINUS$5 &&
+	           str.codePointAt(offset + 1) === HYPHENMINUS$5;
 	}
 
 	function getVendorPrefix(str, offset) {
-	    offset = offset || 0;
+	    offset = offset ?? 0;
 
 	    // verdor prefix should be at least 3 chars length
 	    if (str.length - offset >= 3) {
 	        // vendor prefix starts with hyper minus following non-hyper minus
-	        if (str.charCodeAt(offset) === HYPHENMINUS$5 &&
-	            str.charCodeAt(offset + 1) !== HYPHENMINUS$5) {
+	        if (str.codePointAt(offset) === HYPHENMINUS$5 &&
+	            str.codePointAt(offset + 1) !== HYPHENMINUS$5) {
 	            // vendor prefix should contain a hyper minus at the ending
 	            var secondDashIndex = str.indexOf('-', offset + 2);
 
@@ -5046,7 +5040,7 @@
 	    var vendor = !custom ? getVendorPrefix(name, 0) : '';
 
 	    return keywords$1[keyword] = Object.freeze({
-	        basename: name.substr(vendor.length),
+	        basename: name.slice(vendor.length),
 	        name: name,
 	        vendor: vendor,
 	        prefix: vendor,
@@ -5087,8 +5081,8 @@
 	    var prefix = name.substr(0, hack.length + vendor.length);
 
 	    return properties$1[property] = Object.freeze({
-	        basename: name.substr(prefix.length),
-	        name: name.substr(hack.length),
+	        basename: name.slice(prefix.length),
+	        name: name.slice(hack.length),
 	        hack: hack,
 	        vendor: vendor,
 	        prefix: prefix,
@@ -5143,7 +5137,7 @@
 
 	function tokenize$3(source, stream) {
 	    function getCharCode(offset) {
-	        return offset < sourceLength ? source.charCodeAt(offset) : 0;
+	        return offset < sourceLength ? source.codePointAt(offset) : 0;
 	    }
 
 	    // § 4.3.3. Consume a numeric token
@@ -5218,16 +5212,14 @@
 	        // This algorithm may be called with an ending code point, which denotes the code point
 	        // that ends the string. If an ending code point is not specified,
 	        // the current input code point is used.
-	        if (!endingCodePoint) {
-	            endingCodePoint = getCharCode(offset++);
-	        }
+	        endingCodePoint ??= getCharCode(offset++);
 
 	        // Initially create a <string-token> with its value set to the empty string.
 	        type = TYPE$F.String;
 
 	        // Repeatedly consume the next input code point from the stream:
 	        for (; offset < source.length; offset++) {
-	            var code = source.charCodeAt(offset);
+	            var code = source.codePointAt(offset);
 
 	            switch (charCodeCategory(code)) {
 	                // ending code point
@@ -5292,7 +5284,7 @@
 
 	        // Repeatedly consume the next input code point from the stream:
 	        for (; offset < source.length; offset++) {
-	            var code = source.charCodeAt(offset);
+	            var code = source.codePointAt(offset);
 
 	            switch (charCodeCategory(code)) {
 	                // U+0029 RIGHT PARENTHESIS ())
@@ -5362,12 +5354,10 @@
 	        }
 	    }
 
-	    if (!stream) {
-	        stream = new TokenStream$3();
-	    }
+	    stream ??= new TokenStream$3();
 
 	    // ensure source is a string
-	    source = String(source || '');
+	    source = String(source ?? '');
 
 	    var sourceLength = source.length;
 	    var offsetAndType = adoptBuffer$1(stream.offsetAndType, sourceLength + 1); // +1 because of eof-token
@@ -5382,7 +5372,7 @@
 	    // https://drafts.csswg.org/css-syntax-3/#consume-token
 	    // § 4.3.1. Consume a token
 	    while (offset < sourceLength) {
-	        var code = source.charCodeAt(offset);
+	        var code = source.codePointAt(offset);
 	        var type = 0;
 
 	        balance[tokenCount] = sourceLength;
@@ -5723,7 +5713,7 @@
 	var ALLOW_SIGN$1 = false;
 
 	function isDelim$1(token, code) {
-	    return token !== null && token.type === DELIM$6 && token.value.charCodeAt(0) === code;
+	    return token !== null && token.type === DELIM$6 && token.value.codePointAt(0) === code;
 	}
 
 	function skipSC(token, offset, getNextToken) {
@@ -5739,7 +5729,7 @@
 	        return 0;
 	    }
 
-	    var code = token.value.charCodeAt(valueOffset);
+	    var code = token.value.codePointAt(valueOffset);
 
 	    if (code === PLUSSIGN$8 || code === HYPHENMINUS$4) {
 	        if (disallowSign) {
@@ -5750,7 +5740,7 @@
 	    }
 
 	    for (; valueOffset < token.value.length; valueOffset++) {
-	        if (!isDigit$3(token.value.charCodeAt(valueOffset))) {
+	        if (!isDigit$3(token.value.codePointAt(valueOffset))) {
 	            // Integer is expected
 	            return 0;
 	        }
@@ -5786,7 +5776,7 @@
 	    }
 
 	    if (!sign) {
-	        var code = token.value.charCodeAt(0);
+	        var code = token.value.codePointAt(0);
 	        if (code !== PLUSSIGN$8 && code !== HYPHENMINUS$4) {
 	            // Number sign is expected
 	            return 0;
@@ -5815,7 +5805,7 @@
 	    // -n ['+' | '-'] <signless-integer>
 	    // -n- <signless-integer>
 	    // <dashndashdigit-ident>
-	    else if (token.type === IDENT$i && token.value.charCodeAt(0) === HYPHENMINUS$4) {
+	    else if (token.type === IDENT$i && token.value.codePointAt(0) === HYPHENMINUS$4) {
 	        // expect 1st char is N
 	        if (!cmpChar$4(token.value, 1, N$4)) {
 	            return 0;
@@ -5830,7 +5820,7 @@
 
 	            // -n- <signless-integer>
 	            case 3:
-	                if (token.value.charCodeAt(2) !== HYPHENMINUS$4) {
+	                if (token.value.codePointAt(2) !== HYPHENMINUS$4) {
 	                    return 0;
 	                }
 
@@ -5841,7 +5831,7 @@
 
 	            // <dashndashdigit-ident>
 	            default:
-	                if (token.value.charCodeAt(2) !== HYPHENMINUS$4) {
+	                if (token.value.codePointAt(2) !== HYPHENMINUS$4) {
 	                    return 0;
 	                }
 
@@ -5873,7 +5863,7 @@
 
 	            // '+'? n- <signless-integer>
 	            case 2:
-	                if (token.value.charCodeAt(1) !== HYPHENMINUS$4) {
+	                if (token.value.codePointAt(1) !== HYPHENMINUS$4) {
 	                    return 0;
 	                }
 
@@ -5884,7 +5874,7 @@
 
 	            // '+'? <ndashdigit-ident>
 	            default:
-	                if (token.value.charCodeAt(1) !== HYPHENMINUS$4) {
+	                if (token.value.codePointAt(1) !== HYPHENMINUS$4) {
 	                    return 0;
 	                }
 
@@ -5898,11 +5888,11 @@
 	    // <n-dimension> <signed-integer>
 	    // <n-dimension> ['+' | '-'] <signless-integer>
 	    else if (token.type === DIMENSION$7) {
-	        var code = token.value.charCodeAt(0);
+	        var code = token.value.codePointAt(0);
 	        var sign = code === PLUSSIGN$8 || code === HYPHENMINUS$4 ? 1 : 0;
 
 	        for (var i = sign; i < token.value.length; i++) {
-	            if (!isDigit$3(token.value.charCodeAt(i))) {
+	            if (!isDigit$3(token.value.codePointAt(i))) {
 	                break;
 	            }
 	        }
@@ -5921,7 +5911,7 @@
 	        // <n-dimension> ['+' | '-'] <signless-integer>
 	        if (i + 1 === token.value.length) {
 	            return consumeB$1(getNextToken(++offset), offset, getNextToken);
-	        } else {
+	        }
 	            if (token.value.charCodeAt(i + 1) !== HYPHENMINUS$4) {
 	                return 0;
 	            }
@@ -5937,7 +5927,7 @@
 	            else {
 	                return checkInteger$1(token, i + 2, DISALLOW_SIGN$1, offset);
 	            }
-	        }
+	        
 	    }
 
 	    return 0;
@@ -5957,16 +5947,16 @@
 	var U$2 = 0x0075;            // U+0075 LATIN SMALL LETTER U (u)
 
 	function isDelim(token, code) {
-	    return token !== null && token.type === DELIM$5 && token.value.charCodeAt(0) === code;
+	    return token !== null && token.type === DELIM$5 && token.value.codePointAt(0) === code;
 	}
 
 	function startsWith$1(token, code) {
-	    return token.value.charCodeAt(0) === code;
+	    return token.value.codePointAt(0) === code;
 	}
 
 	function hexSequence(token, offset, allowDash) {
 	    for (var pos = offset, hexlen = 0; pos < token.value.length; pos++) {
-	        var code = token.value.charCodeAt(pos);
+	        var code = token.value.codePointAt(pos);
 
 	        if (code === HYPHENMINUS$3 && allowDash && hexlen !== 0) {
 	            if (hexSequence(token, offset + hexlen + 1, false) > 0) {
@@ -6182,7 +6172,7 @@
 
 	// safe char code getter
 	function charCode(str, index) {
-	    return index < str.length ? str.charCodeAt(index) : 0;
+	    return index < str.length ? str.codePointAt(index) : 0;
 	}
 
 	function eqStr(actual, expected) {
@@ -6206,8 +6196,8 @@
 	    }
 
 	    return (
-	        str.charCodeAt(offset) === 0x005C &&  // U+005C REVERSE SOLIDUS (\)
-	        isDigit$2(str.charCodeAt(offset + 1))
+	        str.codePointAt(offset) === 0x005C &&  // U+005C REVERSE SOLIDUS (\)
+	        isDigit$2(str.codePointAt(offset + 1))
 	    );
 	}
 
@@ -6363,7 +6353,7 @@
 	    }
 
 	    for (var i = 1; i < length; i++) {
-	        if (!isHexDigit$1(token.value.charCodeAt(i))) {
+	        if (!isHexDigit$1(token.value.codePointAt(i))) {
 	            return 0;
 	        }
 	    }
@@ -6511,7 +6501,7 @@
 	            // check for IE postfix hack, i.e. 123px\0 or 123px\9
 	            var reverseSolidusOffset = token.value.indexOf('\\', numberEnd);
 	            var unit = reverseSolidusOffset === -1 || !isPostfixIeHack(token.value, reverseSolidusOffset)
-	                ? token.value.substr(numberEnd)
+	                ? token.value.slice(numberEnd)
 	                : token.value.substring(numberEnd, reverseSolidusOffset);
 
 	            if (type.hasOwnProperty(unit.toLowerCase()) === false) {
@@ -6606,12 +6596,12 @@
 	    }
 
 	    // The first digit of an integer may be immediately preceded by `-` or `+` to indicate the integer’s sign.
-	    var i = token.value.charCodeAt(0) === 0x002B ||       // U+002B PLUS SIGN (+)
-	            token.value.charCodeAt(0) === 0x002D ? 1 : 0; // U+002D HYPHEN-MINUS (-)
+	    var i = token.value.codePointAt(0) === 0x002B ||       // U+002B PLUS SIGN (+)
+	            token.value.codePointAt(0) === 0x002D ? 1 : 0; // U+002D HYPHEN-MINUS (-)
 
 	    // When written literally, an integer is one or more decimal digits 0 through 9 ...
 	    for (; i < token.value.length; i++) {
-	        if (!isDigit$2(token.value.charCodeAt(i))) {
+	        if (!isDigit$2(token.value.codePointAt(i))) {
 	            return 0;
 	        }
 	    }
@@ -6698,7 +6688,7 @@
 	    error.rawMessage = message;
 	    error.message = error.rawMessage + '\n' +
 	        '  ' + error.input + '\n' +
-	        '--' + new Array((error.offset || error.input.length) + 1).join('-') + '^';
+	        '--' + new Array((error.offset ?? error.input.length) + 1).join('-') + '^';
 
 	    return error;
 	};
@@ -6718,20 +6708,20 @@
 
 	Tokenizer$1.prototype = {
 	    charCodeAt: function(pos) {
-	        return pos < this.str.length ? this.str.charCodeAt(pos) : 0;
+	        return pos < this.str.length ? this.str.codePointAt(pos) : 0;
 	    },
 	    charCode: function() {
-	        return this.charCodeAt(this.pos);
+	        return this.codePointAt(this.pos);
 	    },
 	    nextCharCode: function() {
-	        return this.charCodeAt(this.pos + 1);
+	        return this.codePointAt(this.pos + 1);
 	    },
 	    nextNonWsCode: function(pos) {
-	        return this.charCodeAt(this.findWsEnd(pos));
+	        return this.codePointAt(this.findWsEnd(pos));
 	    },
 	    findWsEnd: function(pos) {
 	        for (; pos < this.str.length; pos++) {
-	            var code = this.str.charCodeAt(pos);
+	            var code = this.str.codePointAt(pos);
 	            if (code !== R$2 && code !== N$3 && code !== F$2 && code !== SPACE$2 && code !== TAB$1) {
 	                break;
 	            }
@@ -6744,7 +6734,7 @@
 	    },
 	    eat: function(code) {
 	        if (this.charCode() !== code) {
-	            this.error('Expect `' + String.fromCharCode(code) + '`');
+	            this.error('Expect `' + String.fromCodePoint(code) + '`');
 	        }
 
 	        this.pos++;
@@ -6786,7 +6776,7 @@
 	var RIGHTCURLYBRACKET$2 = 125; // }
 	var INFINITY = 8734;         // ∞
 	var NAME_CHAR = createCharMap(function(ch) {
-	    return /[a-zA-Z0-9\-]/.test(ch);
+	    return /[a-zA-Z0-9-]/.test(ch);
 	});
 	var COMBINATOR_PRECEDENCE = {
 	    ' ': 1,
@@ -6798,7 +6788,7 @@
 	function createCharMap(fn) {
 	    var array = typeof Uint32Array === 'function' ? new Uint32Array(128) : new Array(128);
 	    for (var i = 0; i < 128; i++) {
-	        array[i] = fn(String.fromCharCode(i)) ? 1 : 0;
+	        array[i] = fn(String.fromCodePoint(i)) ? 1 : 0;
 	    }
 	    return array;
 	}
@@ -6813,7 +6803,7 @@
 	    var end = tokenizer.pos;
 
 	    for (; end < tokenizer.str.length; end++) {
-	        var code = tokenizer.str.charCodeAt(end);
+	        var code = tokenizer.str.codePointAt(end);
 	        if (code >= 128 || NAME_CHAR[code] === 0) {
 	            break;
 	        }
@@ -6830,7 +6820,7 @@
 	    var end = tokenizer.pos;
 
 	    for (; end < tokenizer.str.length; end++) {
-	        var code = tokenizer.str.charCodeAt(end);
+	        var code = tokenizer.str.codePointAt(end);
 	        if (code < 48 || code > 57) {
 	            break;
 	        }
@@ -7059,7 +7049,7 @@
 	        name += '()';
 	    }
 
-	    if (tokenizer.charCodeAt(tokenizer.findWsEnd(tokenizer.pos)) === LEFTSQUAREBRACKET$4) {
+	    if (tokenizer.codePointAt(tokenizer.findWsEnd(tokenizer.pos)) === LEFTSQUAREBRACKET$4) {
 	        scanSpaces(tokenizer);
 	        opts = readTypeRange(tokenizer);
 	    }
@@ -7104,7 +7094,7 @@
 	        };
 	    }
 
-	    combinators = Object.keys(combinators).sort(function(a, b) {
+	    combinators = Object.keys(combinators).toSorted(function(a, b) {
 	        return COMBINATOR_PRECEDENCE[a] - COMBINATOR_PRECEDENCE[b];
 	    });
 
@@ -7133,7 +7123,7 @@
 	            }
 	        }
 
-	        if (subgroupStart !== -1 && combinators.length) {
+	        if (subgroupStart !== -1 && combinators.length > 0) {
 	            terms.splice(
 	                subgroupStart,
 	                i - subgroupStart,
@@ -7185,7 +7175,7 @@
 	    return {
 	        type: 'Group',
 	        terms: terms,
-	        combinator: regroupTerms(terms, combinators) || ' ',
+	        combinator: regroupTerms(terms, combinators) ?? ' ',
 	        disallowEmpty: false,
 	        explicit: false
 	    };
@@ -7489,8 +7479,8 @@
 	function isFunctionType(name) {
 	    return (
 	        name.length > 2 &&
-	        name.charCodeAt(name.length - 2) === LEFTPARENTHESIS$6 &&
-	        name.charCodeAt(name.length - 1) === RIGHTPARENTHESIS$6
+	        name.codePointAt(name.length - 2) === LEFTPARENTHESIS$6 &&
+	        name.codePointAt(name.length - 1) === RIGHTPARENTHESIS$6
 	    );
 	}
 
@@ -7565,7 +7555,7 @@
 
 	                    if (map !== null) {
 	                        var key = (isFunctionType(term.name) ? term.name.slice(0, -1) : term.name).toLowerCase();
-	                        if (key in map === false) {
+	                        if (!(key in map)) {
 	                            map[key] = term;
 	                            continue;
 	                        }
@@ -7746,7 +7736,7 @@
 	        }
 	    } else {
 	        // create a match node chain for [min .. max] interval with optional matches
-	        for (var i = node.min || 1; i <= node.max; i++) {
+	        for (var i = node.min ?? 1; i <= node.max; i++) {
 	            if (node.comma && result !== MATCH$1) {
 	                result = createCondition(
 	                    { type: 'Comma', syntax: node },
@@ -7867,7 +7857,7 @@
 	            // otherwise use it as is
 	            return {
 	                type: node.type,
-	                value: node.value.substr(1, node.value.length - 2).replace(/\\'/g, '\''),
+	                value: node.value.substr(1, node.value.length - 2).replaceAll(/\\'/g, '\''),
 	                syntax: node
 	            };
 
@@ -7901,7 +7891,7 @@
 	        return {
 	            type: 'MatchGraph',
 	            match: buildMatchGraph$1(syntaxTree),
-	            syntax: ref || null,
+	            syntax: ref ?? null,
 	            source: syntaxTree
 	        };
 	    }
@@ -7947,8 +7937,8 @@
 	    }
 
 	    for (var i = 0; i < testStr.length; i++) {
-	        var testCode = testStr.charCodeAt(i);
-	        var referenceCode = referenceStr.charCodeAt(i);
+	        var testCode = testStr.codePointAt(i);
+	        var referenceCode = referenceStr.codePointAt(i);
 
 	        // testCode.toLowerCase() for U+0041 LATIN CAPITAL LETTER A (A) .. U+005A LATIN CAPITAL LETTER Z (Z).
 	        if (testCode >= 0x0041 && testCode <= 0x005A) {
@@ -8058,7 +8048,7 @@
 	    function openSyntax() {
 	        syntaxStack = {
 	            syntax: state.syntax,
-	            opts: state.syntax.opts || (syntaxStack !== null && syntaxStack.opts) || null,
+	            opts: (state.syntax.opts ?? (syntaxStack !== null && syntaxStack.opts)) ?? null,
 	            prev: syntaxStack
 	        };
 
@@ -8457,7 +8447,7 @@
 	}
 
 	function matchAsList(tokens, matchGraph, syntaxes) {
-	    var matchResult = internalMatch(tokens, matchGraph, syntaxes || {});
+	    var matchResult = internalMatch(tokens, matchGraph, syntaxes ?? {});
 
 	    if (matchResult.match !== null) {
 	        var item = reverseList(matchResult.match).prev;
@@ -8493,7 +8483,7 @@
 	}
 
 	function matchAsTree$1(tokens, matchGraph, syntaxes) {
-	    var matchResult = internalMatch(tokens, matchGraph, syntaxes || {});
+	    var matchResult = internalMatch(tokens, matchGraph, syntaxes ?? {});
 
 	    if (matchResult.match === null) {
 	        return matchResult;
@@ -8501,7 +8491,7 @@
 
 	    var item = matchResult.match;
 	    var host = matchResult.match = {
-	        syntax: matchGraph.syntax || null,
+	        syntax: matchGraph.syntax ?? null,
 	        match: []
 	    };
 	    var hostStack = [host];
@@ -8522,12 +8512,12 @@
 
 	            case CLOSE_SYNTAX:
 	                hostStack.pop();
-	                host = hostStack[hostStack.length - 1];
+	                host = hostStack.at(-1);
 	                break;
 
 	            default:
 	                host.match.push({
-	                    syntax: item.syntax || null,
+	                    syntax: item.syntax ?? null,
 	                    token: item.token.value,
 	                    node: item.token.node
 	                });
@@ -8642,7 +8632,7 @@
 	        return matchNode.node;
 	    }
 
-	    return getLastMatchNode(matchNode.match[matchNode.match.length - 1]);
+	    return getLastMatchNode(matchNode.match.at(-1));
 	}
 
 	function matchFragments(lexer, ast, match, type, name) {
@@ -8724,7 +8714,7 @@
 	        for (var key in node) {
 	            var valid = true;
 
-	            if (hasOwnProperty$5.call(node, key) === false) {
+	            if (!hasOwnProperty$5.call(node, key)) {
 	                continue;
 	            }
 
@@ -8784,7 +8774,8 @@
 
 	        for (var key in fields) {
 	            if (hasOwnProperty$5.call(fields, key) &&
-	                hasOwnProperty$5.call(node, key) === false) {
+	                !
+	                hasOwnProperty$5.call(node, key)) {
 	                warn(node, 'Field `' + type + '.' + key + '` is missed');
 	            }
 	        }
@@ -8802,7 +8793,7 @@
 	    };
 
 	    for (var key in structure) {
-	        if (hasOwnProperty$5.call(structure, key) === false) {
+	        if (!hasOwnProperty$5.call(structure, key)) {
 	            continue;
 	        }
 
@@ -8822,7 +8813,7 @@
 	            } else if (Array.isArray(fieldType)) {
 	                docsTypes.push('List'); // TODO: use type enum
 	            } else {
-	                throw new Error('Wrong value `' + fieldType + '` in `' + name + '.' + key + '` structure definition');
+	                throw new TypeError('Wrong value `' + fieldType + '` in `' + name + '.' + key + '` structure definition');
 	            }
 	        }
 
@@ -8959,7 +8950,7 @@
 	    this.atrules = {};
 	    this.properties = {};
 	    this.types = {};
-	    this.structure = structure || getStructureFromConfig(config);
+	    this.structure = structure ?? getStructureFromConfig(config);
 
 	    if (config) {
 	        if (config.types) {
@@ -9010,7 +9001,7 @@
 	            }
 	        });
 
-	        return warns.length ? warns : false;
+	        return warns.length > 0 ? warns : false;
 	    },
 
 	    createDescriptor: function(syntax, type, name, parent = null) {
@@ -9171,7 +9162,7 @@
 	        var atrule = this.getAtrule(atruleName);
 	        var descriptor = names$1.keyword(descriptorName);
 
-	        return matchSyntax(this, atrule.descriptors[descriptor.name] || atrule.descriptors[descriptor.basename], value, false);
+	        return matchSyntax(this, atrule.descriptors[descriptor.name] ?? atrule.descriptors[descriptor.basename], value, false);
 	    },
 	    matchDeclaration: function(node) {
 	        if (node.type !== 'Declaration') {
@@ -9232,28 +9223,28 @@
 	    getAtrule: function(atruleName, fallbackBasename = true) {
 	        var atrule = names$1.keyword(atruleName);
 	        var atruleEntry = atrule.vendor && fallbackBasename
-	            ? this.atrules[atrule.name] || this.atrules[atrule.basename]
+	            ? this.atrules[atrule.name] ?? this.atrules[atrule.basename]
 	            : this.atrules[atrule.name];
 
-	        return atruleEntry || null;
+	        return atruleEntry ?? null;
 	    },
 	    getAtrulePrelude: function(atruleName, fallbackBasename = true) {
 	        const atrule = this.getAtrule(atruleName, fallbackBasename);
 
-	        return atrule && atrule.prelude || null;
+	        return atrule && atrule.prelude ?? null;
 	    },
 	    getAtruleDescriptor: function(atruleName, name) {
 	        return this.atrules.hasOwnProperty(atruleName) && this.atrules.declarators
-	            ? this.atrules[atruleName].declarators[name] || null
+	            ? this.atrules[atruleName].declarators[name] ?? null
 	            : null;
 	    },
 	    getProperty: function(propertyName, fallbackBasename = true) {
 	        var property = names$1.property(propertyName);
 	        var propertyEntry = property.vendor && fallbackBasename
-	            ? this.properties[property.name] || this.properties[property.basename]
+	            ? this.properties[property.name] ?? this.properties[property.basename]
 	            : this.properties[property.name];
 
-	        return propertyEntry || null;
+	        return propertyEntry ?? null;
 	    },
 	    getType: function(name) {
 	        return this.types.hasOwnProperty(name) ? this.types[name] : null;
@@ -9300,7 +9291,7 @@
 	            return brokenProperties[name];
 	        });
 
-	        if (brokenTypes.length || brokenProperties.length) {
+	        if (brokenTypes.length > 0 || brokenProperties.length > 0) {
 	            return {
 	                types: brokenTypes,
 	                properties: brokenProperties
@@ -9344,16 +9335,16 @@
 	    var line = host.startLine;
 	    var columns = adoptBuffer(host.columns, sourceLength);
 	    var column = host.startColumn;
-	    var startOffset = source.length > 0 ? isBOM(source.charCodeAt(0)) : 0;
+	    var startOffset = source.length > 0 ? isBOM(source.codePointAt(0)) : 0;
 
 	    for (var i = startOffset; i < sourceLength; i++) { // -1
-	        var code = source.charCodeAt(i);
+	        var code = source.codePointAt(i);
 
 	        lines[i] = line;
 	        columns[i] = column++;
 
 	        if (code === N$1 || code === R || code === F) {
-	            if (code === R && i + 1 < sourceLength && source.charCodeAt(i + 1) === N$1) {
+	            if (code === R && i + 1 < sourceLength && source.codePointAt(i + 1) === N$1) {
 	                i++;
 	                lines[i] = line;
 	                columns[i] = column;
@@ -9380,9 +9371,9 @@
 	OffsetToLocation$1.prototype = {
 	    setSource: function(source, startOffset, startLine, startColumn) {
 	        this.source = source;
-	        this.startOffset = typeof startOffset === 'undefined' ? 0 : startOffset;
-	        this.startLine = typeof startLine === 'undefined' ? 1 : startLine;
-	        this.startColumn = typeof startColumn === 'undefined' ? 1 : startColumn;
+	        this.startOffset = startOffset === undefined ? 0 : startOffset;
+	        this.startLine = startLine === undefined ? 1 : startLine;
+	        this.startColumn = startColumn === undefined ? 1 : startColumn;
 	        this.linesAndColumnsComputed = false;
 	    },
 
@@ -9598,15 +9589,15 @@
 
 	            try {
 	                return consumer.call(this);
-	            } catch (e) {
+	            } catch (error) {
 	                if (this.onParseErrorThrow) {
-	                    throw e;
+	                    throw error;
 	                }
 
 	                var fallbackNode = fallback.call(this, startToken);
 
 	                this.onParseErrorThrow = true;
-	                this.onParseError(e, fallbackNode);
+	                this.onParseError(error, fallbackNode);
 	                this.onParseErrorThrow = false;
 
 	                return fallbackNode;
@@ -9659,7 +9650,7 @@
 	                    default:
 	                        // when test type is part of another token show error for current position + 1
 	                        // e.g. eat(HYPHENMINUS) will fail on "-foo", but pointing on "-" is odd
-	                        if (this.scanner.source.charCodeAt(this.scanner.tokenStart) === tokenType) {
+	                        if (this.scanner.source.codePointAt(this.scanner.tokenStart) === tokenType) {
 	                            offset = offset + 1;
 	                        }
 	                }
@@ -9711,14 +9702,14 @@
 	        },
 
 	        error: function(message, offset) {
-	            var location = typeof offset !== 'undefined' && offset < this.scanner.source.length
+	            var location = offset !== undefined && offset < this.scanner.source.length
 	                ? this.locationMap.getLocation(offset)
 	                : this.scanner.eof
 	                    ? this.locationMap.getLocation(findWhiteSpaceStart(this.scanner.source, this.scanner.source.length - 1))
 	                    : this.locationMap.getLocation(this.scanner.tokenStart);
 
 	            throw new SyntaxError$2(
-	                message || 'Unexpected input',
+	                message ?? 'Unexpected input',
 	                this.scanner.source,
 	                location.offset,
 	                location.line,
@@ -9727,15 +9718,15 @@
 	        }
 	    };
 
-	    config = processConfig(config || {});
+	    config = processConfig(config ?? {});
 	    for (var key in config) {
 	        parser[key] = config[key];
 	    }
 
 	    return function(source, options) {
-	        options = options || {};
+	        options = options ?? {};
 
-	        var context = options.context || 'default';
+	        var context = options.context ?? 'default';
 	        var onComment = options.onComment;
 	        var ast;
 
@@ -9747,7 +9738,7 @@
 	            options.column
 	        );
 
-	        parser.filename = options.filename || '<unknown>';
+	        parser.filename = options.filename ?? '<unknown>';
 	        parser.needPositions = Boolean(options.positions);
 	        parser.onParseError = typeof options.onParseError === 'function' ? options.onParseError : noop$1;
 	        parser.onParseErrorThrow = false;
@@ -9985,7 +9976,7 @@
 	      throw new Error("Expected more digits in base 64 VLQ value.");
 	    }
 
-	    digit = base64.decode(aStr.charCodeAt(aIndex++));
+	    digit = base64.decode(aStr.codePointAt(aIndex++));
 	    if (digit === -1) {
 	      throw new Error("Invalid base64 digit: " + aStr.charAt(aIndex - 1));
 	    }
@@ -10026,14 +10017,14 @@
 		    return aArgs[aName];
 		  } else if (arguments.length === 3) {
 		    return aDefaultValue;
-		  } else {
-		    throw new Error('"' + aName + '" is a required argument.');
 		  }
+		    throw new Error('"' + aName + '" is a required argument.');
+		  
 		}
 		exports.getArg = getArg;
 
 		var urlRegexp = /^(?:([\w+\-.]+):)?\/\/(?:(\w+:\w+)@)?([\w.-]*)(?::(\d+))?(.*)$/;
-		var dataUrlRegexp = /^data:.+\,.+$/;
+		var dataUrlRegexp = /^data:.+,.+$/;
 
 		function urlParse(aUrl) {
 		  var match = aUrl.match(urlRegexp);
@@ -10154,7 +10145,7 @@
 		  var aPathUrl = urlParse(aPath);
 		  var aRootUrl = urlParse(aRoot);
 		  if (aRootUrl) {
-		    aRoot = aRootUrl.path || '/';
+		    aRoot = aRootUrl.path ?? '/';
 		  }
 
 		  // `join(foo, '//www.example.org')`
@@ -10219,7 +10210,7 @@
 		    // file:///, etc.), one or more slashes (/), or simply nothing at all, we
 		    // have exhausted all components, so the path is not relative to the root.
 		    aRoot = aRoot.slice(0, index);
-		    if (aRoot.match(/^([^\/]+:\/)?\/*$/)) {
+		    if (/^([^\/]+:\/)?\/*$/.test(aRoot)) {
 		      return aPath;
 		    }
 
@@ -10227,7 +10218,7 @@
 		  }
 
 		  // Make sure we add a "../" for each component we removed from the root.
-		  return Array(level + 1).join("../") + aPath.substr(aRoot.length + 1);
+		  return Array(level + 1).join("../") + aPath.slice(aRoot.length + 1);
 		}
 		exports.relative = relative;
 
@@ -10278,20 +10269,20 @@
 		    return false;
 		  }
 
-		  if (s.charCodeAt(length - 1) !== 95  /* '_' */ ||
-		      s.charCodeAt(length - 2) !== 95  /* '_' */ ||
-		      s.charCodeAt(length - 3) !== 111 /* 'o' */ ||
-		      s.charCodeAt(length - 4) !== 116 /* 't' */ ||
-		      s.charCodeAt(length - 5) !== 111 /* 'o' */ ||
-		      s.charCodeAt(length - 6) !== 114 /* 'r' */ ||
-		      s.charCodeAt(length - 7) !== 112 /* 'p' */ ||
-		      s.charCodeAt(length - 8) !== 95  /* '_' */ ||
-		      s.charCodeAt(length - 9) !== 95  /* '_' */) {
+		  if (s.codePointAt(length - 1) !== 95  /* '_' */ ||
+		      s.codePointAt(length - 2) !== 95  /* '_' */ ||
+		      s.codePointAt(length - 3) !== 111 /* 'o' */ ||
+		      s.codePointAt(length - 4) !== 116 /* 't' */ ||
+		      s.codePointAt(length - 5) !== 111 /* 'o' */ ||
+		      s.codePointAt(length - 6) !== 114 /* 'r' */ ||
+		      s.codePointAt(length - 7) !== 112 /* 'p' */ ||
+		      s.codePointAt(length - 8) !== 95  /* '_' */ ||
+		      s.codePointAt(length - 9) !== 95  /* '_' */) {
 		    return false;
 		  }
 
 		  for (var i = length - 10; i >= 0; i--) {
-		    if (s.charCodeAt(i) !== 36 /* '$' */) {
+		    if (s.codePointAt(i) !== 36 /* '$' */) {
 		      return false;
 		    }
 		  }
@@ -10445,11 +10436,11 @@
 		 * URL, and the source map's URL.
 		 */
 		function computeSourceURL(sourceRoot, sourceURL, sourceMapURL) {
-		  sourceURL = sourceURL || '';
+		  sourceURL = sourceURL ?? '';
 
 		  if (sourceRoot) {
 		    // This follows what Chrome does.
-		    if (sourceRoot[sourceRoot.length - 1] !== '/' && sourceURL[0] !== '/') {
+		    if (sourceRoot.at(-1) !== '/' && sourceURL[0] !== '/') {
 		      sourceRoot += '/';
 		    }
 		    // The spec says:
@@ -10569,10 +10560,10 @@
 	ArraySet$1.prototype.has = function ArraySet_has(aStr) {
 	  if (hasNativeMap) {
 	    return this._set.has(aStr);
-	  } else {
+	  }
 	    var sStr = util$2.toSetString(aStr);
 	    return has$1.call(this._set, sStr);
-	  }
+	  
 	};
 
 	/**
@@ -10724,9 +10715,7 @@
 	 *   - sourceRoot: A root for all relative URLs in this source map.
 	 */
 	function SourceMapGenerator$1(aArgs) {
-	  if (!aArgs) {
-	    aArgs = {};
-	  }
+	  aArgs ??= {};
 	  this._file = util.getArg(aArgs, 'file', null);
 	  this._sourceRoot = util.getArg(aArgs, 'sourceRoot', null);
 	  this._skipValidation = util.getArg(aArgs, 'skipValidation', false);
@@ -10852,9 +10841,7 @@
 	    if (aSourceContent != null) {
 	      // Add the source content to the _sourcesContents map.
 	      // Create a new _sourcesContents map if the property is null.
-	      if (!this._sourcesContents) {
-	        this._sourcesContents = Object.create(null);
-	      }
+	      this._sourcesContents ??= Object.create(null);
 	      this._sourcesContents[util.toSetString(source)] = aSourceContent;
 	    } else if (this._sourcesContents) {
 	      // Remove the source file from the _sourcesContents map.
@@ -10999,14 +10986,13 @@
 	      // Cases 2 and 3.
 	      return;
 	    }
-	    else {
 	      throw new Error('Invalid mapping: ' + JSON.stringify({
 	        generated: aGenerated,
 	        source: aSource,
 	        original: aOriginal,
 	        name: aName
 	      }));
-	    }
+	    
 	  };
 
 	/**
@@ -11199,7 +11185,7 @@
 	    var handlersChunk = handlers.chunk;
 	    handlers.chunk = function(chunk) {
 	        for (var i = 0; i < chunk.length; i++) {
-	            if (chunk.charCodeAt(i) === 10) { // \n
+	            if (chunk.codePointAt(i) === 10) { // \n
 	                line++;
 	                column = 0;
 	            } else {
@@ -11299,7 +11285,7 @@
 	        fromPlainObject: function(ast) {
 	            walk(ast, {
 	                enter: function(node) {
-	                    if (node.children && node.children instanceof List$2 === false) {
+	                    if (node.children && !( node.children instanceof List$2)) {
 	                        node.children = new List$2().fromArray(node.children);
 	                    }
 	                }
@@ -11341,7 +11327,7 @@
 	    var walkers = [];
 
 	    for (var key in structure) {
-	        if (hasOwnProperty$3.call(structure, key) === false) {
+	        if (!hasOwnProperty$3.call(structure, key)) {
 	            continue;
 	        }
 
@@ -11372,7 +11358,7 @@
 	        }
 	    }
 
-	    if (walkers.length) {
+	    if (walkers.length > 0) {
 	        return {
 	            context: nodeType.walkContext,
 	            fields: walkers
@@ -11488,7 +11474,7 @@
 	            var enterRet = enter.call(context, node, item, list);
 
 	            if (enterRet === breakWalk) {
-	                debugger;
+	                
 	                return true;
 	            }
 
@@ -11509,7 +11495,7 @@
 	            return false;
 	        }
 
-	        var walkReducer = (ret, data, item, list) => ret || walkNode(data, item, list);
+	        var walkReducer = (ret, data, item, list) => ret ?? walkNode(data, item, list);
 	        var enter = noop;
 	        var leave = noop;
 	        var iterators = iteratorsNatural;
@@ -11679,7 +11665,7 @@
 	            : b.replace(/^\s*\|\s*/, '');
 	    }
 
-	    return b || null;
+	    return b ?? null;
 	}
 
 	function appendOrAssign(a, b) {
@@ -11700,14 +11686,14 @@
 	function appendOrAssignOrNull(a, b) {
 	    const result = appendOrAssign(a, b);
 
-	    return !isObject$2(result) || Object.keys(result).length
+	    return !isObject$2(result) || Object.keys(result).length > 0
 	        ? result
 	        : null;
 	}
 
 	function mix$1(dest, src, shape) {
 	    for (const key in shape) {
-	        if (hasOwnProperty$2.call(shape, key) === false) {
+	        if (!hasOwnProperty$2.call(shape, key)) {
 	            continue;
 	        }
 
@@ -11721,7 +11707,7 @@
 	            if (typeof shape[key] === 'function') {
 	                const fn = shape[key];
 	                dest[key] = fn({}, dest[key]);
-	                dest[key] = fn(dest[key] || {}, src[key]);
+	                dest[key] = fn(dest[key] ?? {}, src[key]);
 	            } else if (isObject$2(shape[key])) {
 	                const result = {};
 
@@ -11730,7 +11716,7 @@
 	                }
 
 	                for (let name in src[key]) {
-	                    result[name] = mix$1(result[name] || {}, src[key][name], shape[key]);
+	                    result[name] = mix$1(result[name] ?? {}, src[key][name], shape[key]);
 	                }
 
 	                dest[key] = result;
@@ -11741,7 +11727,7 @@
 	                    return s;
 	                }, {});
 
-	                for (const [name, value] of Object.entries(dest[key] || {})) {
+	                for (const [name, value] of Object.entries(dest[key] ?? {})) {
 	                    res[name] = {};
 	                    if (value) {
 	                        mix$1(res[name], value, innerShape);
@@ -11750,9 +11736,7 @@
 
 	                for (const name in src[key]) {
 	                    if (hasOwnProperty$2.call(src[key], name)) {
-	                        if (!res[name]) {
-	                            res[name] = {};
-	                        }
+	                        res[name] ??= {};
 
 	                        if (src[key] && src[key][name]) {
 	                            mix$1(res[name], src[key][name], innerShape);
@@ -23145,8 +23129,8 @@
 	            }
 	        }
 
-	        result[atruleName.substr(1)] = {
-	            prelude: atrule.syntax.trim().match(/^@\S+\s+([^;\{]*)/)[1].trim() || null,
+	        result[atruleName.slice(1)] = {
+	            prelude: atrule.syntax.trim().match(/^@\S+\s+([^;{]*)/)[1].trim() ?? null,
 	            descriptors
 	        };
 	    }
@@ -23159,7 +23143,7 @@
 
 	    // copy all syntaxes for an original dict
 	    for (const key in dict) {
-	        result[key] = dict[key].syntax || dict[key];
+	        result[key] = dict[key].syntax ?? dict[key];
 	    }
 
 	    // apply a patch
@@ -23197,14 +23181,14 @@
 
 	    // copy all syntaxes for an original dict
 	    for (const key in dict) {
-	        const patchDescriptors = (patchDict[key] && patchDict[key].descriptors) || null;
+	        const patchDescriptors = (patchDict[key] && patchDict[key].descriptors) ?? null;
 
 	        result[key] = {
 	            prelude: key in patchDict && 'prelude' in patchDict[key]
 	                ? patchDict[key].prelude
-	                : dict[key].prelude || null,
+	                : dict[key].prelude ?? null,
 	            descriptors: dict[key].descriptors
-	                ? patchDictionary(dict[key].descriptors, patchDescriptors || {})
+	                ? patchDictionary(dict[key].descriptors, patchDescriptors ?? {})
 	                : patchDescriptors && unpackSyntaxes(patchDescriptors)
 	        };
 	    }
@@ -23213,7 +23197,7 @@
 	    for (const key in patchDict) {
 	        if (!hasOwnProperty.call(dict, key)) {
 	            result[key] = {
-	                prelude: patchDict[key].prelude || null,
+	                prelude: patchDict[key].prelude ?? null,
 	                descriptors: patchDict[key].descriptors && unpackSyntaxes(patchDict[key].descriptors)
 	            };
 	        }
@@ -23245,7 +23229,7 @@
 
 	function checkInteger(offset, disallowSign) {
 	    var pos = this.scanner.tokenStart + offset;
-	    var code = this.scanner.source.charCodeAt(pos);
+	    var code = this.scanner.source.codePointAt(pos);
 
 	    if (code === PLUSSIGN$5 || code === HYPHENMINUS$2) {
 	        if (disallowSign) {
@@ -23255,14 +23239,14 @@
 	    }
 
 	    for (; pos < this.scanner.tokenEnd; pos++) {
-	        if (!isDigit$1(this.scanner.source.charCodeAt(pos))) {
+	        if (!isDigit$1(this.scanner.source.codePointAt(pos))) {
 	            this.error('Integer is expected', pos);
 	        }
 	    }
 	}
 
 	function checkTokenIsInteger(disallowSign) {
-	    return checkInteger.call(this, 0, disallowSign);
+	     checkInteger.call(this, 0, disallowSign);
 	}
 
 	function expectCharCode(offset, code) {
@@ -23316,7 +23300,7 @@
 	    }
 
 	    if (sign === 0) {
-	        type = this.scanner.source.charCodeAt(this.scanner.tokenStart);
+	        type = this.scanner.source.codePointAt(this.scanner.tokenStart);
 	        if (type !== PLUSSIGN$5 && type !== HYPHENMINUS$2) {
 	            this.error('Number sign is expected');
 	        }
@@ -23440,11 +23424,11 @@
 	        // <n-dimension> <signed-integer>
 	        // <n-dimension> ['+' | '-'] <signless-integer>
 	        else if (this.scanner.tokenType === DIMENSION$5) {
-	            var code = this.scanner.source.charCodeAt(this.scanner.tokenStart);
+	            var code = this.scanner.source.codePointAt(this.scanner.tokenStart);
 	            var sign = code === PLUSSIGN$5 || code === HYPHENMINUS$2;
 
 	            for (var i = this.scanner.tokenStart + sign; i < this.scanner.tokenEnd; i++) {
-	                if (!isDigit$1(this.scanner.source.charCodeAt(i))) {
+	                if (!isDigit$1(this.scanner.source.codePointAt(i))) {
 	                    break;
 	                }
 	            }
@@ -23483,12 +23467,12 @@
 	            this.error();
 	        }
 
-	        if (a !== null && a.charCodeAt(0) === PLUSSIGN$5) {
-	            a = a.substr(1);
+	        if (a !== null && a.codePointAt(0) === PLUSSIGN$5) {
+	            a = a.slice(1);
 	        }
 
-	        if (b !== null && b.charCodeAt(0) === PLUSSIGN$5) {
-	            b = b.substr(1);
+	        if (b !== null && b.codePointAt(0) === PLUSSIGN$5) {
+	            b = b.slice(1);
 	        }
 
 	        return {
@@ -23514,7 +23498,7 @@
 	                b = String(node.b);
 	                if (b.charAt(0) === '-' || b.charAt(0) === '+') {
 	                    this.chunk(b.charAt(0));
-	                    this.chunk(b.substr(1));
+	                    this.chunk(b.slice(1));
 	                } else {
 	                    this.chunk('+');
 	                    this.chunk(b);
@@ -23564,7 +23548,7 @@
 
 	// EXCLAMATIONMARK, SEMICOLON, false
 	function exclamationMarkOrSemicolon(tokenType, source, offset) {
-	    if (tokenType === Delim && source.charCodeAt(offset) === EXCLAMATIONMARK$2) {
+	    if (tokenType === Delim && source.codePointAt(offset) === EXCLAMATIONMARK$2) {
 	        return 1;
 	    }
 
@@ -23586,7 +23570,7 @@
 	        var endOffset;
 
 	        this.scanner.skip(
-	            this.scanner.getRawLength(startToken, mode || balanceEnd)
+	            this.scanner.getRawLength(startToken, mode ?? balanceEnd)
 	        );
 
 	        if (excludeWhiteSpace && this.scanner.tokenStart > startOffset) {
@@ -23806,7 +23790,7 @@
 	    }
 
 	    if (this.scanner.isDelim(VERTICALLINE$2)) {
-	        if (this.scanner.source.charCodeAt(this.scanner.tokenStart + 1) !== EQUALSSIGN) {
+	        if (this.scanner.source.codePointAt(this.scanner.tokenStart + 1) !== EQUALSSIGN) {
 	            this.scanner.next();
 	            this.eat(IDENT$e);
 	        } else if (expectIdent) {
@@ -23830,7 +23814,7 @@
 
 	function getOperator() {
 	    var start = this.scanner.tokenStart;
-	    var code = this.scanner.source.charCodeAt(start);
+	    var code = this.scanner.source.codePointAt(start);
 
 	    if (code !== EQUALSSIGN &&        // =
 	        code !== TILDE$2 &&             // ~=
@@ -24153,7 +24137,7 @@
 	    },
 	    parse: function() {
 	        var start = this.scanner.tokenStart;
-	        var code = this.scanner.source.charCodeAt(this.scanner.tokenStart);
+	        var code = this.scanner.source.codePointAt(this.scanner.tokenStart);
 
 	        switch (code) {
 	            case GREATERTHANSIGN$1:
@@ -24212,8 +24196,8 @@
 	        this.eat(COMMENT$4);
 
 	        if ((end - start + 2) >= 2 &&
-	            this.scanner.source.charCodeAt(end - 2) === ASTERISK$4 &&
-	            this.scanner.source.charCodeAt(end - 1) === SOLIDUS$4) {
+	            this.scanner.source.codePointAt(end - 2) === ASTERISK$4 &&
+	            this.scanner.source.codePointAt(end - 1) === SOLIDUS$4) {
 	            end -= 2;
 	        }
 
@@ -24355,7 +24339,7 @@
 
 	    // hacks
 	    if (this.scanner.tokenType === DELIM$4) {
-	        switch (this.scanner.source.charCodeAt(this.scanner.tokenStart)) {
+	        switch (this.scanner.source.codePointAt(this.scanner.tokenStart)) {
 	            case ASTERISK$3:
 	            case DOLLARSIGN:
 	            case PLUSSIGN$3:
@@ -25075,7 +25059,7 @@
 	    var value = this.consume(NUMBER$3);
 
 	    for (var i = 0; i < value.length; i++) {
-	        var code = value.charCodeAt(i);
+	        var code = value.codePointAt(i);
 	        if (!isDigit(code) && code !== FULLSTOP$1) {
 	            this.error('Unsigned number is expected', this.scanner.tokenStart - value.length + i);
 	        }
@@ -25307,7 +25291,7 @@
 
 	                case COMMENT$1:
 	                    // ignore comments except exclamation comments (i.e. /*! .. */) on top level
-	                    if (this.scanner.source.charCodeAt(this.scanner.tokenStart + 2) !== EXCLAMATIONMARK) {
+	                    if (this.scanner.source.codePointAt(this.scanner.tokenStart + 2) !== EXCLAMATIONMARK) {
 	                        this.scanner.next();
 	                        continue;
 	                    }
@@ -25419,7 +25403,7 @@
 
 	function eatHexSequence(offset, allowDash) {
 	    for (var pos = this.scanner.tokenStart + offset, len = 0; pos < this.scanner.tokenEnd; pos++) {
-	        var code = this.scanner.source.charCodeAt(pos);
+	        var code = this.scanner.source.codePointAt(pos);
 
 	        if (code === HYPHENMINUS$1 && allowDash && len !== 0) {
 	            if (eatHexSequence.call(this, offset + len + 1, false) === 0) {
@@ -25459,7 +25443,7 @@
 	}
 
 	function startsWith(code) {
-	    if (this.scanner.source.charCodeAt(this.scanner.tokenStart) !== code) {
+	    if (this.scanner.source.codePointAt(this.scanner.tokenStart) !== code) {
 	        this.error(NAME[code] + ' is expected');
 	    }
 	}
@@ -25600,11 +25584,11 @@
 	                var rawStart = start + 4;
 	                var rawEnd = this.scanner.tokenEnd - 1;
 
-	                while (rawStart < rawEnd && isWhiteSpace(this.scanner.source.charCodeAt(rawStart))) {
+	                while (rawStart < rawEnd && isWhiteSpace(this.scanner.source.codePointAt(rawStart))) {
 	                    rawStart++;
 	                }
 
-	                while (rawStart < rawEnd && isWhiteSpace(this.scanner.source.charCodeAt(rawEnd - 1))) {
+	                while (rawStart < rawEnd && isWhiteSpace(this.scanner.source.codePointAt(rawEnd - 1))) {
 	                    rawEnd--;
 	                }
 
@@ -25811,12 +25795,12 @@
 	            if (cmpChar(this.scanner.source, this.scanner.tokenStart, U) &&
 	                cmpChar(this.scanner.source, this.scanner.tokenStart + 1, PLUSSIGN$1)) {
 	                return this.UnicodeRange();
-	            } else {
-	                return this.Identifier();
 	            }
+	                return this.Identifier();
+	            
 
 	        case DELIM$1:
-	            var code = this.scanner.source.charCodeAt(this.scanner.tokenStart);
+	            var code = this.scanner.source.codePointAt(this.scanner.tokenStart);
 
 	            if (code === SOLIDUS$1 ||
 	                code === ASTERISK$1 ||
@@ -25869,9 +25853,9 @@
 	        case COLON$1:
 	            if (this.scanner.lookupType(1) === COLON$1) {
 	                return this.PseudoElementSelector();
-	            } else {
-	                return this.PseudoClassSelector();
 	            }
+	                return this.PseudoClassSelector();
+	            
 
 	        case IDENT$2:
 	            return this.TypeSelector();
@@ -25882,13 +25866,13 @@
 
 	        case DIMENSION:
 	            // throws when .123ident
-	            if (this.scanner.source.charCodeAt(this.scanner.tokenStart) === FULLSTOP) {
+	            if (this.scanner.source.codePointAt(this.scanner.tokenStart) === FULLSTOP) {
 	                this.error('Identifier is expected', this.scanner.tokenStart + 1);
 	            }
 	            break;
 
 	        case DELIM:
-	            var code = this.scanner.source.charCodeAt(this.scanner.tokenStart);
+	            var code = this.scanner.source.codePointAt(this.scanner.tokenStart);
 
 	            switch (code) {
 	                case PLUSSIGN:
@@ -26455,7 +26439,7 @@
 
 			try {
 				this.url = new URL(url, window.location.href);
-			} catch (e) {
+			} catch (error) {
 				this.url = new URL(window.location.href);
 			}
 		}
@@ -26598,7 +26582,7 @@
 				enter: (node, item, list) => {
 					let content = node.value.value;
 					if ((node.value.type === "Raw" && content.startsWith("data:")) || (node.value.type === "String" && (content.startsWith("\"data:") || content.startsWith("'data:")))) ; else {
-						let href = content.replace(/["']/g, "");
+						let href = content.replaceAll(/["']/g, "");
 						let url = new URL(href, this.url);
 						node.value.value = url.toString();
 					}
@@ -26700,9 +26684,9 @@
 				if (q === "not") {
 					q = queries[index + 1];
 					return !(q === "screen" || q === "speech");
-				} else {
-					return (q === "screen" || q === "speech");
 				}
+					return (q === "screen" || q === "speech");
+				
 			});
 
 			if (shouldNotApply) {
@@ -26712,7 +26696,7 @@
 			csstree.walk(node, {
 				visit: "String",
 				enter: (urlNode, urlItem, urlList) => {
-					let href = urlNode.value.replace(/["']/g, "");
+					let href = urlNode.value.replaceAll(/["']/g, "");
 					let url = new URL(href, this.url);
 					let value = url.toString();
 
@@ -26734,7 +26718,7 @@
 
 		// generate string
 		toString(ast) {
-			return csstree.generate(ast || this.ast);
+			return csstree.generate(ast ?? this.ast);
 		}
 	}
 
@@ -27449,7 +27433,7 @@
 		return new Promise(function(resolve, reject) {
 			let request = new XMLHttpRequest();
 
-			request.open(options.method || "get", url, true);
+			request.open(options.method ?? "get", url, true);
 
 			for (let i in options.headers) {
 				request.setRequestHeader(i, options.headers[i]);
@@ -27465,7 +27449,7 @@
 
 			request.onerror = reject;
 
-			request.send(options.body || null);
+			request.send(options.body ?? null);
 		});
 	}
 
@@ -27498,7 +27482,7 @@
 		setup() {
 			this.base = this.insert(baseStyles);
 			this.styleEl = document.createElement("style");
-			document.head.appendChild(this.styleEl);
+			document.head.append(this.styleEl);
 			this.styleSheet = this.styleEl.sheet;
 			return this.styleSheet;
 		}
@@ -27529,7 +27513,7 @@
 				fetched.push(f);
 			}
 
-			return await Promise.all(fetched)
+			return  Promise.all(fetched)
 				.then(async (originals) => {
 					let text = "";
 					for (let index = 0; index < originals.length; index++) {
@@ -27555,13 +27539,13 @@
 
 			this.sheets.push(sheet);
 
-			if (typeof sheet.width !== "undefined") {
+			if (sheet.width !== undefined) {
 				this.width = sheet.width;
 			}
-			if (typeof sheet.height !== "undefined") {
+			if (sheet.height !== undefined) {
 				this.height = sheet.height;
 			}
-			if (typeof sheet.orientation !== "undefined") {
+			if (sheet.orientation !== undefined) {
 				this.orientation = sheet.orientation;
 			}
 			return sheet.toString();
@@ -27570,11 +27554,11 @@
 		insert(text){
 			let head = document.querySelector("head");
 			let style = document.createElement("style");
-			style.setAttribute("data-pagedjs-inserted-styles", "true");
+			style.dataset.pagedjsInsertedStyles = "true";
 
-			style.appendChild(document.createTextNode(text));
+			style.append(document.createTextNode(text));
 
-			head.appendChild(style);
+			head.append(style);
 
 			this.inserted.push(style);
 			return style;
@@ -27867,7 +27851,7 @@
 
 			let declarations = this.replaceDeclarations(node);
 
-			if (declarations.size) {
+			if (declarations.size > 0) {
 				page.size = declarations.size;
 				page.width = declarations.size.width;
 				page.height = declarations.size.height;
@@ -28051,17 +28035,17 @@
 
 		replaceMarginalia(ast) {
 			let parsed = {};
-			const MARGINS = [
+			const MARGINS = new Set([
 				"top-left-corner", "top-left", "top", "top-center", "top-right", "top-right-corner",
 				"bottom-left-corner", "bottom-left", "bottom", "bottom-center", "bottom-right", "bottom-right-corner",
 				"left-top", "left-middle", "left", "left-bottom", "top-right-corner",
 				"right-top", "right-middle", "right", "right-bottom", "right-right-corner"
-			];
+			]);
 			csstree.walk(ast.block, {
 				visit: "Atrule",
 				enter: (node, item, list) => {
 					let name = node.name;
-					if (MARGINS.includes(name)) {
+					if (MARGINS.has(name)) {
 						if (name === "top") {
 							name = "top-center";
 						}
@@ -28124,14 +28108,12 @@
 
 					} else if (prop.indexOf("margin-") === 0) {
 						let m = prop.substring("margin-".length);
-						if (!parsed.margin) {
-							parsed.margin = {
+						parsed.margin ??= {
 								top: {},
 								right: {},
 								left: {},
 								bottom: {}
 							};
-						}
 						parsed.margin[m] = declaration.value.children.first();
 						dList.remove(dItem);
 
@@ -28141,27 +28123,23 @@
 
 					} else if (prop.indexOf("padding-") === 0) {
 						let p = prop.substring("padding-".length);
-						if (!parsed.padding) {
-							parsed.padding = {
+						parsed.padding ??= {
 								top: {},
 								right: {},
 								left: {},
 								bottom: {}
 							};
-						}
 						parsed.padding[p] = declaration.value.children.first();
 						dList.remove(dItem);
 					}
 
 					else if (prop === "border") {
-						if (!parsed.border) {
-							parsed.border = {
+						parsed.border ??= {
 								top: {},
 								right: {},
 								left: {},
 								bottom: {}
 							};
-						}
 						parsed.border.top = csstree.generate(declaration.value);
 						parsed.border.right = csstree.generate(declaration.value);
 						parsed.border.left = csstree.generate(declaration.value);
@@ -28172,14 +28150,12 @@
 					}
 
 					else if (prop.indexOf("border-") === 0) {
-						if (!parsed.border) {
-							parsed.border = {
+						parsed.border ??= {
 								top: {},
 								right: {},
 								left: {},
 								bottom: {}
 							};
-						}
 						let p = prop.substring("border-".length);
 
 						parsed.border[p] = csstree.generate(declaration.value);
@@ -28236,9 +28212,9 @@
 				visit: "Dimension",
 				enter: (node, item, list) => {
 					let { value, unit } = node;
-					if (typeof width === "undefined") {
+					if (width === undefined) {
 						width = { value, unit };
-					} else if (typeof height === "undefined") {
+					} else if (height === undefined) {
 						height = { value, unit };
 					}
 				}
@@ -28248,7 +28224,7 @@
 			csstree.walk(declaration, {
 				visit: "String",
 				enter: (node, item, list) => {
-					let name = node.value.replace(/["|']/g, "");
+					let name = node.value.replaceAll(/["|']/g, "");
 					let s = pageSizes[name];
 					if (s) {
 						width = s.width;
@@ -28499,8 +28475,8 @@
 		addMarginVars(margin, list, item) {
 			// variables for margins
 			for (let m in margin) {
-				if (typeof margin[m].value !== "undefined") {
-					let value = margin[m].value + (margin[m].unit || "");
+				if (margin[m].value !== undefined) {
+					let value = margin[m].value + (margin[m].unit ?? "");
 					let mVar = list.createItem({
 						type: "Declaration",
 						property: "--pagedjs-margin-" + m,
@@ -28519,8 +28495,8 @@
 			// variables for padding
 			for (let p in padding) {
 
-				if (typeof padding[p].value !== "undefined") {
-					let value = padding[p].value + (padding[p].unit || "");
+				if (padding[p].value !== undefined) {
+					let value = padding[p].value + (padding[p].unit ?? "");
 					let pVar = list.createItem({
 						type: "Declaration",
 						property: "--pagedjs-padding-" + p,
@@ -29442,7 +29418,7 @@
 		addPageAttributes(page, start, pages) {
 			let namedPages = [start.dataset.page];
 
-			if (namedPages && namedPages.length) {
+			if (namedPages && namedPages.length > 0) {
 				for (const named of namedPages) {
 					if (!named) {
 						continue;
@@ -29484,11 +29460,11 @@
 			let fragment = rebuildAncestors(node);
 			let pages = fragment.querySelectorAll("[data-page]");
 
-			if (pages.length) {
-				return pages[pages.length - 1];
-			} else {
-				return fragment.children[0];
+			if (pages.length > 0) {
+				return pages.at(-1);
 			}
+				return fragment.children[0];
+			
 		}
 
 		beforePageLayout(page, contents, breakToken, chunker) {
@@ -30042,10 +30018,10 @@
 						if (prop.property === "break-after") {
 							let nodeAfter = displayedElementAfter(elements[i], parsed);
 
-							elements[i].setAttribute("data-break-after", prop.value);
+							elements[i].dataset.breakAfter = prop.value;
 
 							if (nodeAfter) {
-								nodeAfter.setAttribute("data-previous-break-after", prop.value);
+								nodeAfter.dataset.previousBreakAfter = prop.value;
 							}
 						} else if (prop.property === "break-before") {
 							let nodeBefore = displayedElementBefore(elements[i], parsed);
@@ -30058,16 +30034,16 @@
 									// we ignore this explicit page break because an implicit page break is already needed
 									continue;
 								}
-								elements[i].setAttribute("data-break-before", prop.value);
-								nodeBefore.setAttribute("data-next-break-before", prop.value);
+								elements[i].dataset.breakBefore = prop.value;
+								nodeBefore.dataset.nextBreakBefore = prop.value;
 							}
 						} else if (prop.property === "page") {
-							elements[i].setAttribute("data-page", prop.value);
+							elements[i].dataset.page = prop.value;
 
 							let nodeAfter = displayedElementAfter(elements[i], parsed);
 
 							if (nodeAfter) {
-								nodeAfter.setAttribute("data-after-page", prop.value);
+								nodeAfter.dataset.afterPage = prop.value;
 							}
 						} else {
 							elements[i].setAttribute("data-" + prop.property, prop.value);
@@ -30096,20 +30072,20 @@
 			if (before) {
 				if (before.dataset.splitFrom) {
 					page.splitFrom = before.dataset.splitFrom;
-					pageElement.setAttribute("data-split-from", before.dataset.splitFrom);
+					pageElement.dataset.splitFrom = before.dataset.splitFrom;
 				} else if (before.dataset.breakBefore && before.dataset.breakBefore !== "avoid") {
 					page.breakBefore = before.dataset.breakBefore;
-					pageElement.setAttribute("data-break-before", before.dataset.breakBefore);
+					pageElement.dataset.breakBefore = before.dataset.breakBefore;
 				}
 			}
 
 			if (after && after.dataset) {
 				if (after.dataset.splitTo) {
 					page.splitTo = after.dataset.splitTo;
-					pageElement.setAttribute("data-split-to", after.dataset.splitTo);
+					pageElement.dataset.splitTo = after.dataset.splitTo;
 				} else if (after.dataset.breakAfter && after.dataset.breakAfter !== "avoid") {
 					page.breakAfter = after.dataset.breakAfter;
-					pageElement.setAttribute("data-break-after", after.dataset.breakAfter);
+					pageElement.dataset.breakAfter = after.dataset.breakAfter;
 				}
 			}
 
@@ -30173,7 +30149,7 @@
 		getMediaName(node) {
 			let media = [];
 
-			if (typeof node.prelude === "undefined" ||
+			if (node.prelude === undefined ||
 					node.prelude.type !== "AtrulePrelude" ) {
 				return;
 			}
@@ -30330,7 +30306,7 @@
 					}
 					let increment = {
 						selector: selector,
-						number: value || 1
+						number: value ?? 1
 					};
 					counter.increments[selector] = increment;
 					increments.push(increment);
@@ -30382,7 +30358,7 @@
 					if (rule.ruleNode.type === "Atrule" && rule.ruleNode.name === "page") {
 						selector = ".pagedjs_page";
 					} else {
-						selector = csstree.generate(prelude || rule.ruleNode);
+						selector = csstree.generate(prelude ?? rule.ruleNode);
 					}
 
 					if (name === "footnote") {
@@ -30397,7 +30373,7 @@
 
 					let reset = {
 						selector: selector,
-						number: value || 0
+						number: value ?? 0
 					};
 
 					counter.resets[selector] = reset;
@@ -30452,10 +30428,10 @@
 				// Add counter data
 				for (let i = 0; i < incrementElements.length; i++) {
 					incrementElements[i].setAttribute("data-counter-"+ counter.name +"-increment", increment.number);
-					if (incrementElements[i].getAttribute("data-counter-increment")) {
-						incrementElements[i].setAttribute("data-counter-increment", incrementElements[i].getAttribute("data-counter-increment") + " " + counter.name);
+					if (incrementElements[i].dataset.counterIncrement) {
+						incrementElements[i].dataset.counterIncrement = incrementElements[i].getAttribute("data-counter-increment") + " " + counter.name;
 					} else {
-						incrementElements[i].setAttribute("data-counter-increment", counter.name);
+						incrementElements[i].dataset.counterIncrement = counter.name;
 					}
 				}
 			}
@@ -30479,13 +30455,13 @@
 						//
 						// always returns an empty string. We could try to temporarily attach the element to get its computed style,
 						// but for now using the inline style is enough for us.
-						value = resetElements[i].style.getPropertyValue(value) || 0;
+						value = resetElements[i].style.getPropertyValue(value) ?? 0;
 					}
 					resetElements[i].setAttribute("data-counter-"+ counter.name +"-reset", value);
-					if (resetElements[i].getAttribute("data-counter-reset")) {
-						resetElements[i].setAttribute("data-counter-reset", resetElements[i].getAttribute("data-counter-reset") + " " + counter.name);
+					if (resetElements[i].dataset.counterReset) {
+						resetElements[i].dataset.counterReset = resetElements[i].getAttribute("data-counter-reset") + " " + counter.name;
 					} else {
-						resetElements[i].setAttribute("data-counter-reset", counter.name);
+						resetElements[i].dataset.counterReset = counter.name;
 					}
 				}
 			}
@@ -30638,7 +30614,7 @@
 				resets.push(`footnote-marker ${value}`);
 			});
 
-			if (resets.length) {
+			if (resets.length > 0) {
 				this.styleSheet.insertRule(`[data-page-number="${pageElement.dataset.pageNumber}"] { counter-increment: none; counter-reset: ${resets.join(" ")} }`, this.styleSheet.cssRules.length);
 			}
 		}
@@ -30658,7 +30634,7 @@
 		}
 
 		afterPageLayout(pageElement, page, breakToken, chunker) {
-			var orderedLists = pageElement.getElementsByTagName("ol");
+			var orderedLists = pageElement.querySelectorAll("ol");
 			for (var list of orderedLists) {
 				if (list.firstElementChild) {
 					list.start = list.firstElementChild.dataset.itemNum;
@@ -30676,7 +30652,7 @@
 			}
 			let items = list.children;
 			for (var i = 0; i < items.length; i++) {
-				items[i].setAttribute("data-item-num", i + start);
+				items[i].dataset.itemNum = i + start;
 			}
 		}
 
@@ -30786,10 +30762,10 @@
 
 		onRule(ruleNode, ruleItem, rulelist) {
 			let selector = csstree.generate(ruleNode.prelude);
-			if (selector.match(/:(first|last|nth)-of-type/)) {
+			if (/:(first|last|nth)-of-type/.test(selector)) {
 				
 				let declarations = csstree.generate(ruleNode.block);
-				declarations = declarations.replace(/[{}]/g,"");
+				declarations = declarations.replaceAll(/[{}]/g,"");
 
 				let uuid = "nth-of-type-" + UUID();
 
@@ -30815,13 +30791,13 @@
 				let elements = parsed.querySelectorAll(s);
 
 				for (var i = 0; i < elements.length; i++) {
-					let dataNthOfType = elements[i].getAttribute("data-nth-of-type");
+					let dataNthOfType = elements[i].dataset.nthOfType;
 
 					if (dataNthOfType && dataNthOfType != "") {
 						dataNthOfType = `${dataNthOfType},${selectors[s][0]}`;
-						elements[i].setAttribute("data-nth-of-type", dataNthOfType);
+						elements[i].dataset.nthOfType = dataNthOfType;
 					} else {
-						elements[i].setAttribute("data-nth-of-type", selectors[s][0]);
+						elements[i].dataset.nthOfType = selectors[s][0];
 					}
 				}
 
@@ -30841,10 +30817,10 @@
 
 		onRule(ruleNode, ruleItem, rulelist) {
 			let selector = csstree.generate(ruleNode.prelude);
-			if (selector.match(/\+/)) {
+			if (/\+/.test(selector)) {
 				
 				let declarations = csstree.generate(ruleNode.block);
-				declarations = declarations.replace(/[{}]/g,"");
+				declarations = declarations.replaceAll(/[{}]/g,"");
 
 				let uuid = "following-" + UUID();
 
@@ -30870,13 +30846,13 @@
 				let elements = parsed.querySelectorAll(s);
 
 				for (var i = 0; i < elements.length; i++) {
-					let dataFollowing = elements[i].getAttribute("data-following");
+					let dataFollowing = elements[i].dataset.following;
 
 					if (dataFollowing && dataFollowing != "") {
 						dataFollowing = `${dataFollowing},${selectors[s][0]}`;
-						elements[i].setAttribute("data-following", dataFollowing);
+						elements[i].dataset.following = dataFollowing;
 					} else {
-						elements[i].setAttribute("data-following", selectors[s][0]);
+						elements[i].dataset.following = selectors[s][0];
 					}
 				}
 
@@ -31022,10 +30998,10 @@
 				for (var i = 0; i < elements.length; i++) {
 					element = elements[i];
 					// Add note type
-					element.setAttribute("data-note", "footnote");
-					element.setAttribute("data-break-before", "avoid");
-					element.setAttribute("data-note-policy", note.policy || "auto");
-					element.setAttribute("data-note-display", note.display || "block");
+					element.dataset.note = "footnote";
+					element.dataset.breakBefore = "avoid";
+					element.dataset.notePolicy = note.policy ?? "auto";
+					element.dataset.noteDisplay = note.display ?? "block";
 					// Mark all parents
 					this.processFootnoteContainer(element);
 				}
@@ -31040,7 +31016,7 @@
 			while (element) {
 				if (isContainer(element)) {
 					// Add flag to the previous non-container element that will render with children
-					prevElement.setAttribute("data-has-notes", "true");
+					prevElement.dataset.hasNotes = "true";
 					break;
 				}
 
@@ -31049,7 +31025,7 @@
 
 				// If no containers were found and there are no further parents flag the last element
 				if (!element) {
-					prevElement.setAttribute("data-has-notes", "true");
+					prevElement.dataset.hasNotes = "true";
 				}
 			}
 		}
@@ -31070,7 +31046,7 @@
 					notes = node.querySelectorAll("[data-note='footnote']");
 				}
 
-				if (notes && notes.length) {
+				if (notes && notes.length > 0) {
 					this.findVisibleFootnotes(notes, node);
 				}
 			}
@@ -31111,7 +31087,7 @@
 			}
 
 			// Remove the break before attribute for future layout
-			node.removeAttribute("data-break-before");
+			delete node.dataset.breakBefore;
 
 			// Check if note already exists for overflow
 			let existing = noteInnerContent.querySelector(`[data-ref="${node.dataset.ref}"]`);
@@ -31122,7 +31098,7 @@
 			}
 
 			// Add the note node
-			noteInnerContent.appendChild(node);
+			noteInnerContent.append(node);
 
 			// Remove empty class
 			if (noteContent.classList.contains("pagedjs_footnote_empty")) {
@@ -31210,7 +31186,7 @@
 				pageArea.style.setProperty("--pagedjs-footnotes-height", "0px");
 				// Add a wrapper as this div is removed later
 				let wrapperDiv = document.createElement("div");
-				wrapperDiv.appendChild(node);
+				wrapperDiv.append(node);
 				// Push to the layout queue for the next page
 				this.needsLayout.push(wrapperDiv);
 			} else if (!needsNoteCall) {
@@ -31278,7 +31254,7 @@
 				let startIsNode;
 				if (isElement(startContainer)) {
 					let start = startContainer.childNodes[startOffset];
-					startIsNode = isElement(start) && start.hasAttribute("data-footnote-marker");
+					startIsNode = isElement(start) && Object.hasOwn(start.dataset, "footnoteMarker");
 				}
 
 				let extracted = overflow.extractContents();
@@ -31318,16 +31294,16 @@
 					let breakBefore, previousBreakAfter;
 					if (
 						breakToken.node &&
-						typeof breakToken.node.dataset !== "undefined" &&
-						typeof breakToken.node.dataset.previousBreakAfter !== "undefined"
+						breakToken.node.dataset !== undefined &&
+						breakToken.node.dataset.previousBreakAfter !== undefined
 					) {
 						previousBreakAfter = breakToken.node.dataset.previousBreakAfter;
 					}
 
 					if (
 						breakToken.node &&
-						typeof breakToken.node.dataset !== "undefined" &&
-						typeof breakToken.node.dataset.breakBefore !== "undefined"
+						breakToken.node.dataset !== undefined &&
+						breakToken.node.dataset.breakBefore !== undefined
 					) {
 						breakBefore = breakToken.node.dataset.breakBefore;
 					}
@@ -31352,7 +31328,7 @@
 		}
 
 		beforePageLayout(page) {
-			while (this.needsLayout.length) {
+			while (this.needsLayout.length > 0) {
 				let fragment = this.needsLayout.shift();
 
 				Array.from(fragment.childNodes).forEach((node) => {
@@ -31543,9 +31519,7 @@
 			}
 
 			// move elements
-			if (!this.orderedSelectors) {
-				this.orderedSelectors = this.orderSelectors(this.elements);
-			}
+			this.orderedSelectors ??= this.orderSelectors(this.elements);
 
 			for (let selector of this.orderedSelectors) {
 				if (selector) {
@@ -31559,7 +31533,7 @@
 							// selected.classList.add("pagedjs_clear-after"); // Clear ::after
 							let clone = running.first.cloneNode(true);
 							clone.style.display = null;
-							selected.appendChild(clone);
+							selected.append(clone);
 						}
 					}
 				}
@@ -31658,7 +31632,7 @@
 
 		beforeTreeParse(text, sheet) {
 			// element(x) is parsed as image element selector, so update element to element-ident
-			sheet.text = text.replace(/element[\s]*\(([^|^#)]*)\)/g, "element-ident($1)");
+			sheet.text = text.replaceAll(/element[\s]*\(([^|^#)]*)\)/g, "element-ident($1)");
 		}
 	}
 
@@ -31667,10 +31641,10 @@
 		return el
 			.replace(new RegExp(`^[${trim}]+`), "")
 			.replace(new RegExp(`[${trim}]+$`), "")
-			.replace(/["']/g, match => {
+			.replaceAll(/["']/g, match => {
 				return "\\" + match;
 			})
-			.replace(/[\n]/g, match => {
+			.replaceAll(/[\n]/g, match => {
 				return "\\00000A";
 			});
 	}
@@ -31678,8 +31652,8 @@
 	function cleanSelector(el) {
 		if(el == null) return;
 		return el
-			.replace(new RegExp("::footnote-call", "g"), "")
-			.replace(new RegExp("::footnote-marker", "g"), "");
+			.replaceAll(new RegExp("::footnote-call", "g"), "")
+			.replaceAll(new RegExp("::footnote-marker", "g"), "");
 	}
 
 	class StringSets extends Handler {
@@ -31761,10 +31735,7 @@
 		afterPageLayout(fragment) {
 
 		
-			if ( this.pageLastString === undefined )
-			{
-				this.pageLastString = {};
-			}
+			this.pageLastString ??= {};
 
 			
 			for (let name of Object.keys(this.stringSetSelectors)) {
@@ -31779,7 +31750,7 @@
 
 				let varFirst, varLast, varStart, varFirstExcept;
 
-				if(selected.length == 0){
+				if(selected.length === 0){
 					// if there is no sel. on the page
 					varFirst = stringPrevPage;
 					varLast = stringPrevPage;
@@ -31790,11 +31761,11 @@
 					selected.forEach((sel) => {
 						// push each content into the array to define in the variable the first and the last element of the page.
 						if (func === "content") {
-							this.pageLastString[name] = selected[selected.length - 1].textContent;
+							this.pageLastString[name] = selected.at(-1).textContent;
 						}
 
 						if (func === "attr") {
-							this.pageLastString[name] = selected[selected.length - 1].getAttribute(value) || "";
+							this.pageLastString[name] = selected.at(-1).getAttribute(value) ?? "";
 						}
 
 					});	
@@ -31806,18 +31777,18 @@
 					}
 
 					if (func === "attr") {
-						varFirst = selected[0].getAttribute(value) || "";
+						varFirst = selected[0].getAttribute(value) ?? "";
 					}
 
 
 					/* LAST */
 
 					if (func === "content") {
-						varLast = selected[selected.length - 1].textContent;
+						varLast = selected.at(-1).textContent;
 					}
 
 					if (func === "attr") {
-						varLast = selected[selected.length - 1].getAttribute(value) || "";
+						varLast = selected.at(-1).getAttribute(value) ?? "";
 					}
 
 
@@ -32032,7 +32003,7 @@
 						func: func,
 						args: args,
 						value: value,
-						style: style || "content",
+						style: style ?? "content",
 						selector: s,
 						fullSelector: this.selector,
 						variable: variable
@@ -32089,7 +32060,7 @@
 						// content & first-letter & before & after refactorized
 						if (target.style) {
 							this.selector = UUID();
-							selected.setAttribute("data-target-text", this.selector);
+							selected.dataset.targetText = this.selector;
 
 							let psuedo = "";
 							if (split.length > 1) {
@@ -32182,9 +32153,9 @@
 				// See: https://developer.mozilla.org/en-US/docs/Web/CSS/white-space#Values
 
 				return NodeFilter.FILTER_REJECT;
-			} else {
-				return NodeFilter.FILTER_REJECT;
 			}
+				return NodeFilter.FILTER_REJECT;
+			
 		}
 
 	}
@@ -32225,15 +32196,15 @@
 	(function (exports) {
 		// The following regular expressions assume that selectors matching the preceding regular expressions have been removed
 		var attributeRegex = /(\[[^\]]+\])/g;
-		var idRegex = /(#[^\s\+>~\.\[:]+)/g;
-		var classRegex = /(\.[^\s\+>~\.\[:]+)/g;
-		var pseudoElementRegex = /(::[^\s\+>~\.\[:]+|:first-line|:first-letter|:before|:after)/g;
-		var pseudoClassRegex = /(:[^\s\+>~\.\[:]+)/g;
-		var elementRegex = /([^\s\+>~\.\[:]+)/g;
-		var notRegex = /:not\(([^\)]*)\)/g;
+		var idRegex = /(#[^\s+>~.[:]+)/g;
+		var classRegex = /(\.[^\s+>~.[:]+)/g;
+		var pseudoElementRegex = /(::[^\s+>~.[:]+|:first-line|:first-letter|:before|:after)/g;
+		var pseudoClassRegex = /(:[^\s+>~.[:]+)/g;
+		var elementRegex = /([^\s+>~.[:]+)/g;
+		var notRegex = /:not\(([^)]*)\)/g;
 		var ruleRegex = /\{[^]*/gm;
-		var separatorRegex = /[\*\s\+>~]/g;
-		var straysRegex = /[#\.]/g;
+		var separatorRegex = /[*\s+>~]/g;
+		var straysRegex = /[#.]/g;
 
 		// Find matches for a regular expression in a string and push their details to parts
 		// Type is "a" for IDs, "b" for classes, attributes and pseudo-classes and "c" for elements and pseudo-elements
@@ -32314,9 +32285,7 @@
 		exports.isSelectorValid = function(selector) {
 		  var valid = validSelectorCache[selector];
 		  if (valid === undefined) {
-		    if (testSelectorElement == null) {
-		      testSelectorElement = document.createElement('div');
-		    }
+		    testSelectorElement ??= document.createElement('div');
 
 		    try {
 		      testSelectorElement.querySelector(selector);
@@ -32367,7 +32336,7 @@
 			for (let i = 0; i < matches.length; i++) {
 				let element = matches[i];
 				let selector = selectors[i];
-				let displayValue = selector[selector.length-1].value;
+				let displayValue = selector.at(-1).value;
 				if(this.removable(element) && displayValue === "none") {
 					element.dataset.undisplayed = "undisplayed";
 				}
@@ -32405,10 +32374,10 @@
 				try {
 					try {
 						query = content.querySelectorAll(selector);
-					} catch (e) {
+					} catch (error) {
 						query = content.querySelectorAll(cleanSelector(selector));
 					}
-				} catch (e) {
+				} catch (error) {
 					query = [];
 				}
 				let elements = Array.from(query);
@@ -32416,7 +32385,7 @@
 					if (matches.includes(e)) {
 						let index = matches.indexOf(e);
 						selectors[index].push(displayItem);
-						selectors[index] = selectors[index].sort(this.sorter);
+						selectors[index] = selectors[index].toSorted(this.sorter);
 					} else {
 						matches.push(e);
 						selectors.push([displayItem]);
@@ -32466,7 +32435,7 @@
 			var symbol;
 			if (typeof Symbol !== 'function') return false;
 			symbol = Symbol('test symbol');
-			try { String(symbol); } catch (e) { return false; }
+			try { String(symbol); } catch (error) { return false; }
 
 			// Return 'true' also for polyfills
 			if (!validTypes[typeof Symbol.iterator]) return false;
@@ -32531,7 +32500,7 @@
 			try {
 				String(NativeSymbol());
 				isNativeSafe = true;
-			} catch (ignore) {}
+			} catch (error) {}
 		}
 
 		var generateName = (function () {
@@ -32589,18 +32558,18 @@
 
 			// To ensure proper interoperability with other native functions (e.g. Array.from)
 			// fallback to eventual native implementation of given symbol
-			hasInstance: d('', (NativeSymbol && NativeSymbol.hasInstance) || SymbolPolyfill('hasInstance')),
-			isConcatSpreadable: d('', (NativeSymbol && NativeSymbol.isConcatSpreadable) ||
+			hasInstance: d('', (NativeSymbol && NativeSymbol.hasInstance) ?? SymbolPolyfill('hasInstance')),
+			isConcatSpreadable: d('', (NativeSymbol && NativeSymbol.isConcatSpreadable) ??
 				SymbolPolyfill('isConcatSpreadable')),
-			iterator: d('', (NativeSymbol && NativeSymbol.iterator) || SymbolPolyfill('iterator')),
-			match: d('', (NativeSymbol && NativeSymbol.match) || SymbolPolyfill('match')),
-			replace: d('', (NativeSymbol && NativeSymbol.replace) || SymbolPolyfill('replace')),
-			search: d('', (NativeSymbol && NativeSymbol.search) || SymbolPolyfill('search')),
-			species: d('', (NativeSymbol && NativeSymbol.species) || SymbolPolyfill('species')),
-			split: d('', (NativeSymbol && NativeSymbol.split) || SymbolPolyfill('split')),
-			toPrimitive: d('', (NativeSymbol && NativeSymbol.toPrimitive) || SymbolPolyfill('toPrimitive')),
-			toStringTag: d('', (NativeSymbol && NativeSymbol.toStringTag) || SymbolPolyfill('toStringTag')),
-			unscopables: d('', (NativeSymbol && NativeSymbol.unscopables) || SymbolPolyfill('unscopables'))
+			iterator: d('', (NativeSymbol && NativeSymbol.iterator) ?? SymbolPolyfill('iterator')),
+			match: d('', (NativeSymbol && NativeSymbol.match) ?? SymbolPolyfill('match')),
+			replace: d('', (NativeSymbol && NativeSymbol.replace) ?? SymbolPolyfill('replace')),
+			search: d('', (NativeSymbol && NativeSymbol.search) ?? SymbolPolyfill('search')),
+			species: d('', (NativeSymbol && NativeSymbol.species) ?? SymbolPolyfill('species')),
+			split: d('', (NativeSymbol && NativeSymbol.split) ?? SymbolPolyfill('split')),
+			toPrimitive: d('', (NativeSymbol && NativeSymbol.toPrimitive) ?? SymbolPolyfill('toPrimitive')),
+			toStringTag: d('', (NativeSymbol && NativeSymbol.toStringTag) ?? SymbolPolyfill('toStringTag')),
+			unscopables: d('', (NativeSymbol && NativeSymbol.unscopables) ?? SymbolPolyfill('unscopables'))
 		});
 
 		// Internal tweaks for real symbol producer
@@ -32739,7 +32708,7 @@
 				typeof value === "string" ||
 				(value &&
 					typeof value === "object" &&
-					(value instanceof String || objToString.call(value) === id)) ||
+					(value instanceof String || objToString.call(value) === id)) ??
 				false
 			);
 		};
@@ -32834,7 +32803,7 @@
 					for (i = 0, j = 0; i < length; ++i) {
 						value = arrayLike[i];
 						if (i + 1 < length) {
-							code = value.charCodeAt(0);
+							code = value.codePointAt(0);
 							// eslint-disable-next-line max-depth
 							if (code >= 0xd800 && code <= 0xdbff) value += arrayLike[++i];
 						}
@@ -32949,7 +32918,7 @@
 	var map = { function: true, object: true };
 
 	var isObject$1 = function (value) {
-		return (isValue(value) && map[typeof value]) || false;
+		return (isValue(value) && map[typeof value]) ?? false;
 	};
 
 	var isObject = isObject$1;
@@ -33031,7 +33000,7 @@
 		constructor(options) {
 			// this.preview = this.getParams("preview") !== "false";
 
-			this.settings = options || {};
+			this.settings = options ?? {};
 
 			// Process styles
 			this.polisher = new Polisher(false);
@@ -33084,7 +33053,7 @@
 		}
 
 		registerHandlers() {
-			return registerHandlers.apply(registerHandlers, arguments);
+			 registerHandlers.apply(registerHandlers, arguments);
 		}
 
 		getParams(name) {
@@ -33114,7 +33083,7 @@
 				template.dataset.ref = "pagedjs-content";
 				template.innerHTML = body.innerHTML;
 				body.innerHTML = "";
-				body.appendChild(template);
+				body.append(template);
 			}
 
 			return template.content;
@@ -33128,7 +33097,7 @@
 			const elements = [...stylesheets, ...inlineStyles];
 			return elements
 				// preserve order
-				.sort(function (element1, element2) {
+				.toSorted(function (element1, element2) {
 					const position = element1.compareDocumentPosition(element2);
 					if (position === Node.DOCUMENT_POSITION_PRECEDING) {
 						return 1;
@@ -33158,13 +33127,9 @@
 
 			await this.hooks.beforePreview.trigger(content, renderTo);
 
-			if (!content) {
-				content = this.wrapContent();
-			}
+			content ??= this.wrapContent();
 
-			if (!stylesheets) {
-				stylesheets = this.removeStyles();
-			}
+			stylesheets ??= this.removeStyles();
 
 			this.polisher.setup();
 
@@ -33218,7 +33183,7 @@
 		};
 	});
 
-	let config = window.PagedConfig || {
+	let config = window.PagedConfig ?? {
 		auto: true,
 		before: undefined,
 		after: undefined,

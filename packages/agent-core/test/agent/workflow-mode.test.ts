@@ -21,7 +21,7 @@ describe('WorkflowMode', () => {
     mode.enter('manual');
 
     const history = ctx.agent.context.history;
-    const last = history[history.length - 1];
+    const last = history.at(-1);
     expect(last?.origin).toEqual({
       kind: 'injection',
       variant: 'workflow_mode',
@@ -84,7 +84,7 @@ describe('WorkflowMode', () => {
     const mode = ctx.agent.workflowMode;
 
     // Should not throw
-    expect(() => mode.exit()).not.toThrow();
+    expect(() =>{  mode.exit(); }).not.toThrow();
     expect(mode.isActive).toBe(false);
   });
 

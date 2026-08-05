@@ -124,7 +124,7 @@ describe('server-v2 /api/v1 fs folder picker', () => {
     );
     expect(body.code).toBe(0);
     expect(body.data.path).toBe(await realpath(root));
-    const names = body.data.entries.map((e) => e.name).sort();
+    const names = body.data.entries.map((e) => e.name).toSorted();
     expect(names).toEqual(['alpha', 'beta']);
     for (const entry of body.data.entries) {
       expect(entry.is_dir).toBe(true);
@@ -233,7 +233,7 @@ describe('server-v2 /api/v1 fs:mkdir', () => {
   it('creates a directory that fs:browse then lists', async () => {
     const target = join(dir as string, 'fresh-folder');
 
-    const { status, body } = await postJson<{ path: string }>('/api/v1/fs:mkdir', {
+    const { status, body } = await postJson('/api/v1/fs:mkdir', {
       path: target,
     });
     expect(status).toBe(200);

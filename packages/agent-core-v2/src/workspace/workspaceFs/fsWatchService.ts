@@ -102,7 +102,7 @@ export class WorkspaceFsWatchService extends Disposable implements IWorkspaceFsW
     this.loadGitignore();
     const handle = this.hostFsWatch.watch(this.workDir, { recursive: true });
     this.handle = handle;
-    this.handleSub = handle.onDidChange((e) => this.onRaw(e));
+    this.handleSub = handle.onDidChange((e) =>{  this.onRaw(e); });
   }
 
   private teardownHandle(): void {
@@ -238,7 +238,7 @@ class WorkspaceFsWatchSubscription implements IWorkspaceFsWatchSubscription {
       this.pending = [];
     }
     if (this.debounceTimer === undefined) {
-      const timer = setTimeout(() => this.flush(), this.debounceMs);
+      const timer = setTimeout(() =>{  this.flush(); }, this.debounceMs);
       timer.unref?.();
       this.debounceTimer = timer;
     }

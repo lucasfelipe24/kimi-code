@@ -219,7 +219,7 @@ export class FrameParser {
   private offset = 0; // absolute offset of the next byte to be consumed
 
   *feed(chunk: Buffer): Generator<Frame> {
-    let buf: Buffer = this.pending.length ? Buffer.concat([this.pending, chunk]) : chunk;
+    let buf: Buffer = this.pending.length > 0 ? Buffer.concat([this.pending, chunk]) : chunk;
     let pos = 0;
 
     while (true) {
@@ -502,7 +502,7 @@ function scanAbortError(): Error {
  *  thread pool for a plain fd; fs.promises has no fd-level read). */
 function readAt(fd: number, buf: Buffer, bufOff: number, len: number, pos: number): Promise<number> {
   return new Promise((resolve, reject) => {
-    fs.read(fd, buf, bufOff, len, pos, (err, bytesRead) => (err ? reject(err) : resolve(bytesRead)));
+    fs.read(fd, buf, bufOff, len, pos, (err, bytesRead) =>{ err ? reject(err) : resolve(bytesRead); });
   });
 }
 

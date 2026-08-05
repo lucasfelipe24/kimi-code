@@ -7,8 +7,8 @@
  *   node html_to_pdf.js input.html --output custom.pdf
  */
 
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 const { loadPlaywright, resolveChromium } = require('./browser_helper');
 
 const { chromium } = loadPlaywright();
@@ -143,7 +143,7 @@ async function convertHTMLToPDF(inputFile, outputFile, customCSS) {
     }
     browser = await chromium.launch(launchOptions);
   } catch (launchError) {
-    const errorMsg = launchError.message || '';
+    const errorMsg = launchError.message ?? '';
 
     // Check for common Ubuntu/Linux dependency issues
     if (errorMsg.includes('shared libraries') || errorMsg.includes('.so')) {
@@ -268,7 +268,7 @@ async function convertHTMLToPDF(inputFile, outputFile, customCSS) {
       await page.waitForFunction(() => {
         const mermaids = document.querySelectorAll('.mermaid');
         for (const m of mermaids) {
-          if (!m.querySelector('svg') && !m.getAttribute('data-processed')) {
+          if (!m.querySelector('svg') && !m.dataset.processed) {
             return false;
           }
         }
@@ -358,11 +358,11 @@ async function convertHTMLToPDF(inputFile, outputFile, customCSS) {
         // If using counter() in ::before or list-style: none
         if (hasCustomNumbering || (beforeContent && beforeContent !== 'none' && beforeContent !== '""')) {
           // Mark this ol as counter-fixed
-          ol.setAttribute('data-counter-fixed', 'true');
+          ol.dataset.counterFixed = 'true';
 
           // Add data-counter attribute to each li
           liItems.forEach((li, index) => {
-            li.setAttribute('data-counter', index + 1);
+            li.dataset.counter = index + 1;
             fixedCount++;
           });
         }
@@ -371,7 +371,7 @@ async function convertHTMLToPDF(inputFile, outputFile, customCSS) {
       // Inject CSS to use data-counter attribute instead of CSS counter
       if (fixedCount > 0) {
         const style = document.createElement('style');
-        style.setAttribute('data-counter-fix', 'true');
+        style.dataset.counterFix = 'true';
         style.textContent = `
           /* Override CSS counter with data-counter attribute */
           ol[data-counter-fixed] {
@@ -382,7 +382,7 @@ async function convertHTMLToPDF(inputFile, outputFile, customCSS) {
             counter-increment: none !important;
           }
         `;
-        document.head.appendChild(style);
+        document.head.append(style);
       }
 
       return fixedCount;
@@ -454,7 +454,7 @@ async function convertHTMLToPDF(inputFile, outputFile, customCSS) {
             tag: el.tagName.toLowerCase(),
             class: el.className || '',
             overflow: scrollW - clientW,
-            preview: (el.textContent || '').slice(0, 60).replace(/\s+/g, ' ')
+            preview: (el.textContent || '').slice(0, 60).replaceAll(/\s+/g, ' ')
           });
         }
       });
@@ -480,15 +480,15 @@ async function convertHTMLToPDF(inputFile, outputFile, customCSS) {
       let totalEnglish = 0;
 
       pages.forEach((p, i) => {
-        const text = p.innerText || '';
-        const chinese = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
-        const english = (text.match(/[a-zA-Z]+/g) || []).length;
+        const text = p.innerText ?? '';
+        const chinese = (text.match(/[\u4E00-\u9FA5]/g) ?? []).length;
+        const english = (text.match(/[a-zA-Z]+/g) ?? []).length;
         const wordCount = chinese + english;
         totalChinese += chinese;
         totalEnglish += english;
 
         // Detect TOC pages (contain many page number patterns)
-        const tocPattern = (text.match(/\.{3,}\s*\d+|…+\s*\d+/g) || []).length;
+        const tocPattern = (text.match(/\.{3,}\s*\d+|…+\s*\d+/g) ?? []).length;
         const isToc = tocPattern >= 5;
 
         pageStats.push({

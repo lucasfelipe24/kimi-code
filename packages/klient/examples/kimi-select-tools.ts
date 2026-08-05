@@ -259,8 +259,8 @@ interface WireBody {
 
 async function probeWireEncoding(): Promise<void> {
   console.log('\n=== part A: wire-encoding boundary (local stub) ===');
-  let handler: (req: IncomingMessage, res: ServerResponse) => void = (_req, res) =>
-    writePong(res);
+  let handler: (req: IncomingMessage, res: ServerResponse) => void = (_req, res) =>{ 
+    writePong(res); };
   let lastBody: WireBody | undefined;
 
   const server = createServer((req, res) => {
@@ -276,7 +276,7 @@ async function probeWireEncoding(): Promise<void> {
     });
   });
   await new Promise<void>((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve());
+    server.listen(0, '127.0.0.1', () =>{  resolve(); });
   });
   const port = (server.address() as AddressInfo).port;
 
@@ -305,11 +305,11 @@ async function probeWireEncoding(): Promise<void> {
 
   const input: ModelRequestInput = {
     systemPrompt: SYSTEM_PROMPT,
-    tools: [SELECT_TOOLS, { ...COMPUTER_USE_TOOLS[0]!, deferred: true }],
+    tools: [SELECT_TOOLS, { ...COMPUTER_USE_TOOLS[0], deferred: true }],
     messages: [
       announcementMessage(COMPUTER_USE_NAMES),
       userMessage('take a screenshot'),
-      toolDeclarationMessage([COMPUTER_USE_TOOLS[0]!]),
+      toolDeclarationMessage([COMPUTER_USE_TOOLS[0]]),
     ],
   };
 
@@ -330,7 +330,8 @@ async function probeWireEncoding(): Promise<void> {
       'kimi: top-level tools[] keeps select_tools',
     );
     assert(
-      kimiBody?.tools?.some((t) => t.function?.name === 'computer_screenshot') !== true,
+      !
+      kimiBody?.tools?.some((t) => t.function?.name === 'computer_screenshot'),
       'kimi: deferred tool stays OUT of top-level tools[]',
     );
     console.log(
@@ -357,7 +358,7 @@ async function probeWireEncoding(): Promise<void> {
   } finally {
     server.closeAllConnections();
     await new Promise<void>((resolve) => {
-      server.close(() => resolve());
+      server.close(() =>{  resolve(); });
     });
   }
 }
@@ -382,7 +383,7 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
     return await Promise.race([
       promise,
       new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(() => reject(new Error(`${label} timed out after ${String(ms)}ms`)), ms);
+        timer = setTimeout(() =>{  reject(new Error(`${label} timed out after ${String(ms)}ms`)); }, ms);
       }),
     ]);
   } finally {
@@ -687,7 +688,7 @@ async function probeTappedContext(): Promise<void> {
         });
       });
       await new Promise<void>((resolve) => {
-        server.listen(0, '127.0.0.1', () => resolve());
+        server.listen(0, '127.0.0.1', () =>{  resolve(); });
       });
       const port = (server.address() as AddressInfo).port;
 
@@ -697,7 +698,7 @@ async function probeTappedContext(): Promise<void> {
           registry,
         );
         // One scenario is enough to show the mechanism: click (has arguments).
-        const scenario = SCENARIOS[1]!;
+        const scenario = SCENARIOS[1];
         const step1 = await step1Select(tapped, scenario);
         if (step1.kind === 'selected') {
           const step2 = await step2UseLoadedTool(tapped, step1, scenario);
@@ -710,7 +711,7 @@ async function probeTappedContext(): Promise<void> {
       } finally {
         server.closeAllConnections();
         await new Promise<void>((resolve) => {
-          server.close(() => resolve());
+          server.close(() =>{  resolve(); });
         });
       }
     }

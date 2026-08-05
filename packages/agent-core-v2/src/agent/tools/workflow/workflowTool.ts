@@ -90,12 +90,12 @@ export class WorkflowTool implements IWorkflowTool {
     if (hasName === hasScript) {
       return { output: WORKFLOW_NAME_OR_SCRIPT_REQUIRED, isError: true };
     }
-    const subject = hasName ? name! : 'inline-script';
+    const subject = hasName ? name : 'inline-script';
     return {
       description: hasName ? `Run workflow ${subject}` : 'Run inline workflow script',
       accesses: ToolAccesses.none(),
       display: hasName
-        ? this.namedWorkflowDisplay(name!, args.args ?? '')
+        ? this.namedWorkflowDisplay(name, args.args ?? '')
         : this.inlineScriptDisplay(script!, args.args ?? ''),
       approvalRule: this.name,
       matchesRule: (ruleArgs) => matchesGlobRuleSubject(ruleArgs, subject),

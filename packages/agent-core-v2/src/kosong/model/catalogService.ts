@@ -146,8 +146,8 @@ export class ModelCatalog extends Disposable implements IModelCatalog {
     @IHostRequestHeaders private readonly hostRequestHeaders: IHostRequestHeaders,
   ) {
     super();
-    this._register(this.models.onDidChangeModels(() => this.notifyConfigChanged()));
-    this._register(this.providers.onDidChangeProviders(() => this.notifyConfigChanged()));
+    this._register(this.models.onDidChangeModels(() =>{  this.notifyConfigChanged(); }));
+    this._register(this.providers.onDidChangeProviders(() =>{  this.notifyConfigChanged(); }));
   }
 
   notifyConfigChanged(): void {

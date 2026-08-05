@@ -138,8 +138,8 @@ export class TranscriptService {
     // events are per-handler (Workspace scope), so follow every handler —
     // present and future — through the App-scope registry.
     followWorkspaceHandlers(deps.core.accessor, (service) => {
-      const d1 = service.onDidCloseSession(({ sessionId }) => this.dropSession(sessionId));
-      const d2 = service.onDidArchiveSession(({ sessionId }) => this.dropSession(sessionId));
+      const d1 = service.onDidCloseSession(({ sessionId }) =>{  this.dropSession(sessionId); });
+      const d2 = service.onDidArchiveSession(({ sessionId }) =>{  this.dropSession(sessionId); });
       return {
         dispose: () => {
           d1.dispose();
@@ -169,8 +169,8 @@ export class TranscriptService {
     const store = new TranscriptStore(sessionId);
     let binding: TranscriptBinding;
     try {
-      binding = bindSessionTranscript(store, session, this.deps.logger, (event) =>
-        this.handleLiveOps(sessionId, event),
+      binding = bindSessionTranscript(store, session, this.deps.logger, (event) =>{ 
+        this.handleLiveOps(sessionId, event); },
       );
     } catch (error) {
       // The session's core scope can be disposed mid-bind during shutdown

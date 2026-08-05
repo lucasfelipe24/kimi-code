@@ -133,7 +133,7 @@ describe('SessionInitService', () => {
     ix.set(ISessionInitService, new SyncDescriptor(SessionInitService));
   });
 
-  afterEach(() => disposables.dispose());
+  afterEach(() =>{  disposables.dispose(); });
 
   it('spawns a coder subagent, reloads AGENTS.md, and reminds the main agent', async () => {
     const svc = ix.get(ISessionInitService);
@@ -187,7 +187,7 @@ describe('SessionInitService', () => {
     }));
     const svc = ix.get(ISessionInitService);
 
-    const error = await svc.generateAgentsMd().catch((e) => e);
+    const error = await svc.generateAgentsMd().catch((error) => error);
     expect(error).toBeInstanceOf(Error2);
     expect((error as Error2).code).toBe(ErrorCodes.SESSION_INIT_FAILED);
     expect((error as Error2).message).toContain('coder exploded');
@@ -200,7 +200,7 @@ describe('SessionInitService', () => {
     lifecycle.get.mockReturnValue(undefined);
     const svc = ix.get(ISessionInitService);
 
-    const error = await svc.generateAgentsMd().catch((e) => e);
+    const error = await svc.generateAgentsMd().catch((error) => error);
     expect(error).toBeInstanceOf(Error2);
     expect((error as Error2).code).toBe(ErrorCodes.AGENT_NOT_FOUND);
   });
@@ -212,16 +212,16 @@ describe('SessionInitService', () => {
       // The real lifecycle rejects the run completion when the launch signal
       // aborts; mirror that so the service-level propagation is exercised.
       completion: new Promise<{ summary: string }>((_resolve, reject) => {
-        opts.signal.addEventListener('abort', () => reject(opts.signal.reason));
+        opts.signal.addEventListener('abort', () =>{  reject(opts.signal.reason); });
       }),
     }));
     const svc = ix.get(ISessionInitService);
 
     const pending = svc.generateAgentsMd();
-    await vi.waitFor(() => expect(run).toHaveBeenCalled());
+    await vi.waitFor(() =>{  expect(run).toHaveBeenCalled(); });
     svc.cancelInit();
 
-    const error = await pending.catch((e) => e);
+    const error = await pending.catch((error) => error);
     // Surfaces as a user cancellation (TUI resets quietly on isAbortError),
     // never as SESSION_INIT_FAILED, and without a subagent.failed event.
     expect(error).toBeInstanceOf(UserCancellationError);
@@ -232,6 +232,6 @@ describe('SessionInitService', () => {
 
   it('cancelInit is a no-op when no init run is in flight', () => {
     const svc = ix.get(ISessionInitService);
-    expect(() => svc.cancelInit()).not.toThrow();
+    expect(() =>{  svc.cancelInit(); }).not.toThrow();
   });
 });

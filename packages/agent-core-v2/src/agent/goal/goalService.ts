@@ -332,7 +332,7 @@ export class AgentGoalService extends Disposable implements IAgentGoalService {
       }),
     );
     this._register(
-      usageService.onDidRecord((ctx) => this.handleUsageRecorded(ctx)),
+      usageService.onDidRecord((ctx) =>{  this.handleUsageRecorded(ctx); }),
     );
     this._register(
       loopService.hooks.onWillBeginStep.register('goal-count-turn', async (ctx, next) => {

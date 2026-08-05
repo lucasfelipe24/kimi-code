@@ -175,11 +175,9 @@ export class WorkspaceService implements IWorkspaceService {
       await this.ensureMerged();
       const catalog = await this.loadCatalog();
       let root = catalog.workspaces.find((ws) => ws.id === id)?.root;
-      if (root === undefined) {
-        root = (await readSessionIndexEntries(this.storage)).find(
+      root ??= (await readSessionIndexEntries(this.storage)).find(
           (line) => encodeWorkDirKey(line.workDir) === id,
         )?.workDir;
-      }
       if (root === undefined) {
         await this.store.save({
           workspaces: catalog.workspaces.filter((ws) => ws.id !== id),

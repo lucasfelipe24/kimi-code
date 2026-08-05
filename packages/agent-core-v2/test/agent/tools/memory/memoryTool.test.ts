@@ -160,7 +160,7 @@ describe('MemoryTool', () => {
     tracked = [];
     build();
   });
-  afterEach(() => disposables.dispose());
+  afterEach(() =>{  disposables.dispose(); });
 
   it('is registered as a native tool without a flag gate', () => {
     const contribution = getAgentToolContributions().find(

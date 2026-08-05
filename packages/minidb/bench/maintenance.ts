@@ -70,13 +70,13 @@ function percentileOf(sorted, p) {
 
 function latencySummary(samples) {
   if (!samples || samples.length === 0) return undefined;
-  const sorted = [...samples].sort((a, b) => a - b);
+  const sorted = [...samples].toSorted((a, b) => a - b);
   return {
     count: sorted.length,
     p50: percentileOf(sorted, 50),
     p95: percentileOf(sorted, 95),
     p99: percentileOf(sorted, 99),
-    max: sorted[sorted.length - 1],
+    max: sorted.at(-1),
   };
 }
 
@@ -137,7 +137,7 @@ async function scenario(name, dir, fn) {
   eld.enable();
   sampler.start();
   const t0 = performance.now();
-  const out = (await fn()) || {};
+  const out = (await fn()) ?? {};
   const durationMs = performance.now() - t0;
   const peaks = sampler.stop();
   eld.disable();
@@ -361,9 +361,9 @@ async function main() {
   const jsonPath = jsonIdx !== -1 ? argv[jsonIdx + 1] : process.env.BENCH_JSON;
   const quick = argv.includes('--quick') || process.env.BENCH_QUICK === '1';
 
-  const SEED = Number(process.env.BENCH_SEED || 42);
-  const N = quick ? 20_000 : Number(process.env.N || 1_000_000);
-  const NDISK = quick ? 5_000 : Number(process.env.NDISK || 100_000);
+  const SEED = Number(process.env.BENCH_SEED ?? 42);
+  const N = quick ? 20_000 : Number(process.env.N ?? 1_000_000);
+  const NDISK = quick ? 5_000 : Number(process.env.NDISK ?? 100_000);
 
   console.log(
     `\nminidb stage-6 maintenance benchmark  (N=${fmt(N)}, disk N=${fmt(NDISK)}, seed=${SEED}${quick ? ', QUICK' : ''}, node ${process.version})\n`,
@@ -432,7 +432,7 @@ async function main() {
   console.log('\ndone.\n');
 }
 
-main().catch((e) => {
-  console.error(e);
+main().catch((error) => {
+  console.error(error);
   process.exit(1);
 });

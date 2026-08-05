@@ -16,7 +16,7 @@ import type { ValueLoc } from './store.js';
  *  postings file's async read. */
 export function readAtAsync(fd: number, buf: Buffer, bufOff: number, len: number, pos: number): Promise<number> {
   return new Promise((resolve, reject) => {
-    fs.read(fd, buf, bufOff, len, pos, (err, bytesRead) => (err ? reject(err) : resolve(bytesRead)));
+    fs.read(fd, buf, bufOff, len, pos, (err, bytesRead) =>{ err ? reject(err) : resolve(bytesRead); });
   });
 }
 
@@ -51,9 +51,9 @@ export class ValueReader {
   private openIfExists(file: string): number | null {
     try {
       return fs.openSync(file, 'r');
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
-      throw e;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw error;
     }
   }
 

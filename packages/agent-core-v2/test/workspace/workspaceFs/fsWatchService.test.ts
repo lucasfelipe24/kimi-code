@@ -121,7 +121,7 @@ function makeWorkspace(gitignore?: string): Harness {
     stubPair(IHostFileSystem, fakeHostFs(gitignore)),
   ]);
   const svc = workspace.accessor.get(IWorkspaceFsWatchService);
-  disposers.push(() => host.dispose());
+  disposers.push(() =>{  host.dispose(); });
   return { svc, watch };
 }
 
@@ -214,8 +214,8 @@ describe('WorkspaceFsWatchService', () => {
   it('rejects paths that escape the workspace', () => {
     const { svc } = makeWorkspace();
     const sub = svc.subscribe();
-    expect(() => sub.setWatchedPaths(['../x'])).toThrowError(/escapes workspace|rejected/);
-    expect(() => sub.setWatchedPaths(['/abs'])).toThrowError(/rejected/);
+    expect(() =>{  sub.setWatchedPaths(['../x']); }).toThrowError(/escapes workspace|rejected/);
+    expect(() =>{  sub.setWatchedPaths(['/abs']); }).toThrowError(/rejected/);
   });
 
   it('disposes the os handle when the last watched path set becomes empty', () => {

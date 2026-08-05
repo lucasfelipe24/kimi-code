@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
  * the plugin out) — callers must treat auto-install as best-effort.
  */
 export async function resolveBundledPluginDir(pluginId: string): Promise<string | undefined> {
-  const sourceDir = dirname(fileURLToPath(import.meta.url));
+  const sourceDir = import.meta.dirname;
   const candidates = [
     // Bundled into the app: dist-plugins/<id> next to dist/ (this file is
     // bundled into dist/main.mjs by tsdown).

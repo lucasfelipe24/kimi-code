@@ -205,7 +205,7 @@ export class MaintenanceScheduler {
     });
     task.promise = promise;
     if (opts.deadlineMs !== undefined) {
-      task.deadlineTimer = setTimeout(() => task.controller.abort(), opts.deadlineMs);
+      task.deadlineTimer = setTimeout(() =>{  task.controller.abort(); }, opts.deadlineMs);
       task.deadlineTimer.unref?.();
     }
     this.queue.push(task);
@@ -226,8 +226,8 @@ export class MaintenanceScheduler {
     task.startedAt = Date.now();
     try {
       await this.preflight(task.kind);
-    } catch (e) {
-      this.finish(task, e);
+    } catch (error) {
+      this.finish(task, error);
       void this.pump();
       return;
     }
@@ -240,8 +240,8 @@ export class MaintenanceScheduler {
     try {
       await this.als.run(task, () => task.run(ctx));
       this.finish(task, null);
-    } catch (e) {
-      this.finish(task, e);
+    } catch (error) {
+      this.finish(task, error);
     }
     void this.pump();
   }
@@ -326,7 +326,7 @@ export class WorkerSlots {
   tryAcquire(): (() => void) | null {
     if (this.available <= 0) return null;
     this.available--;
-    return () => this.release();
+    return () =>{  this.release(); };
   }
 
   /** Wait for a slot (observing the optional abort signal). */
@@ -342,7 +342,7 @@ export class WorkerSlots {
       };
       const grant = (): void => {
         signal?.removeEventListener('abort', onAbort);
-        resolve(() => this.release());
+        resolve(() =>{  this.release(); });
       };
       signal?.addEventListener('abort', onAbort, { once: true });
       this.waiters.push(grant);

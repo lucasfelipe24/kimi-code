@@ -77,12 +77,12 @@ function percentileOf(sorted, p) {
 
 function latencySummary(samples) {
   if (!samples || samples.length === 0) return undefined;
-  const sorted = [...samples].sort((a, b) => a - b);
+  const sorted = [...samples].toSorted((a, b) => a - b);
   return {
     p50: percentileOf(sorted, 50),
     p95: percentileOf(sorted, 95),
     p99: percentileOf(sorted, 99),
-    max: sorted[sorted.length - 1],
+    max: sorted.at(-1),
   };
 }
 
@@ -126,7 +126,7 @@ async function scenario(name, fn, { ops: opCount, extra } = {}) {
   eld.enable();
   mem.start();
   const t0 = performance.now();
-  const out = (await fn({ lat: (ms) => latencies.push(ms) })) || {};
+  const out = (await fn({ lat: (ms) => latencies.push(ms) })) ?? {};
   const durationMs = performance.now() - t0;
   const memPeaks = mem.stop();
   eld.disable();
@@ -427,13 +427,13 @@ async function main() {
   const jsonPath = jsonIdx !== -1 ? argv[jsonIdx + 1] : process.env.BENCH_JSON;
   const quick = argv.includes('--quick') || process.env.BENCH_QUICK === '1';
 
-  const SEED = Number(process.env.BENCH_SEED || 42);
+  const SEED = Number(process.env.BENCH_SEED ?? 42);
   const VALUE = 'x'.repeat(100); // 100-byte values
-  const N = quick ? 5_000 : Number(process.env.N || 200_000);
-  const NSMALL = quick ? 300 : Number(process.env.NSMALL || 3_000);
+  const N = quick ? 5_000 : Number(process.env.N ?? 200_000);
+  const NSMALL = quick ? 300 : Number(process.env.NSMALL ?? 3_000);
   const COLD_OPEN_SIZES = quick ? [1_000, 2_000] : [10_000, 50_000, 100_000];
   const SEARCH_SIZES = quick ? [1_000, 2_000] : [10_000, 100_000];
-  const IDLE_MS = quick ? 400 : Number(process.env.BENCH_IDLE_MS || 10_000);
+  const IDLE_MS = quick ? 400 : Number(process.env.BENCH_IDLE_MS ?? 10_000);
 
   console.log(
     `\nminidb benchmark  (N=${fmt(N)}, value=${VALUE.length}B, seed=${SEED}${quick ? ', QUICK' : ''}, node ${process.version})\n`,
@@ -467,7 +467,7 @@ async function main() {
   console.log('\ndone.\n');
 }
 
-main().catch((e) => {
-  console.error(e);
+main().catch((error) => {
+  console.error(error);
   process.exit(1);
 });

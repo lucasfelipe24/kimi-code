@@ -299,7 +299,7 @@ export function registerWorkflowsRoutes(app: WorkflowsRouteHost, core: Scope): v
       await ensureMainAgent(session);
       const runService = session.accessor.get(IWorkflowRunService);
 
-      const body = req.body as z.infer<typeof runWorkflowBodySchema>;
+      const body = req.body;
       const result = await runService.start({
         name: body.name,
         script: body.script,
@@ -447,7 +447,7 @@ export function registerWorkflowsRoutes(app: WorkflowsRouteHost, core: Scope): v
         return;
       }
 
-      const body = req.body as z.infer<typeof saveWorkflowBodySchema>;
+      const body = req.body;
       const saved = await catalog.save(body);
       // Reload the catalog and find the saved workflow to derive its name
       await catalog.reload();

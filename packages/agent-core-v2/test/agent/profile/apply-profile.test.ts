@@ -36,7 +36,7 @@ import {
 const profile: ResolvedAgentProfile = normalizeAgentProfile({
   name: 'agents-profile',
   systemPrompt: (context) =>
-    typeof context['agentsMd'] === 'string' ? (context['agentsMd'] as string) : '',
+    typeof context['agentsMd'] === 'string' ? (context['agentsMd']) : '',
   tools: [],
 });
 

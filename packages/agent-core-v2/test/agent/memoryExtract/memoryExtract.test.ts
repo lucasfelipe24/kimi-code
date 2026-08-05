@@ -276,7 +276,7 @@ describe('AgentMemoryExtractService', () => {
     agentId = MAIN_AGENT_ID;
     build();
   });
-  afterEach(() => disposables.dispose());
+  afterEach(() =>{  disposables.dispose(); });
 
   it('coalesces a burst of turn.ended into one run, then reruns for genuinely new transcript', async () => {
     context.append(userMessage('how do I deploy the service'));
@@ -563,7 +563,7 @@ describe('AgentMemoryExtractService', () => {
       ({ signal }) =>
         new Promise<readonly MemoryExtractDraft[]>((_resolve, reject) => {
           if (signal.aborted) reject(new Error('aborted'));
-          signal.addEventListener('abort', () => reject(new Error('aborted')));
+          signal.addEventListener('abort', () =>{  reject(new Error('aborted')); });
         }),
     );
     endTurn();

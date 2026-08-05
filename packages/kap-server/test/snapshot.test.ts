@@ -304,7 +304,7 @@ describe('server-v2 GET /api/v1/sessions/:id/snapshot', () => {
     base = `http://127.0.0.1:${server.port}`;
 
     // Guard: nothing is live in the new process — the session is cold.
-    expect(getLiveSessionById(server!.core.accessor, sid)).toBeUndefined();
+    expect(getLiveSessionById(server.core.accessor, sid)).toBeUndefined();
 
     const snap = await snapshot(sid);
     expect(snap.session.id).toBe(sid);
@@ -349,7 +349,7 @@ describe('server-v2 GET /api/v1/sessions/:id/snapshot', () => {
     base = `http://127.0.0.1:${server.port}`;
 
     // Guard: still cold before the request — the snapshot itself resumes it.
-    expect(getLiveSessionById(server!.core.accessor, sid)).toBeUndefined();
+    expect(getLiveSessionById(server.core.accessor, sid)).toBeUndefined();
 
     const snap = await snapshot(sid);
     expect(snap.session.id).toBe(sid);
@@ -394,7 +394,7 @@ describe('server-v2 GET /api/v1/sessions/:id/snapshot', () => {
 
     // Resume the cold session, then seed messages into the live context so the
     // snapshot projects message timestamps from the normalized numeric base.
-    const resumed = await resumeSessionById(server!.core.accessor, sid);
+    const resumed = await resumeSessionById(server.core.accessor, sid);
     if (resumed === undefined) throw new Error(`session ${sid} failed to resume`);
     const main = await resumed.accessor.get(IAgentLifecycleService).create({ agentId: 'main' });
     const context = main.accessor.get(IAgentContextMemoryService);

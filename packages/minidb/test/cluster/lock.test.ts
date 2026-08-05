@@ -194,8 +194,8 @@ test('closeAll() drains in-flight callbacks before closing handles — no MiniDb
 
     // A callback parked mid-flight: closeAll must wait for it instead of
     // closing the handle under it (the old 'MiniDb is closed' leak).
-    const gate = deferred<void>();
-    const entered = deferred<void>();
+    const gate = deferred();
+    const entered = deferred();
     const op = pool.withWriter(2, shardDir, async (db) => {
       entered.resolve();
       await gate.promise;

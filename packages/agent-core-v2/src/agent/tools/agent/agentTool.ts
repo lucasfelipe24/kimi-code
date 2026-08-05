@@ -509,7 +509,7 @@ function buildProfileDescriptions(
   showModelPreferences: boolean,
 ): string {
   const BUILTIN_NAMES = new Set(['coder', 'explore', 'plan']);
-  const sorted = [...profiles].sort((a, b) => {
+  const sorted = [...profiles].toSorted((a, b) => {
     const aBuiltin = BUILTIN_NAMES.has(a.name) ? 1 : 0;
     const bBuiltin = BUILTIN_NAMES.has(b.name) ? 1 : 0;
     return aBuiltin - bBuiltin;
