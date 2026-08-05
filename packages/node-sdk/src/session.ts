@@ -68,7 +68,7 @@ interface CapabilityRpcSurface {
   installCapability(id: string): Promise<CapabilityStatus>;
 }
 
-function capabilityRpc(rpc: SDKRpcClientBase): CapabilityRpcSurface {
+export function capabilityRpc(rpc: SDKRpcClientBase): CapabilityRpcSurface {
   const candidate = rpc as Partial<CapabilityRpcSurface>;
   if (
     typeof candidate.listCapabilities !== 'function' ||
