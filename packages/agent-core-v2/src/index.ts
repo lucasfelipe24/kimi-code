@@ -364,6 +364,8 @@ export * from '#/agent/memoryRecall/memoryRecall';
 import '#/agent/memoryRecall/memoryRecallService';
 export * from '#/agent/memoryExtract/memoryExtract';
 import '#/agent/memoryExtract/memoryExtractService';
+export * from '#/agent/memoryRerank/memoryRerank';
+import '#/agent/memoryRerank/memoryRerankService';
 
 import '#/session/agentLifecycle/profile/profiles';
 export * from '#/session/agentLifecycle/agentLifecycle';
