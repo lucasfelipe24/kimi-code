@@ -118,14 +118,16 @@ export const ErrorCode = {
   GOAL_UNSUPPORTED_AGENT: 40920,
   /** 创建时 provider_id 已存在 */
   PROVIDER_ALREADY_EXISTS: 40921,
+  /** page_token 损坏 / 版本不符 / 与当前查询条件不匹配，需从首页重新拉取 */
+  PAGE_TOKEN_MISMATCH: 40922,
   /** memory 写入需要受信任的 workspace（project scope） */
-  MEMORY_TRUST_REQUIRED: 40922,
+  MEMORY_TRUST_REQUIRED: 40926,
   /** memory 内容被拒绝（疑似凭证 / 敏感信息） */
-  MEMORY_CONTENT_REJECTED: 40923,
+  MEMORY_CONTENT_REJECTED: 40927,
   /** persistent-memory 实验开关未启用 */
-  MEMORY_DISABLED: 40924,
+  MEMORY_DISABLED: 40928,
   /** memory scope 已达容量上限 */
-  MEMORY_SCOPE_FULL: 40925,
+  MEMORY_SCOPE_FULL: 40929,
 
   /** approval 60s 超时 */
   APPROVAL_EXPIRED: 41001,

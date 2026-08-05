@@ -205,7 +205,7 @@ async function runExternalEditor(
 /** The daemon reports a disabled feature with the `memory.disabled` code. */
 function isMemoryDisabled(error: unknown): boolean {
   const code = memoryErrorCode(error);
-  return code === 40924 || code === 'memory.disabled';
+  return code === 40928 || code === 'memory.disabled';
 }
 
 function memoryErrorCode(error: unknown): unknown {
@@ -223,13 +223,13 @@ function formatMemoryError(error: unknown): string {
     case 'memory.version_conflict':
       return 'This memory changed since you opened it. Reopen it and retry.';
     case 'memory.trust_required':
-    case 40922:
+    case 40926:
       return 'Trust this workspace before creating or updating project memory.';
     case 'memory.content_rejected':
-    case 40923:
+    case 40927:
       return 'The content looks like a secret and was rejected.';
     case 'memory.scope_full':
-    case 40925:
+    case 40929:
       return 'This scope is at capacity. Forget an existing memory first.';
     case 'memory.body_too_large':
     case 41306:

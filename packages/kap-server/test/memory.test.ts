@@ -7,7 +7,7 @@
  *   - PATCH  update mutates name/body and bumps version
  *   - DELETE forget removes it
  *   - GET    on an unknown workspace → 40410
- *   - project scope on an untrusted workspace → 40922 (trust required)
+ *   - project scope on an untrusted workspace → 40926 (trust required)
  *   - native: create still succeeds with the old experiment env unset
  *
  * Persistent memory is a native engine-v2 capability (no feature flag). The
@@ -193,7 +193,7 @@ describe('server-v2 /api/v1 memories', () => {
       expect(fromB.body.data.items.map((m) => m.name)).toContain('prefers portuguese');
     });
 
-    it('rejects project-scope creation on an untrusted workspace with 40922', async () => {
+    it('rejects project-scope creation on an untrusted workspace with 40926', async () => {
       const wid = await registerWorkspace(await makeWorkspaceDir());
       const res = await send<null>('POST', `/api/v1/workspaces/${wid}/memories`, {
         scope: 'project',
@@ -202,7 +202,7 @@ describe('server-v2 /api/v1 memories', () => {
         description: 'requires trust',
         body: 'trusted-only content',
       });
-      expect(res.body.code).toBe(40922);
+      expect(res.body.code).toBe(40926);
     });
 
     it('returns 40410 for an unknown workspace', async () => {

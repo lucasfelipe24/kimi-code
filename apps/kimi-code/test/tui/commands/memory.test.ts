@@ -107,7 +107,7 @@ describe('handleMemoryCommand', () => {
   it('surfaces the disabled notice when the feature is off', async () => {
     const host = makeHost([]);
     host.harness.listMemories.mockRejectedValueOnce(
-      Object.assign(new Error('disabled'), { code: 40924 }),
+      Object.assign(new Error('disabled'), { code: 40928 }),
     );
 
     handleMemoryCommand(host, '');
