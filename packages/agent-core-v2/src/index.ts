@@ -291,6 +291,8 @@ export * from '#/session/workflow/workflowHost';
 export * from '#/session/workflow/workflowRunTask';
 export * from '#/agent/workflow/agentWorkflowReview';
 import '#/agent/workflow/agentWorkflowReviewService';
+export * from '#/agent/workflow/workflowMode';
+import '#/agent/workflow/workflowModeService';
 export * from '#/agent/tools/workflow/workflow';
 import '#/agent/tools/workflow/workflowTool';
 export * from '#/agent/permissionGate/permissionGate';

@@ -362,7 +362,7 @@ describe('FullCompaction', () => {
       properties: expect.objectContaining({
         agent_id: 'main',
         source: 'manual',
-        tokens_before: 3_299,
+        tokens_before: 3_405,
         tokens_after: expect.any(Number),
         duration_ms: expect.any(Number),
         compacted_count: 6,
@@ -410,6 +410,11 @@ describe('FullCompaction', () => {
     ctx.appendExchange(1, 'old user one', 'old assistant one', 20);
     ctx.appendToolExchange();
     ctx.appendUserMessage([{ type: 'text', text: 'how do I deploy the service' }]);
+    // Keep recall deterministic: without an explicit reranker the always-on
+    // default rerank service fires a real, unmocked secondary-model generate
+    // call, which fails and drops every candidate. Disabling the reranker
+    // exercises the deterministic recall path this test asserts.
+    ctx.get(IAgentMemoryRecallService).setReranker(undefined);
     ctx.mockNextResponse({ type: 'text', text: 'Compacted summary.' });
 
     await ctx.rpc.beginCompaction({});
@@ -897,7 +902,7 @@ describe('FullCompaction', () => {
       session_id: 'test-session',
       cwd: dir,
       trigger: 'auto',
-      token_count: 3_299,
+      token_count: 3_405,
     });
     expect(post).toMatchObject({
       hook_event_name: 'PostCompact',
@@ -983,7 +988,7 @@ describe('FullCompaction', () => {
       event: 'compaction_finished',
       properties: expect.objectContaining({
         source: 'manual',
-        tokens_before: 14_365,
+        tokens_before: 15_007,
         retry_count: 1,
         trace_id: 'trace-compact-1',
       }),
@@ -1366,7 +1371,7 @@ describe('FullCompaction', () => {
       properties: expect.objectContaining({
         agent_id: 'main',
         source: 'manual',
-        tokens_before: 14_365,
+        tokens_before: 15_007,
         duration_ms: expect.any(Number),
         round: 1,
         retry_count: 0,
@@ -1591,7 +1596,7 @@ describe('FullCompaction', () => {
       event: 'compaction_failed',
       properties: expect.objectContaining({
         source: 'manual',
-        tokens_before: 14_365,
+        tokens_before: 15_007,
         duration_ms: expect.any(Number),
         retry_count: 4,
         error_type: 'APIConnectionError',
@@ -1966,12 +1971,13 @@ describe('FullCompaction', () => {
       event: 'compaction_finished',
       properties: expect.objectContaining({
         source: 'auto',
-        tokens_before: 3_306,
-        // 3260 estimated request-overhead tokens (system prompt + tools) +
-        // 9 measured summary output tokens (scripted compaction exchange) +
-        // 21 estimated tokens for the kept user messages — the summary
-        // component is the REAL provider count, not a text estimate.
-        tokens_after: 3_290,
+        tokens_before: 3_412,
+        // 3366 estimated request-overhead tokens (system prompt + tools,
+        // including the native Memory tool schema) + 9 measured summary output
+        // tokens (scripted compaction exchange) + 21 estimated tokens for the
+        // kept user messages — the summary component is the REAL provider
+        // count, not a text estimate.
+        tokens_after: 3_396,
         compacted_count: 7,
         retry_count: 0,
       }),

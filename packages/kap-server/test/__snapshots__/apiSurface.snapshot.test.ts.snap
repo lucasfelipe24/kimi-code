@@ -37,6 +37,10 @@ exports[`API surface snapshot > matches the documented v2 route table and meta e
       "/api/v1/workspaces/{workspace_id}",
     ],
     [
+      "DELETE",
+      "/api/v1/workspaces/{workspace_id}/memories/{memory_id}",
+    ],
+    [
       "GET",
       "/api/v1/auth",
     ],
@@ -230,11 +234,31 @@ exports[`API surface snapshot > matches the documented v2 route table and meta e
     ],
     [
       "GET",
+      "/api/v1/sessions/{session_id}/workflows",
+    ],
+    [
+      "GET",
+      "/api/v1/sessions/{session_id}/workflows/{name}",
+    ],
+    [
+      "GET",
+      "/api/v1/sessions/{session_id}/workflows/runs",
+    ],
+    [
+      "GET",
+      "/api/v1/sessions/{session_id}/workflows/runs/{runId}",
+    ],
+    [
+      "GET",
       "/api/v1/tools",
     ],
     [
       "GET",
       "/api/v1/workspaces",
+    ],
+    [
+      "GET",
+      "/api/v1/workspaces/{workspace_id}/memories",
     ],
     [
       "GET",
@@ -259,6 +283,10 @@ exports[`API surface snapshot > matches the documented v2 route table and meta e
     [
       "PATCH",
       "/api/v1/workspaces/{workspace_id}",
+    ],
+    [
+      "PATCH",
+      "/api/v1/workspaces/{workspace_id}/memories/{memory_id}",
     ],
     [
       "POST",
@@ -394,6 +422,22 @@ exports[`API surface snapshot > matches the documented v2 route table and meta e
     ],
     [
       "POST",
+      "/api/v1/sessions/{session_id}/workflows/reload",
+    ],
+    [
+      "POST",
+      "/api/v1/sessions/{session_id}/workflows/run",
+    ],
+    [
+      "POST",
+      "/api/v1/sessions/{session_id}/workflows/runs/{runId}/cancel",
+    ],
+    [
+      "POST",
+      "/api/v1/sessions/{session_id}/workflows/save",
+    ],
+    [
+      "POST",
       "/api/v1/shutdown",
     ],
     [
@@ -403,6 +447,10 @@ exports[`API surface snapshot > matches the documented v2 route table and meta e
     [
       "POST",
       "/api/v1/workspaces",
+    ],
+    [
+      "POST",
+      "/api/v1/workspaces/{workspace_id}/memories",
     ],
     [
       "POST",

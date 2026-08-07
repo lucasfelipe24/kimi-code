@@ -14,7 +14,8 @@
  *
  * **Resolution**: `core` → `IWorkflowCatalogService` (App scope) directly.
  * For Session-scoped `IWorkflowRunService`, resolves via `ISessionIndex`
- * (existence, → 40401) → `ISessionLifecycleService` → `ensureMainAgent`.
+ * (existence, → 40401) → `getLiveSessionById` (the live session handle from
+ * its workspace handler) → `IWorkflowRunService`.
  *
  * **Error mapping**:
  *   - unknown session   → 40401 (session.not_found)
@@ -25,7 +26,7 @@ import {
   IWorkflowCatalogService,
   IWorkflowRunService,
   ISessionIndex,
-  ISessionLifecycleService,
+  getLiveSessionById,
   type Scope,
   MAIN_AGENT_ID,
 } from '@moonshot-ai/agent-core-v2';
@@ -290,7 +291,7 @@ export function registerWorkflowsRoutes(app: WorkflowsRouteHost, core: Scope): v
         return;
       }
 
-      const session = core.accessor.get(ISessionLifecycleService).get(session_id);
+      const session = getLiveSessionById(core.accessor, session_id);
       if (session === undefined) {
         // Session summary exists but is not live (closed) → cannot run
         reply.send(errEnvelope(ErrorCode.SESSION_NOT_FOUND, `session ${session_id} is not active`, req.id));
@@ -339,7 +340,7 @@ export function registerWorkflowsRoutes(app: WorkflowsRouteHost, core: Scope): v
         return;
       }
 
-      const session = core.accessor.get(ISessionLifecycleService).get(session_id);
+      const session = getLiveSessionById(core.accessor, session_id);
       if (session === undefined) {
         reply.send(okEnvelope({ items: [] }, req.id));
         return;
@@ -511,7 +512,7 @@ async function resolveRunService(
   core: Scope,
   sid: string,
 ): Promise<IWorkflowRunService | undefined> {
-  const session = core.accessor.get(ISessionLifecycleService).get(sid);
+  const session = getLiveSessionById(core.accessor, sid);
   if (session === undefined) return undefined;
   return session.accessor.get(IWorkflowRunService);
 }
