@@ -39,6 +39,7 @@ import type {
   CreateGoalInput,
   ForkSessionInput,
   GetConfigOptions,
+  GlobalMcpServerAuthStatus,
   McpServerConfig,
   GoalSnapshot,
   GoalToolResult,
@@ -376,6 +377,11 @@ export abstract class SDKRpcClientBase {
   async listGlobalMcpServers(): Promise<readonly McpServerConfig[]> {
     const rpc = await this.getRpc();
     return rpc.listGlobalMcpServers({});
+  }
+
+  async listGlobalMcpServerAuthStatuses(): Promise<readonly GlobalMcpServerAuthStatus[]> {
+    const rpc = await this.getRpc();
+    return rpc.listGlobalMcpServerAuthStatuses({});
   }
 
   async addGlobalMcpServer(server: McpServerConfig): Promise<readonly McpServerConfig[]> {
