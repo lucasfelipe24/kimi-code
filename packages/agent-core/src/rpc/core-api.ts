@@ -453,7 +453,9 @@ export interface SaveWorkflowResult {
 export interface McpServerInfo {
   readonly name: string;
   readonly transport: 'stdio' | 'http' | 'sse';
-  readonly status: 'pending' | 'connected' | 'failed' | 'disabled' | 'needs-auth';
+  // 'removed' is only produced by the v2 engine (config-driven tombstone);
+  // v1 never emits it, but SDK consumers share this type across engines.
+  readonly status: 'pending' | 'connected' | 'failed' | 'disabled' | 'needs-auth' | 'removed';
   readonly toolCount: number;
   readonly error?: string;
 }

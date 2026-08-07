@@ -28,6 +28,7 @@ import type {
   TurnStepCompletedEvent,
   TurnStepInterruptedEvent,
   TurnStepStartedEvent,
+  TokenUsage,
   WarningEvent,
   WorkflowRunCompletedEvent,
   WorkflowRunStartedEvent,
@@ -113,6 +114,9 @@ export interface SessionEventHost {
   showNotice(title: string, detail?: string): void;
   updateActivityPane(): void;
   track(event: string, props?: Record<string, unknown>): void;
+  recordSessionActivity(): void;
+  noteStepUsage(usage: TokenUsage | undefined): void;
+  noteCompactionFinished(): void;
   mountEditorReplacement(panel: Component & Focusable): void;
   restoreEditor(): void;
   restoreInputText(text: string): void;
@@ -453,6 +457,7 @@ export class SessionEventHandler {
 
     this.host.streamingUI.resetToolUi();
     this.host.streamingUI.finalizeTurn(sendQueued);
+    this.host.recordSessionActivity();
     this.renderPendingModelBlockedFallback();
     this.currentTurnHasAssistantText = false;
     this.goalCompletionTurnEnded = true;
@@ -493,6 +498,7 @@ export class SessionEventHandler {
 
   private handleStepCompleted(event: TurnStepCompletedEvent): void {
     this.host.streamingUI.flushNow();
+    this.host.noteStepUsage(event.usage);
     this.maybeShowDebugTiming(event);
 
     if (event.providerFinishReason === 'filtered') {
@@ -1059,6 +1065,13 @@ export class SessionEventHandler {
           'textMuted',
         );
         return;
+      case 'removed':
+        this.finalizeMcpServerStatusRow(
+          server.name,
+          `MCP server "${server.name}" removed`,
+          'textMuted',
+        );
+        return;
       case 'pending':
         this.showMcpServerStatusSpinner(server.name);
         return;
@@ -1156,6 +1169,12 @@ export class SessionEventHandler {
       event.result.tokensAfter,
       event.result.summary,
     );
+    // A completed compaction just refreshed and shrank the cached context —
+    // count it as activity so the next submit isn't judged against the
+    // pre-compaction timestamp, and reset the cache-break baseline (the drop
+    // is expected). Cancellations do neither: the context was not cut.
+    this.host.recordSessionActivity();
+    this.host.noteCompactionFinished();
     this.finishCompaction(sendQueued);
   }
 

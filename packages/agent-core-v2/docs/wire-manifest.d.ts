@@ -47,10 +47,10 @@
 //   permission.record_approval_result  permissionRules       persisted  src/agent/permissionRules/permissionRulesOps.ts
 //   permission.rules.add               permissionRules       transient  src/agent/permissionRules/permissionRulesOps.ts
 //   permission.set_mode                permissionMode        persisted  src/agent/permissionMode/permissionModeOps.ts
-//   plan_mode.cancel                   plan                  persisted  src/agent/plan/planOps.ts
-//   plan_mode.enter                    plan                  persisted  src/agent/plan/planOps.ts
-//   plan_mode.exit                     plan                  persisted  src/agent/plan/planOps.ts
-//   plan.revision                      plan                  persisted  src/agent/plan/planOps.ts
+//   plan_mode.cancel                   plan                  persisted  src/features/plan/planOps.ts
+//   plan_mode.enter                    plan                  persisted  src/features/plan/planOps.ts
+//   plan_mode.exit                     plan                  persisted  src/features/plan/planOps.ts
+//   plan.revision                      plan                  persisted  src/features/plan/planOps.ts
 //   profile.bind                       profile               persisted  src/agent/profile/profileOps.ts
 //   skill.activate                     skill                 transient  src/agent/skill/skillOps.ts
 //   swarm_mode.enter                   swarm                 persisted  src/agent/swarm/swarmOps.ts
@@ -412,7 +412,7 @@ interface PermissionSetModePayload {
 
 /**
  * model: plan · persisted · toEvent
- * owner: src/agent/plan/planOps.ts
+ * owner: src/features/plan/planOps.ts
  */
 interface PlanModeCancelPayload {
   _name: 'plan_mode.cancel';
@@ -421,7 +421,7 @@ interface PlanModeCancelPayload {
 
 /**
  * model: plan · persisted · toEvent
- * owner: src/agent/plan/planOps.ts
+ * owner: src/features/plan/planOps.ts
  */
 interface PlanModeEnterPayload {
   _name: 'plan_mode.enter';
@@ -430,7 +430,7 @@ interface PlanModeEnterPayload {
 
 /**
  * model: plan · persisted · toEvent
- * owner: src/agent/plan/planOps.ts
+ * owner: src/features/plan/planOps.ts
  */
 interface PlanModeExitPayload {
   _name: 'plan_mode.exit';
@@ -439,7 +439,7 @@ interface PlanModeExitPayload {
 
 /**
  * model: plan · persisted · toEvent
- * owner: src/agent/plan/planOps.ts
+ * owner: src/features/plan/planOps.ts
  */
 interface PlanRevisionPayload {
   _name: 'plan.revision';

@@ -97,7 +97,8 @@ describe('SessionInitService', () => {
       accessor: {
         get: (id: unknown) => {
           if (id === IAgentPermissionModeService) return permissionMode;
-          if (id === IAgentProfileService) return { republishStatus };
+          if (id === IAgentProfileService)
+            return { republishStatus, getEffectiveThinkingLevel: () => 'off' };
           return undefined;
         },
       },
@@ -168,6 +169,8 @@ describe('SessionInitService', () => {
         subagentName: 'coder',
         parentToolCallId: 'generate-agents-md',
         callerAgentId: 'main',
+        model: 'mock-model',
+        thinkingEffort: 'off',
       }),
     );
     expect(republishStatus).toHaveBeenCalledTimes(1);
@@ -209,8 +212,6 @@ describe('SessionInitService', () => {
     run.mockImplementationOnce((agentId: string, _req: unknown, opts: { signal: AbortSignal }) => ({
       agentId,
       turn: {},
-      // The real lifecycle rejects the run completion when the launch signal
-      // aborts; mirror that so the service-level propagation is exercised.
       completion: new Promise<{ summary: string }>((_resolve, reject) => {
         opts.signal.addEventListener('abort', () =>{  reject(opts.signal.reason); });
       }),

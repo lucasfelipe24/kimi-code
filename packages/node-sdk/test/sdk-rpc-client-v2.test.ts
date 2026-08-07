@@ -23,7 +23,11 @@ import {
   type KimiConfig,
 } from '#/index';
 import { foldAgentWireReplay } from '#/v2/resume-replay';
-import { IHostRequestHeaders } from '@moonshot-ai/agent-core-v2';
+import {
+  drainQueryStoreDisposals,
+  drainSessionIndexMirror,
+  IHostRequestHeaders,
+} from '@moonshot-ai/agent-core-v2';
 
 import { TEST_IDENTITY } from './test-identity';
 import { recordingTelemetry, type TelemetryRecord } from './telemetry';
@@ -32,6 +36,10 @@ const tempDirs: string[] = [];
 
 afterEach(async () => {
   vi.unstubAllEnvs();
+  // The read-model mirror/query-store close asynchronously on dispose; await
+  // the drains so the rm below never races their final flush (ENOTEMPTY).
+  await drainSessionIndexMirror();
+  await drainQueryStoreDisposals();
   for (const dir of tempDirs.splice(0)) {
     await rm(dir, { recursive: true, force: true });
   }
