@@ -298,25 +298,30 @@ kimi vis --host 0.0.0.0 --port 8123 --no-open
 
 ### `kimi search`
 
-Manage the web search backend and semantic rerank without opening the TUI. In **Settings → Web Search**, the current providers appear at the top: **Web search provider** configures Moonshot or LangSearch, while **Rerank provider** independently manages the reranker status and API key. Moonshot setup can reuse the current Kimi Code OAuth login or accept an API key for the China or Global API region. Both the CLI and TUI persist changes to `[services]` in `config.toml`. LangSearch search and rerank are experimental; enable **LangSearch web search** under **Settings → Experiments** or set `KIMI_CODE_EXPERIMENTAL_LANGSEARCH_WEB_SEARCH=1` before configuring them.
+Manage the web search backend and semantic rerank without opening the TUI. In **Settings → Web Search**, the current providers appear at the top: **Web search provider** only configures or edits Moonshot, LangSearch, or Brave (preserving the current selection), **Active web search provider** explicitly switches which configured backend serves `WebSearch`, and **Rerank provider** independently manages the reranker status and API key. Configuring Moonshot can reuse the current Kimi Code OAuth login or accept an API key for the China or Global API region. Both the CLI and TUI persist changes to `[services]` in `config.toml`; on the CLI, `kimi search set brave|langsearch` both configures and selects the backend (writes `active_search_provider`), while `kimi search use` only switches the selection. Brave search is enabled by default; set `KIMI_CODE_EXPERIMENTAL_BRAVE_SEARCH=0` to turn it off. LangSearch web search is still experimental; enable **LangSearch web search** under **Settings → Experiments** (or set `KIMI_CODE_EXPERIMENTAL_LANGSEARCH_WEB_SEARCH=1`) before configuring it. Brave search and explicit provider selection require the default `agent-core-v2` engine; the legacy engine preserves the config but does not run them.
 
 | Command | Description |
 | --- | --- |
-| `kimi search status` | Show the active search backend and rerank status |
-| `kimi search set langsearch --api-key <key>` | Configure LangSearch web search |
+| `kimi search status` | Show the selected and active search backends and rerank status |
+| `kimi search set langsearch --api-key <key>` | Configure and select LangSearch web search |
+| `kimi search set brave --api-key <key>` | Configure and select Brave Search |
 | `kimi search set rerank` | Configure LangSearch semantic rerank; reuses the search API key by default |
-| `kimi search clear langsearch` | Remove `[services.langsearch]` and fall back to Moonshot when available |
+| `kimi search use <provider>` | Select an already-configured backend: `brave`, `langsearch`, or `moonshot` |
+| `kimi search clear langsearch` | Remove `[services.langsearch]`; clears the selection when it was active |
+| `kimi search clear brave` | Remove `[services.brave]`; clears the selection when it was active |
 | `kimi search clear rerank` | Remove `[services.rerank]` |
 | `kimi search limits` | Show the published LangSearch quotas for each tier |
 
-`kimi search set langsearch` accepts `--tier <free|tier1|tier2|tier3>` and `--count <1-10>`. `kimi search set rerank` accepts `--provider langsearch`, an optional `--api-key <key>`, and `--enabled <true|false>`.
+`kimi search set langsearch` accepts `--tier <free|tier1|tier2|tier3>` and `--count <1-10>`. `kimi search set brave` accepts an optional `--base-url <url>`. `kimi search set rerank` accepts `--provider langsearch`, an optional `--api-key <key>`, and `--enabled <true|false>`.
 
 ```sh
 kimi search set langsearch --api-key YOUR_API_KEY --tier free --count 10
+kimi search set brave --api-key YOUR_API_KEY
+kimi search use brave
 kimi search set rerank
 kimi search status
 kimi search clear rerank
-kimi search clear langsearch
+kimi search clear brave
 ```
 
 See [`services`](../configuration/config-files.md#services) for the complete configuration field reference and backend precedence.

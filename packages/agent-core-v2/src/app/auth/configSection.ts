@@ -3,11 +3,12 @@
  * env bindings.
  *
  * Owns the `[services]` configuration section (`moonshot_search` /
- * `moonshot_fetch` / `langsearch`), mirroring v1's `ServicesConfigSchema`: the
- * schema, and the snake_case ↔ camelCase TOML transforms (including the nested
- * `oauth` and `custom_headers` normalization, with `custom_headers` record keys
- * preserved verbatim). Both entries' `base_url` / `api_key` are env-overridable
- * (`KIMI_WEB_SEARCH_*` / `KIMI_WEB_FETCH_*`, env wins over the file). Its
+ * `moonshot_fetch` / `langsearch` / `brave`), mirroring v1's
+ * `ServicesConfigSchema`: the schema, and the snake_case ↔ camelCase TOML
+ * transforms (including the nested `oauth` and `custom_headers` normalization,
+ * with `custom_headers` record keys preserved verbatim). Moonshot and Brave
+ * `base_url` / `api_key` fields are env-overridable (`KIMI_WEB_*` /
+ * `KIMI_BRAVE_*`, env wins over the file). Its
  * effective overlay treats an env base URL as a new credential boundary and
  * prevents persisted API keys, OAuth refs, or custom headers from crossing
  * into that endpoint; the composed `stripEnv` keeps env-derived values from
@@ -16,13 +17,9 @@
  * `config` domain never imports this domain's types.
  *
  * The `auth` domain owns this section because its OAuth login/logout flows
- * provision and clear it, and its `WebSearchProviderService`
- * consumes `moonshot_search` and `langsearch`; the `web` domain reads
+ * provision and clear it, and its `WebSearchProviderService` consumes the
+ * search-provider selection and credentials; the `web` domain reads
  * `moonshot_fetch` from the same section. Bound at App scope.
- *
- * `langsearch` is an alternative web-search backend (LangSearch API) with
- * optional rerank and per-tier rate limiting. It takes precedence over
- * `moonshot_search` when configured.
  */
 
 import { z } from 'zod';
@@ -90,6 +87,18 @@ export const LangSearchServiceConfigSchema = z.object({
 
 export type LangSearchServiceConfig = z.infer<typeof LangSearchServiceConfigSchema>;
 
+export const BraveServiceConfigSchema = z.object({
+  apiKey: z.string().optional(),
+  baseUrl: z.string().optional(),
+  customHeaders: StringRecordSchema.optional(),
+});
+
+export type BraveServiceConfig = z.infer<typeof BraveServiceConfigSchema>;
+
+export const SearchProviderSchema = z.enum(['brave', 'langsearch', 'moonshot']);
+
+export type SearchProvider = z.infer<typeof SearchProviderSchema>;
+
 export const RerankServiceConfigSchema = z.object({
   enabled: z.boolean().optional(),
   provider: z.enum(['langsearch']).optional(),
@@ -102,9 +111,11 @@ export type RerankServiceConfig = z.infer<typeof RerankServiceConfigSchema>;
 
 export const ServicesConfigSchema = z
   .object({
+    activeSearchProvider: SearchProviderSchema.optional(),
     moonshotSearch: MoonshotServiceConfigSchema.optional(),
     moonshotFetch: MoonshotServiceConfigSchema.optional(),
     langsearch: LangSearchServiceConfigSchema.optional(),
+    brave: BraveServiceConfigSchema.optional(),
     rerank: RerankServiceConfigSchema.optional(),
   })
   .passthrough();
@@ -115,6 +126,8 @@ export const WEB_SEARCH_BASE_URL_ENV = 'KIMI_WEB_SEARCH_BASE_URL';
 export const WEB_SEARCH_API_KEY_ENV = 'KIMI_WEB_SEARCH_API_KEY';
 export const WEB_FETCH_BASE_URL_ENV = 'KIMI_WEB_FETCH_BASE_URL';
 export const WEB_FETCH_API_KEY_ENV = 'KIMI_WEB_FETCH_API_KEY';
+export const BRAVE_BASE_URL_ENV = 'KIMI_BRAVE_BASE_URL';
+export const BRAVE_API_KEY_ENV = 'KIMI_BRAVE_API_KEY';
 
 const nonBlankEnv = (raw: string): string | undefined => {
   const trimmed = raw.trim();
@@ -131,11 +144,17 @@ const moonshotFetchEnvBindings = envBindings(MoonshotServiceConfigSchema, {
   apiKey: { env: WEB_FETCH_API_KEY_ENV, parse: nonBlankEnv },
 });
 
+const braveEnvBindings = envBindings(BraveServiceConfigSchema, {
+  baseUrl: { env: BRAVE_BASE_URL_ENV, parse: nonBlankEnv },
+  apiKey: { env: BRAVE_API_KEY_ENV, parse: nonBlankEnv },
+});
+
 export const servicesEnvBindings: EnvBindings<ServicesConfig> = envBindings(
   ServicesConfigSchema,
   {
     moonshotSearch: moonshotSearchEnvBindings,
     moonshotFetch: moonshotFetchEnvBindings,
+    brave: braveEnvBindings,
   },
 );
 
@@ -155,9 +174,16 @@ const servicesCredentialEnvOverlay: ConfigEffectiveOverlay = {
       WEB_FETCH_BASE_URL_ENV,
       WEB_FETCH_API_KEY_ENV,
     );
+    const brave = isolateEnvServiceCredentials(
+      services['brave'],
+      getEnv,
+      BRAVE_BASE_URL_ENV,
+      BRAVE_API_KEY_ENV,
+    );
     if (
       moonshotSearch === services['moonshotSearch'] &&
-      moonshotFetch === services['moonshotFetch']
+      moonshotFetch === services['moonshotFetch'] &&
+      brave === services['brave']
     ) {
       return [];
     }
@@ -165,6 +191,7 @@ const servicesCredentialEnvOverlay: ConfigEffectiveOverlay = {
       ...services,
       moonshotSearch,
       moonshotFetch,
+      brave,
     });
     return [SERVICES_SECTION];
   },
@@ -187,17 +214,26 @@ function isolateEnvServiceCredentials(
 
 const stripMoonshotSearchEnv = stripEnvBoundFields(moonshotSearchEnvBindings);
 const stripMoonshotFetchEnv = stripEnvBoundFields(moonshotFetchEnvBindings);
+const stripBraveEnv = stripEnvBoundFields(braveEnvBindings);
 
 export const stripServicesEnv: ConfigStripEnv<ServicesConfig> = (value, raw, getEnv) => {
   if (!isPlainObject(value)) return value;
+  const rawServices = isPlainObject(raw) ? raw : undefined;
   let out: ServicesConfig | undefined;
-  for (const [key, strip] of [
-    ['moonshotSearch', stripMoonshotSearchEnv],
-    ['moonshotFetch', stripMoonshotFetchEnv],
+  for (const [key, strip, baseUrlEnv] of [
+    ['moonshotSearch', stripMoonshotSearchEnv, WEB_SEARCH_BASE_URL_ENV],
+    ['moonshotFetch', stripMoonshotFetchEnv, WEB_FETCH_BASE_URL_ENV],
+    ['brave', stripBraveEnv, BRAVE_BASE_URL_ENV],
   ] as const) {
     const entry = value[key];
     if (entry === undefined) continue;
-    const stripped = strip(entry, isPlainObject(raw) ? raw[key] : undefined, getEnv);
+    const rawEntry = rawServices?.[key];
+    const stripped =
+      getEnv !== undefined && nonBlankEnv(getEnv(baseUrlEnv) ?? '') !== undefined
+        ? isPlainObject(rawEntry)
+          ? rawEntry
+          : undefined
+        : strip(entry, rawEntry, getEnv);
     if (stripped === entry) continue;
     out ??= { ...value };
     if (stripped === undefined) {
@@ -236,9 +272,11 @@ function serviceEntryFromToml(data: Record<string, unknown>): Record<string, unk
 export const servicesToToml = (value: unknown, rawSnake: unknown): unknown => {
   if (!isPlainObject(value)) return value;
   const out = cloneRecord(rawSnake);
+  setDefined(out, 'active_search_provider', value['activeSearchProvider']);
   writeService(out, 'moonshot_search', value['moonshotSearch']);
   writeService(out, 'moonshot_fetch', value['moonshotFetch']);
   writeService(out, 'langsearch', value['langsearch']);
+  writeService(out, 'brave', value['brave']);
   writeService(out, 'rerank', value['rerank']);
   return out;
 };

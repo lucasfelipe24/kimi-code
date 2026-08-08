@@ -15,8 +15,15 @@ import {
 import { DisposableStore } from '#/_base/di/lifecycle';
 import { createServices, type TestInstantiationService } from '#/_base/di/test';
 import { Emitter } from '#/_base/event';
+import { Error2, ErrorCodes } from '#/errors';
 import { IAuthSummaryService, IOAuthService, IOAuthToolkit } from '#/app/auth/auth';
 import { AuthSummaryService, OAuthService } from '#/app/auth/authService';
+import { BraveClient } from '#/app/auth/brave/braveClient';
+import {
+  BRAVE_SEARCH_FLAG_ENV,
+  BRAVE_SEARCH_FLAG_ID,
+  braveSearchFlag,
+} from '#/app/auth/webSearch/flag';
 import {
   SERVICES_SECTION,
   servicesFromToml,
@@ -816,18 +823,33 @@ describe('OAuthService', () => {
   });
 });
 
+describe('Brave Search flag', () => {
+  it('registers as an on-by-default search-provider flag', () => {
+    expect(braveSearchFlag).toEqual({
+      id: BRAVE_SEARCH_FLAG_ID,
+      title: 'Brave Search',
+      description: 'Use Brave Search as a configurable WebSearch backend.',
+      env: BRAVE_SEARCH_FLAG_ENV,
+      default: true,
+      surface: 'both',
+    });
+  });
+});
+
 describe('WebSearchProviderService', () => {
   let disposables: DisposableStore;
   let ix: TestInstantiationService;
   let providers: Record<string, ProviderConfig>;
   let servicesConfig: ServicesConfig | undefined;
   let resolveTokenProvider: ReturnType<typeof vi.fn>;
+  let braveFlagEnabled: boolean;
   let langSearchFlagEnabled: boolean;
 
   beforeEach(() => {
     disposables = new DisposableStore();
     providers = {};
     servicesConfig = undefined;
+    braveFlagEnabled = true;
     langSearchFlagEnabled = true;
     resolveTokenProvider = vi
       .fn()
@@ -856,7 +878,12 @@ describe('WebSearchProviderService', () => {
           get: ((domain: string) =>
             domain === SERVICES_SECTION ? servicesConfig : undefined) as IConfigService['get'],
         });
-        reg.defineInstance(IFlagService, stubFlag(() => langSearchFlagEnabled));
+        reg.defineInstance(
+          IFlagService,
+          stubFlag((id) =>
+            id === BRAVE_SEARCH_FLAG_ID ? braveFlagEnabled : langSearchFlagEnabled,
+          ),
+        );
         reg.define(IWebSearchProviderService, WebSearchProviderService);
         reg.define(IRerankService, RerankService);
       },
@@ -1037,6 +1064,78 @@ describe('WebSearchProviderService', () => {
     expect(resolveTokenProvider).not.toHaveBeenCalled();
   });
 
+  it('selects Brave explicitly and maps generic search results', async () => {
+    servicesConfig = {
+      activeSearchProvider: 'brave',
+      brave: {
+        apiKey: 'brave-key',
+        baseUrl: 'https://brave.example/res/v1/',
+        customHeaders: { 'Cache-Control': 'max-age=60', 'X-Custom': 'yes' },
+      },
+      langsearch: { apiKey: 'ls-key' },
+      moonshotSearch: { baseUrl: 'https://moonshot.example/search', apiKey: 'ms-key' },
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          web: {
+            results: [
+              {
+                title: '<strong>Brave</strong> &amp; Search',
+                url: 'https://example.com/result',
+                description: 'A <strong>generic</strong> result &amp; snippet',
+                profile: { long_name: 'Example Site' },
+                published: '2026-08-08T00:00:00Z',
+                page_age: '2 hours ago',
+              },
+            ],
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = createService().getWebSearchProvider();
+    expect(provider).not.toBeUndefined();
+    await expect(provider!.search('brave search')).resolves.toEqual([
+      {
+        title: 'Brave &amp; Search',
+        url: 'https://example.com/result',
+        snippet: 'A generic result &amp; snippet',
+        siteName: 'Example Site',
+        date: '2026-08-08T00:00:00Z',
+      },
+    ]);
+
+    const [rawUrl, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const url = new URL(rawUrl);
+    expect(`${url.origin}${url.pathname}`).toBe('https://brave.example/res/v1/web/search');
+    expect(url.searchParams.get('q')).toBe('brave search');
+    expect(url.searchParams.get('count')).toBe('10');
+    expect(rawUrl).not.toContain('brave-key');
+    const headers = new Headers(init.headers);
+    expect(headers.get('X-Subscription-Token')).toBe('brave-key');
+    expect(headers.get('Accept')).toBe('application/json');
+    expect(headers.get('Accept-Encoding')).toBe('gzip');
+    expect(headers.get('Cache-Control')).toBe('max-age=60');
+    expect(headers.get('X-Custom')).toBe('yes');
+  });
+
+  it('does not activate explicitly selected Brave while its flag is disabled', () => {
+    braveFlagEnabled = false;
+    servicesConfig = {
+      activeSearchProvider: 'brave',
+      brave: { apiKey: 'brave-key' },
+      langsearch: { apiKey: 'ls-key' },
+      moonshotSearch: { baseUrl: 'https://moonshot.example/search', apiKey: 'ms-key' },
+    };
+
+    const service = createService();
+    expect(service.hasWebSearchProvider()).toBe(false);
+    expect(service.getWebSearchProvider()).toBeUndefined();
+  });
+
   // --- LangSearch provider tests ---
 
   function langsearchFetchMock(
@@ -1198,7 +1297,7 @@ describe('WebSearchProviderService', () => {
     ]);
   });
 
-  it('langsearch takes precedence over moonshot_search', async () => {
+  it('preserves LangSearch precedence over Moonshot when no selector is configured', async () => {
     servicesConfig = {
       langsearch: { apiKey: 'ls-key' },
       moonshotSearch: { baseUrl: 'https://moonshot.example.com/search', apiKey: 'ms-key' },
@@ -1212,8 +1311,60 @@ describe('WebSearchProviderService', () => {
     expect(provider).not.toBeUndefined();
     await provider!.search('query');
 
-    // First call should be to LangSearch, not Moonshot.
     expect(fetchMock.mock.calls[0]![0]).toBe('https://api.langsearch.com/v1/web-search');
+  });
+
+  it.each(['brave', 'langsearch', 'moonshot'] as const)(
+    'does not fall back when explicitly selected %s is incomplete',
+    (selected) => {
+      servicesConfig = {
+        activeSearchProvider: selected,
+        brave: { apiKey: selected === 'brave' ? undefined : 'brave-key' },
+        langsearch: { apiKey: selected === 'langsearch' ? undefined : 'ls-key' },
+        moonshotSearch:
+          selected === 'moonshot'
+            ? { apiKey: 'ms-key' }
+            : { baseUrl: 'https://moonshot.example/search', apiKey: 'ms-key' },
+      };
+      providers = {
+        [OAUTH_PROVIDER]: {
+          type: 'kimi',
+          baseUrl: 'https://managed.example/v1',
+          oauth: { storage: 'file', key: 'oauth/kimi-code' },
+        },
+      };
+
+      const service = createService();
+      expect(service.hasWebSearchProvider()).toBe(false);
+      expect(service.getWebSearchProvider()).toBeUndefined();
+      expect(resolveTokenProvider).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['langsearch', 'https://api.langsearch.com/v1/web-search'],
+    ['moonshot', 'https://moonshot.example/search'],
+  ] as const)('selects %s explicitly', async (selected, expectedUrl) => {
+    servicesConfig = {
+      activeSearchProvider: selected,
+      langsearch: { apiKey: 'ls-key' },
+      moonshotSearch: { baseUrl: 'https://moonshot.example/search', apiKey: 'ms-key' },
+    };
+    const fetchMock = vi.fn().mockImplementation((url: string) =>
+      Promise.resolve(
+        url.endsWith('/v1/web-search')
+          ? {
+              status: 200,
+              json: async () => ({ code: 200, data: { webPages: { value: [] } } }),
+            }
+          : { status: 200, json: async () => ({ search_results: [] }) },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createService().getWebSearchProvider()!.search('query');
+
+    expect(fetchMock.mock.calls[0]![0]).toBe(expectedUrl);
   });
 
   // Tool activation gates on presence alone. An env-configured endpoint is
@@ -1241,7 +1392,9 @@ describe('WebSearchProviderService', () => {
         get: ((domain: string) =>
           domain === SERVICES_SECTION ? servicesConfig : undefined) as IConfigService['get'],
       } as IConfigService,
-      stubFlag(() => langSearchFlagEnabled),
+      stubFlag((id) =>
+        id === BRAVE_SEARCH_FLAG_ID ? braveFlagEnabled : langSearchFlagEnabled,
+      ),
       { getRerankProvider: () => undefined } as IRerankService,
       notFrozen,
     );
@@ -1264,6 +1417,152 @@ describe('WebSearchProviderService', () => {
   });
 });
 
+describe('BraveClient', () => {
+  it('serializes repeated GET values and prevents auth header overrides', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ ok: true }));
+    const client = new BraveClient({
+      apiKey: 'brave-key',
+      baseUrl: 'https://brave.example/res/v1/',
+      customHeaders: {
+        accept: 'application/vnd.brave+json',
+        'x-subscription-token': 'custom-brave-key',
+      },
+      fetchImpl: fetchMock,
+    });
+
+    await expect(
+      client.requestJson('/web/search', {
+        query: { q: 'a/b & c', country: ['US', 'BR'], count: 5 },
+        headers: { 'X-Loc-City': 'Recife', 'X-Subscription-Token': 'request-key' },
+      }),
+    ).resolves.toEqual({ ok: true });
+
+    const [rawUrl, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const url = new URL(rawUrl);
+    expect(url.searchParams.get('q')).toBe('a/b & c');
+    expect(url.searchParams.getAll('country')).toEqual(['US', 'BR']);
+    expect(url.searchParams.get('count')).toBe('5');
+    expect(rawUrl).not.toContain('brave-key');
+    expect(init.method).toBe('GET');
+    expect(init.body).toBeUndefined();
+    const headers = new Headers(init.headers);
+    expect(headers.get('X-Subscription-Token')).toBe('brave-key');
+    expect(headers.get('X-Loc-City')).toBe('Recife');
+    expect(headers.get('Accept')).toBe('application/vnd.brave+json');
+  });
+
+  it('returns a raw streaming response without parsing JSON', async () => {
+    const response = new Response('data: [DONE]\n', { headers: { 'Content-Type': 'text/event-stream' } });
+    const client = new BraveClient({
+      apiKey: 'brave-key',
+      fetchImpl: vi.fn().mockResolvedValue(response),
+    });
+
+    await expect(client.request('/chat/completions', { method: 'POST', body: {} })).resolves.toBe(
+      response,
+    );
+  });
+
+  it('sends POST bodies as JSON and never retries POST', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('unavailable', { status: 503 }));
+    const client = new BraveClient({ apiKey: 'brave-key', fetchImpl: fetchMock });
+
+    await expect(
+      client.requestJson('/answers', { method: 'POST', body: { q: 'query', count: 3 } }),
+    ).rejects.toMatchObject({ code: ErrorCodes.WEB_FETCH_FAILED, details: { status: 503 } });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.search.brave.com/res/v1/answers');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(JSON.stringify({ q: 'query', count: 3 }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([429, 503])('retries GET once for HTTP %i', async (status) => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('secret response', { status, headers: { 'Retry-After': '60' } }))
+      .mockResolvedValueOnce(Response.json({ ok: true }));
+    const client = new BraveClient({
+      apiKey: 'brave-key',
+      fetchImpl: fetchMock,
+      retryAfterMaxMs: 1,
+    });
+
+    await expect(client.requestJson('/web/search')).resolves.toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries GET transport failures once and returns a sanitized final error', async () => {
+    const transportError = new Error('request failed for token brave-key');
+    const fetchMock = vi.fn().mockRejectedValue(transportError);
+    const client = new BraveClient({ apiKey: 'brave-key', fetchImpl: fetchMock });
+
+    const error = await client.requestJson('/web/search').catch((failure: unknown) => failure);
+
+    expect(error).toBeInstanceOf(Error2);
+    expect(error).toMatchObject({ code: ErrorCodes.WEB_FETCH_FAILED });
+    expect((error as Error).message).not.toContain('brave-key');
+    expect((error as Error).cause).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry non-retryable HTTP failures or expose response content', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('secret response', { status: 401 }));
+    const client = new BraveClient({ apiKey: 'brave-key', fetchImpl: fetchMock });
+
+    const error = await client.requestJson('/web/search').catch((failure: unknown) => failure);
+
+    expect(error).toMatchObject({
+      code: ErrorCodes.WEB_FETCH_FAILED,
+      details: { status: 401 },
+    });
+    expect((error as Error).message).not.toContain('secret response');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('translates malformed JSON with the response status', async () => {
+    const client = new BraveClient({
+      apiKey: 'brave-key',
+      fetchImpl: vi.fn().mockResolvedValue(new Response('{invalid', { status: 200 })),
+    });
+
+    await expect(client.requestJson('/web/search')).rejects.toMatchObject({
+      code: ErrorCodes.WEB_FETCH_FAILED,
+      details: { status: 200 },
+    });
+  });
+
+  it('propagates external cancellation through the composed request signal', async () => {
+    const controller = new AbortController();
+    const abortError = new DOMException('cancelled', 'AbortError');
+    const fetchMock = vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+      controller.abort(abortError);
+      expect(init.signal).not.toBe(controller.signal);
+      throw abortError;
+    });
+    const client = new BraveClient({ apiKey: 'brave-key', fetchImpl: fetchMock });
+
+    await expect(
+      client.requestJson('/web/search', { signal: controller.signal }),
+    ).rejects.toBe(abortError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('enforces the configured timeout without retrying the timed-out request', async () => {
+    const fetchMock = vi.fn().mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+        }),
+    );
+    const client = new BraveClient({ apiKey: 'brave-key', fetchImpl: fetchMock, timeoutMs: 1 });
+
+    await expect(client.requestJson('/web/search')).rejects.toMatchObject({ name: 'TimeoutError' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('services config section', () => {
   it('registers the services section and validates its schema', () => {
     const registry = new ConfigRegistry();
@@ -1271,16 +1570,20 @@ describe('services config section', () => {
     expect(registry.getSection(SERVICES_SECTION)).toBeDefined();
     expect(
       registry.validate(SERVICES_SECTION, {
+        activeSearchProvider: 'brave',
         moonshotSearch: { baseUrl: 'https://api.example.com/search', apiKey: 'search-key' },
         moonshotFetch: { baseUrl: 'https://api.example.com/fetch' },
         langsearch: { apiKey: 'ls-key', tier: 'tier1', count: 5 },
+        brave: { apiKey: 'brave-key', baseUrl: 'https://api.search.brave.com/res/v1' },
         rerank: { enabled: true, provider: 'langsearch' },
         customService: { baseUrl: 'https://service.example.com', retries: 3 },
       }),
     ).toEqual({
+      activeSearchProvider: 'brave',
       moonshotSearch: { baseUrl: 'https://api.example.com/search', apiKey: 'search-key' },
       moonshotFetch: { baseUrl: 'https://api.example.com/fetch' },
       langsearch: { apiKey: 'ls-key', tier: 'tier1', count: 5 },
+      brave: { apiKey: 'brave-key', baseUrl: 'https://api.search.brave.com/res/v1' },
       rerank: { enabled: true, provider: 'langsearch' },
       customService: { baseUrl: 'https://service.example.com', retries: 3 },
     });
@@ -1295,6 +1598,7 @@ describe('services config section', () => {
   it('maps services from TOML snake_case to camelCase', () => {
     expect(
       servicesFromToml({
+        active_search_provider: 'brave',
         moonshot_search: {
           base_url: 'https://api.example.com/search',
           api_key: 'search-key',
@@ -1303,9 +1607,15 @@ describe('services config section', () => {
         },
         moonshot_fetch: { base_url: 'https://api.example.com/fetch', api_key: 'fetch-key' },
         langsearch: { api_key: 'ls-key', tier: 'tier1', count: 5 },
+        brave: {
+          api_key: 'brave-key',
+          base_url: 'https://api.search.brave.com/res/v1',
+          custom_headers: { 'X-Brave': '1' },
+        },
         rerank: { enabled: true, provider: 'langsearch' },
       }),
     ).toEqual({
+      activeSearchProvider: 'brave',
       moonshotSearch: {
         baseUrl: 'https://api.example.com/search',
         apiKey: 'search-key',
@@ -1314,6 +1624,11 @@ describe('services config section', () => {
       },
       moonshotFetch: { baseUrl: 'https://api.example.com/fetch', apiKey: 'fetch-key' },
       langsearch: { apiKey: 'ls-key', tier: 'tier1', count: 5 },
+      brave: {
+        apiKey: 'brave-key',
+        baseUrl: 'https://api.search.brave.com/res/v1',
+        customHeaders: { 'X-Brave': '1' },
+      },
       rerank: { enabled: true, provider: 'langsearch' },
     });
   });
@@ -1322,6 +1637,7 @@ describe('services config section', () => {
     expect(
       servicesToToml(
         {
+          activeSearchProvider: 'brave',
           moonshotSearch: {
             baseUrl: 'https://api.example.com/search',
             apiKey: 'search-key',
@@ -1332,15 +1648,24 @@ describe('services config section', () => {
               oauthHost: 'https://auth.example.com',
             },
           },
+          brave: {
+            apiKey: 'brave-key',
+            customHeaders: { 'X-Brave': '1' },
+          },
         },
         { custom_service: { base_url: 'https://service.example.com' } },
       ),
     ).toEqual({
+      active_search_provider: 'brave',
       moonshot_search: {
         base_url: 'https://api.example.com/search',
         api_key: 'search-key',
         custom_headers: { 'X-Search': '1' },
         oauth: { storage: 'file', key: 'oauth/kimi-code', oauth_host: 'https://auth.example.com' },
+      },
+      brave: {
+        api_key: 'brave-key',
+        custom_headers: { 'X-Brave': '1' },
       },
       custom_service: { base_url: 'https://service.example.com' },
     });

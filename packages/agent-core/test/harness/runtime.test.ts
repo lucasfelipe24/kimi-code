@@ -370,6 +370,63 @@ custom_headers = { "X-Test" = "1" }
     });
   });
 
+  it('does not execute explicit web search provider selection in the v1 runtime', async () => {
+    tmp = await mkdtemp(join(tmpdir(), 'kimi-core-runtime-'));
+    const homeDir = join(tmp, 'home');
+    const workDir = join(tmp, 'work');
+    await mkdir(homeDir, { recursive: true });
+    await mkdir(workDir, { recursive: true });
+    await writeFile(
+      join(homeDir, 'config.toml'),
+      `${baseModelConfig()}
+[experimental]
+langsearch-web-search = true
+
+[services]
+active_search_provider = "langsearch"
+
+[services.langsearch]
+api_key = "sk-test"
+
+[services.moonshot_search]
+base_url = "https://moonshot.example.test/search"
+api_key = "sk-moonshot-test"
+
+[services.rerank]
+enabled = true
+provider = "langsearch"
+api_key = "sk-rerank-test"
+`,
+    );
+    vi.stubEnv('KIMI_WEB_SEARCH_BASE_URL', 'https://search-env.example.test/search');
+    vi.stubEnv('KIMI_WEB_SEARCH_API_KEY', 'env-search-key');
+    const fetchImpl = vi.fn();
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const [coreRpc, sdkRpc] = createRPC<CoreAPI, SDKAPI>();
+    const core = new KimiCore(coreRpc, { homeDir });
+    const rpc = await sdkRpc({
+      emitEvent: vi.fn(),
+      requestApproval: vi.fn(async (): Promise<ApprovalResponse> => ({ decision: 'rejected' })),
+      requestQuestion: vi.fn(async () => null),
+      toolCall: vi.fn(async () => ({ output: '' })),
+    });
+
+    const created = await rpc.createSession({
+      id: 'ses_runtime_explicit_search_v1',
+      workDir,
+      model: 'default-mock',
+    });
+    const session = core.sessions.get(created.id);
+
+    expect(session?.options.toolServices?.webSearcher).toBeUndefined();
+    expect(session?.options.toolServices?.urlFetcher).toBeDefined();
+    expect(session?.getReadyAgent('main')?.tools.data().some((tool) => tool.name === 'WebSearch')).toBe(
+      false,
+    );
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it('registers WebSearch from services.langsearch in the v1 runtime', async () => {
     tmp = await mkdtemp(join(tmpdir(), 'kimi-core-runtime-'));
     const homeDir = join(tmp, 'home');

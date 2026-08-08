@@ -1,13 +1,11 @@
 /**
- * `auth` domain (cross-cutting) — OAuth-backed web search seam.
+ * `auth` domain (cross-cutting) — configurable web-search provider seam.
  *
- * Owns the seam for the `WebSearch` backend, which needs an authenticated
- * Moonshot search provider. `IWebSearchProviderService` exposes the
- * configured `WebSearchProvider` (or `undefined` when search is not
- * configured), and `hasWebSearchProvider` answers presence alone — for tool
- * activation gates, which may run before the identity snapshot the composed
- * provider embeds has frozen. Tests and hosts that need a custom backend bind
- * `IWebSearchProviderService` directly. Bound at App scope.
+ * `IWebSearchProviderService` exposes the selected generic `WebSearchProvider`
+ * (or `undefined` when search is unavailable), and `hasWebSearchProvider`
+ * answers presence without constructing a provider or freezing identity.
+ * Tests and hosts that need a custom backend bind the interface directly.
+ * Bound at App scope.
  */
 
 import { createDecorator, type ServiceIdentifier } from '#/_base/di/instantiation';

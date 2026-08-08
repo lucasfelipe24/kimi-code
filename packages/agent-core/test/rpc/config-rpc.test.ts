@@ -70,6 +70,49 @@ max_steps_per_turn = "nope"
     expect(diagnostics.warnings[0]).toContain('loop_control');
   });
 
+  it('warns that explicit web search provider selection requires engine v2', async () => {
+    const core = makeCore(
+      await makeHome(`${VALID_TOML}
+[services]
+active_search_provider = "brave"
+
+[services.brave]
+api_key = "YOUR_API_KEY"
+`),
+    );
+
+    const config = await core.getKimiConfig({});
+    expect(config.services?.activeSearchProvider).toBe('brave');
+    await expect(core.getConfigDiagnostics({})).resolves.toEqual({
+      warnings: [expect.stringMatching(/explicit provider selection requires engine v2/i)],
+    });
+  });
+
+  it('keeps the engine-v2 warning when a broken reload preserves explicit selection', async () => {
+    const home = await makeHome(`${VALID_TOML}
+[services]
+active_search_provider = "brave"
+
+[services.brave]
+api_key = "YOUR_API_KEY"
+`);
+    const core = makeCore(home);
+    const configPath = path.join(home, 'config.toml');
+
+    await writeFile(configPath, '[[[', 'utf-8');
+    const kept = await core.getKimiConfig({ reload: true });
+
+    expect(kept.services?.activeSearchProvider).toBe('brave');
+    const diagnostics = await core.getConfigDiagnostics({});
+    expect(diagnostics.warnings.some((warning) => warning.includes('Invalid TOML'))).toBe(true);
+    expect(diagnostics.warnings.some((warning) => warning.includes('previously loaded'))).toBe(true);
+    expect(
+      diagnostics.warnings.some((warning) =>
+        /explicit provider selection requires engine v2/i.test(warning),
+      ),
+    ).toBe(true);
+  });
+
   it('rejects config writes with an actionable error while the file is invalid', async () => {
     const home = await makeHome(`${VALID_TOML}
 [loop_control]

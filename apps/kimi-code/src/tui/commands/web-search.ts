@@ -6,6 +6,7 @@ import type {
   KimiConfig,
   MoonshotServiceConfig,
   RerankServiceConfig,
+  SearchProvider,
   ServicesConfig,
 } from '@moonshot-ai/kimi-code-sdk';
 
@@ -16,17 +17,26 @@ import {
 import { formatErrorMessage } from '../utils/event-payload';
 import type { SlashCommandHost } from './dispatch';
 import { isExperimentalFlagEnabled } from './experimental-flags';
-import { promptApiKey } from './prompts';
+import { promptApiKey, promptBaseUrl } from './prompts';
 
 // ---------------------------------------------------------------------------
 // /settings → Web Search — search and rerank provider configuration
 // ---------------------------------------------------------------------------
 
 const LANGSEARCH_EXPERIMENTAL_FLAG = 'langsearch-web-search';
+const BRAVE_EXPERIMENTAL_FLAG = 'brave-search';
 const ROOT_SEARCH_PROVIDER = 'search-provider';
+const ROOT_ACTIVE_PROVIDER = 'active-provider';
 const ROOT_RERANK_PROVIDER = 'rerank-provider';
 
-const SEARCH_PROVIDER_VALUES = ['moonshot', 'langsearch'] as const;
+// Provider selection now writes `services.activeSearchProvider` and persists the
+// whole `[services]` section in one atomic write, so switching provider never
+// deletes another provider's credentials. That write shape only exists on the
+// v2 engine; v1 is reported as unsupported before anything is changed.
+const V2_SELECTION_MESSAGE =
+  'Brave Search and explicit provider selection require engine v2. No configuration was changed.';
+
+const SEARCH_PROVIDER_VALUES = ['moonshot', 'langsearch', 'brave'] as const;
 type SearchProviderChoice = (typeof SEARCH_PROVIDER_VALUES)[number];
 
 const TIER_VALUES = ['free', 'tier1', 'tier2', 'tier3'] as const;
@@ -64,7 +74,12 @@ export async function showWebSearchConfig(host: SlashCommandHost): Promise<void>
       {
         value: ROOT_SEARCH_PROVIDER,
         label: 'Web search provider',
-        description: 'Configure Moonshot or LangSearch for web search.',
+        description: 'Configure Moonshot, LangSearch, or Brave for web search.',
+      },
+      {
+        value: ROOT_ACTIVE_PROVIDER,
+        label: 'Active web search provider',
+        description: 'Select Brave, LangSearch, or Moonshot without changing credentials.',
       },
       {
         value: ROOT_RERANK_PROVIDER,
@@ -75,6 +90,8 @@ export async function showWebSearchConfig(host: SlashCommandHost): Promise<void>
   });
   if (action === ROOT_SEARCH_PROVIDER) {
     await showSearchProviderMenu(host);
+  } else if (action === ROOT_ACTIVE_PROVIDER) {
+    await showActiveProviderMenu(host);
   } else if (action === ROOT_RERANK_PROVIDER) {
     await showRerankProviderMenu(host);
   }
@@ -83,10 +100,9 @@ export async function showWebSearchConfig(host: SlashCommandHost): Promise<void>
 async function showSearchProviderMenu(host: SlashCommandHost): Promise<void> {
   const config = await host.harness.getConfig();
   const services = config.services ?? {};
-  const current = currentSearchProvider(services);
   const selected = await pickChoice(host, {
     title: 'Web search provider',
-    currentValue: current,
+    currentValue: services.activeSearchProvider,
     options: [
       {
         value: 'moonshot',
@@ -100,22 +116,52 @@ async function showSearchProviderMenu(host: SlashCommandHost): Promise<void> {
           ? 'Use the LangSearch Web Search API.'
           : 'Enable LangSearch web search under Settings → Experiments first.',
       },
+      {
+        value: 'brave',
+        label: 'Brave',
+        description: isExperimentalFlagEnabled(BRAVE_EXPERIMENTAL_FLAG)
+          ? 'Use the Brave Search API.'
+          : 'Enable Brave Search under Settings → Experiments first.',
+      },
     ],
   });
   if (!isSearchProviderChoice(selected)) return;
-  if (
-    selected === 'langsearch' &&
-    !isExperimentalFlagEnabled(LANGSEARCH_EXPERIMENTAL_FLAG)
-  ) {
-    showLangSearchExperimentalNotice(host);
+  if (!isExperimentalFlagEnabled(searchProviderFlag(selected))) {
+    showSearchExperimentalNotice(host, selected);
     return;
   }
+  if (!requireAtomicSelection(host)) return;
 
-  if (selected === current) {
+  if (isProviderComplete(services, selected)) {
     await manageSearchProvider(host, selected);
   } else {
     await configureSearchProvider(host, selected);
   }
+}
+
+async function showActiveProviderMenu(host: SlashCommandHost): Promise<void> {
+  const config = await host.harness.getConfig();
+  const services = config.services ?? {};
+  const provider = await pickChoice(host, {
+    title: 'Active web search provider',
+    currentValue: services.activeSearchProvider,
+    options: SEARCH_PROVIDER_VALUES.map((value) => ({
+      value,
+      label: searchProviderLabel(value),
+      description: providerAvailabilityDescription(services, value),
+    })),
+  });
+  if (!isSearchProviderChoice(provider) || provider === services.activeSearchProvider) return;
+  if (!isExperimentalFlagEnabled(searchProviderFlag(provider))) {
+    showSearchExperimentalNotice(host, provider);
+    return;
+  }
+  if (!isProviderComplete(services, provider)) {
+    host.showError(`${searchProviderLabel(provider)} is not completely configured.`);
+    return;
+  }
+  if (!requireAtomicSelection(host)) return;
+  await useSearchProvider(host, provider);
 }
 
 async function manageSearchProvider(
@@ -146,12 +192,26 @@ async function manageSearchProvider(
   }
 }
 
+/** Switch the active provider only — inactive providers keep their credentials. */
+async function useSearchProvider(
+  host: SlashCommandHost,
+  provider: SearchProviderChoice,
+): Promise<void> {
+  await persistServices(
+    host,
+    { activeSearchProvider: provider },
+    `${searchProviderLabel(provider)} selected for web search.`,
+  );
+}
+
 async function configureSearchProvider(
   host: SlashCommandHost,
   provider: SearchProviderChoice,
 ): Promise<void> {
   if (provider === 'langsearch') {
     await configureLangSearch(host);
+  } else if (provider === 'brave') {
+    await configureBrave(host);
   } else {
     await configureMoonshot(host);
   }
@@ -166,15 +226,44 @@ async function configureLangSearch(host: SlashCommandHost): Promise<void> {
   const tier = await pickTier(host);
   if (tier === undefined) return;
 
-  try {
-    await host.harness.replaceService('langsearch', {
-      apiKey,
-      tier,
-    });
-    await reloadSessionAfterWebSearchChange(host, 'LangSearch web search configured.');
-  } catch (error) {
-    host.showError(`Failed to save LangSearch config: ${formatErrorMessage(error)}`);
-  }
+  await persistServices(
+    host,
+    { langsearch: { apiKey, tier } },
+    'LangSearch web search configured. Select it under Active web search provider to use it.',
+  );
+}
+
+async function configureBrave(host: SlashCommandHost): Promise<void> {
+  const apiKey = await promptApiKey(host, 'Brave', [
+    'Your key will be saved to ~/.kimi-code/config.toml under [services.brave].',
+  ]);
+  if (apiKey === undefined) return;
+
+  const baseUrlChoice = await pickChoice(host, {
+    title: 'Brave Search API endpoint',
+    options: [
+      {
+        value: 'default',
+        label: 'Default endpoint',
+        description: 'https://api.search.brave.com/res/v1',
+      },
+      {
+        value: 'custom',
+        label: 'Custom base URL',
+        description: 'Use a compatible Brave Search API endpoint.',
+      },
+    ],
+  });
+  if (baseUrlChoice === undefined) return;
+  const baseUrl =
+    baseUrlChoice === 'custom' ? await promptBaseUrl(host, 'Brave Search') : undefined;
+  if (baseUrlChoice === 'custom' && baseUrl === undefined) return;
+
+  await persistServices(
+    host,
+    { brave: { apiKey, baseUrl } },
+    'Brave web search configured. Select it under Active web search provider to use it.',
+  );
 }
 
 async function configureMoonshot(host: SlashCommandHost): Promise<void> {
@@ -239,52 +328,28 @@ async function saveMoonshotConfig(
   host: SlashCommandHost,
   service: MoonshotServiceConfig,
 ): Promise<void> {
-  try {
-    const config = await host.harness.getConfig();
-    const langsearch = config.services?.langsearch;
-    const rerank = config.services?.rerank;
-    await host.harness.replaceService('moonshotSearch', service);
-    if (
-      rerank?.provider === 'langsearch' &&
-      !isNonEmpty(rerank.apiKey) &&
-      isNonEmpty(langsearch?.apiKey)
-    ) {
-      await host.harness.replaceService('rerank', {
-        ...rerank,
-        apiKey: langsearch.apiKey,
-      });
-    }
-    if (langsearch !== undefined) {
-      await host.harness.removeService('langsearch');
-    }
-    await reloadSessionAfterWebSearchChange(host, 'Moonshot web search configured.');
-  } catch (error) {
-    host.showError(`Failed to save Moonshot config: ${formatErrorMessage(error)}`);
-  }
+  await persistServices(
+    host,
+    { moonshotSearch: service },
+    'Moonshot web search configured. Select it under Active web search provider to use it.',
+  );
 }
 
 async function removeSearchProvider(
   host: SlashCommandHost,
   provider: SearchProviderChoice,
 ): Promise<void> {
-  try {
-    await host.harness.removeService(
-      provider === 'moonshot' ? 'moonshotSearch' : 'langsearch',
-    );
-    await reloadSessionAfterWebSearchChange(
-      host,
-      `${searchProviderLabel(provider)} web search removed.`,
-    );
-  } catch (error) {
-    host.showError(
-      `Failed to remove ${searchProviderLabel(provider)}: ${formatErrorMessage(error)}`,
-    );
+  const config = await host.harness.getConfig();
+  const patch: Record<string, unknown> = { [serviceKey(provider)]: undefined };
+  if (config.services?.activeSearchProvider === provider) {
+    patch['activeSearchProvider'] = undefined;
   }
+  await persistServices(host, patch, `${searchProviderLabel(provider)} web search removed.`);
 }
 
 async function showRerankProviderMenu(host: SlashCommandHost): Promise<void> {
   if (!isExperimentalFlagEnabled(LANGSEARCH_EXPERIMENTAL_FLAG)) {
-    showLangSearchExperimentalNotice(host);
+    showSearchExperimentalNotice(host, 'langsearch');
     return;
   }
   const config = await host.harness.getConfig();
@@ -499,6 +564,36 @@ function pickChoice(
   });
 }
 
+/**
+ * Persist search-provider changes as ONE atomic `[services]` write: merge the
+ * patch over the current section, drop keys mapped to `undefined`, then reload
+ * the session once. Callers must have passed `requireAtomicSelection` first.
+ */
+async function persistServices(
+  host: SlashCommandHost,
+  patch: Record<string, unknown>,
+  statusMessage: string,
+): Promise<void> {
+  try {
+    const config = await host.harness.getConfig();
+    const services: Record<string, unknown> = { ...config.services, ...patch };
+    for (const key of Object.keys(services)) {
+      if (services[key] === undefined) delete services[key];
+    }
+    await host.harness.replaceConfigSections({ services });
+    await reloadSessionAfterWebSearchChange(host, statusMessage);
+  } catch (error) {
+    host.showError(`Failed to save web search config: ${formatErrorMessage(error)}`);
+  }
+}
+
+/** Explicit provider selection needs the v2 atomic write; v1 is reported, not corrupted. */
+function requireAtomicSelection(host: SlashCommandHost): boolean {
+  if (host.harness.supportsAtomicSectionReplace()) return true;
+  host.showError(V2_SELECTION_MESSAGE);
+  return false;
+}
+
 async function reloadSessionAfterWebSearchChange(
   host: SlashCommandHost,
   statusMessage: string,
@@ -530,42 +625,25 @@ function findMoonshotOAuthSource(config: KimiConfig): MoonshotOAuthSource | unde
   return undefined;
 }
 
-function currentSearchProvider(
-  services: ServicesConfig,
-): SearchProviderChoice | undefined {
-  if (
-    isExperimentalFlagEnabled(LANGSEARCH_EXPERIMENTAL_FLAG) &&
-    isNonEmpty(services.langsearch?.apiKey)
-  ) {
-    return 'langsearch';
-  }
-  if (isNonEmpty(services.moonshotSearch?.baseUrl)) return 'moonshot';
-  return undefined;
-}
-
 function currentProviderSummary(services: ServicesConfig): {
   readonly search: string;
   readonly rerank: string;
   readonly hasWarning: boolean;
 } {
   const langSearchEnabled = isExperimentalFlagEnabled(LANGSEARCH_EXPERIMENTAL_FLAG);
-  const current = currentSearchProvider(services);
-  const langSearchDisabled = !langSearchEnabled && isNonEmpty(services.langsearch?.apiKey);
-  const search =
-    current === 'langsearch'
-      ? `Current web search: LangSearch (tier: ${services.langsearch?.tier ?? 'free'})`
-      : current === 'moonshot'
-        ? `Current web search: Moonshot (${services.moonshotSearch?.oauth !== undefined ? 'OAuth' : 'API key'})`
-        : langSearchDisabled
-          ? 'Current web search: LangSearch configured, experimental feature disabled'
-          : 'Current web search: not configured';
+  const selected = services.activeSearchProvider;
+  const searchUnavailable =
+    selected === undefined ||
+    !isExperimentalFlagEnabled(searchProviderFlag(selected)) ||
+    !isProviderComplete(services, selected);
+  const search = searchSummaryLine(services, selected);
 
   const rerank = services.rerank;
   if (rerank?.provider === undefined) {
     return {
       search,
       rerank: 'Current rerank: not configured',
-      hasWarning: current === undefined || langSearchDisabled,
+      hasWarning: searchUnavailable,
     };
   }
   const rerankLabel = rerankProviderLabel(rerank.provider);
@@ -580,7 +658,7 @@ function currentProviderSummary(services: ServicesConfig): {
     return {
       search,
       rerank: `Current rerank: ${rerankLabel} disabled`,
-      hasWarning: current === undefined,
+      hasWarning: searchUnavailable,
     };
   }
 
@@ -588,19 +666,83 @@ function currentProviderSummary(services: ServicesConfig): {
   return {
     search,
     rerank: `Current rerank: ${rerankLabel} ${hasKey ? 'enabled' : 'missing API key'}`,
-    hasWarning: current === undefined || !hasKey,
+    hasWarning: searchUnavailable || !hasKey,
   };
 }
 
-function searchProviderLabel(provider: SearchProviderChoice): string {
-  return provider === 'moonshot' ? 'Moonshot' : 'LangSearch';
+function searchSummaryLine(
+  services: ServicesConfig,
+  selected: SearchProvider | undefined,
+): string {
+  if (selected === undefined) return 'Current web search: not configured';
+  const label = searchProviderLabel(selected);
+  if (!isExperimentalFlagEnabled(searchProviderFlag(selected))) {
+    return `Current web search: ${label} selected, experimental feature disabled`;
+  }
+  if (!isProviderComplete(services, selected)) {
+    return `Current web search: ${label} selected, incomplete configuration`;
+  }
+  if (selected === 'moonshot') {
+    const auth = services.moonshotSearch?.oauth !== undefined
+      ? 'OAuth'
+      : isNonEmpty(services.moonshotSearch?.apiKey)
+        ? 'API key'
+        : 'configured endpoint';
+    return `Current web search: Moonshot (${auth})`;
+  }
+  if (selected === 'langsearch') {
+    return `Current web search: LangSearch (tier: ${services.langsearch?.tier ?? 'free'})`;
+  }
+  return 'Current web search: Brave';
+}
+
+function isProviderComplete(services: ServicesConfig, provider: SearchProvider): boolean {
+  if (provider === 'brave') return isNonEmpty(services.brave?.apiKey);
+  if (provider === 'langsearch') return isNonEmpty(services.langsearch?.apiKey);
+  return isNonEmpty(services.moonshotSearch?.baseUrl);
+}
+
+function providerAvailabilityDescription(
+  services: ServicesConfig,
+  provider: SearchProviderChoice,
+): string {
+  if (!isExperimentalFlagEnabled(searchProviderFlag(provider))) {
+    return 'Experimental feature disabled.';
+  }
+  if (!isProviderComplete(services, provider)) return 'Not completely configured.';
+  return 'Configured and available.';
+}
+
+function serviceKey(provider: SearchProviderChoice): 'moonshotSearch' | 'langsearch' | 'brave' {
+  return provider === 'moonshot' ? 'moonshotSearch' : provider;
+}
+
+function searchProviderFlag(provider: SearchProvider): string | undefined {
+  if (provider === 'langsearch') return LANGSEARCH_EXPERIMENTAL_FLAG;
+  if (provider === 'brave') return BRAVE_EXPERIMENTAL_FLAG;
+  return undefined;
+}
+
+function searchProviderLabel(provider: SearchProvider): string {
+  if (provider === 'moonshot') return 'Moonshot';
+  if (provider === 'langsearch') return 'LangSearch';
+  return 'Brave';
 }
 
 function rerankProviderLabel(provider: RerankProviderChoice): string {
   return provider === 'langsearch' ? 'LangSearch' : provider;
 }
 
-function showLangSearchExperimentalNotice(host: SlashCommandHost): void {
+function showSearchExperimentalNotice(
+  host: SlashCommandHost,
+  provider: SearchProviderChoice,
+): void {
+  if (provider === 'brave') {
+    host.showNotice(
+      'Enable “Brave Search” under Settings → Experiments before configuring Brave.',
+    );
+    return;
+  }
   host.showNotice(
     'Enable “LangSearch web search” under Settings → Experiments before configuring LangSearch or rerank.',
   );

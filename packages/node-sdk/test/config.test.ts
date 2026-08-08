@@ -369,6 +369,11 @@ api_key = "sk-rerank-test"
       enabled: false,
       provider: 'langsearch',
     });
+    await harness.replaceService('brave', {
+      apiKey: 'brave-test-key',
+      baseUrl: 'https://api.search.brave.com/res/v1',
+    });
+    await harness.setConfig({ services: { activeSearchProvider: 'brave' } });
 
     const config = await harness.getConfig({ reload: true });
     expect(config.services?.moonshotSearch).toEqual({
@@ -379,7 +384,13 @@ api_key = "sk-rerank-test"
       enabled: false,
       provider: 'langsearch',
     });
+    expect(config.services?.brave).toEqual({
+      apiKey: 'brave-test-key',
+      baseUrl: 'https://api.search.brave.com/res/v1',
+    });
+    expect(config.services?.activeSearchProvider).toBe('brave');
     const text = await readFile(configPath, 'utf-8');
+    expect(text).toContain('active_search_provider = "brave"');
     expect(text).not.toContain('oauth/kimi-code');
     expect(text).not.toContain('sk-rerank-test');
   });
@@ -399,6 +410,10 @@ count = 5
 enabled = true
 provider = "langsearch"
 api_key = "sk-rerank-test"
+
+[services.brave]
+api_key = "brave-test-key"
+base_url = "https://api.search.brave.com/res/v1"
 `,
       'utf-8',
     );
@@ -411,6 +426,7 @@ api_key = "sk-rerank-test"
     expect(config.services?.moonshotFetch?.apiKey).toBe('sk-fetch');
     expect(config.services?.langsearch?.apiKey).toBe('sk-langsearch-test');
     expect(config.services?.rerank?.apiKey).toBe('sk-rerank-test');
+    expect(config.services?.brave?.apiKey).toBe('brave-test-key');
     let text = await readFile(configPath, 'utf-8');
     expect(text).not.toContain('[services.moonshot_search]');
     expect(text).toContain('[services.moonshot_fetch]');
@@ -439,6 +455,16 @@ api_key = "sk-rerank-test"
     expect(config.services?.moonshotFetch?.apiKey).toBe('sk-fetch');
     text = await readFile(configPath, 'utf-8');
     expect(text).not.toContain('[services.rerank]');
+    expect(text).toContain('[services.brave]');
+    expect(text).toContain('[services.moonshot_fetch]');
+
+    await harness.removeService('brave');
+
+    config = await harness.getConfig({ reload: true });
+    expect(config.services?.brave).toBeUndefined();
+    expect(config.services?.moonshotFetch?.apiKey).toBe('sk-fetch');
+    text = await readFile(configPath, 'utf-8');
+    expect(text).not.toContain('[services.brave]');
     expect(text).toContain('[services.moonshot_fetch]');
   });
 

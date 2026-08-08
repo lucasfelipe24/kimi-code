@@ -102,6 +102,8 @@ import {
   wrapSubagentModelError,
 } from '#/session/subagent/configSection';
 import {
+  BRAVE_API_KEY_ENV,
+  BRAVE_BASE_URL_ENV,
   SERVICES_SECTION,
   WEB_FETCH_API_KEY_ENV,
   WEB_FETCH_BASE_URL_ENV,
@@ -601,18 +603,21 @@ describe('services config section env bindings', () => {
     return { config: ix.get(IConfigService), disposables };
   }
 
-  it('resolves moonshot_search / moonshot_fetch fields from KIMI_WEB_* env vars', async () => {
+  it('resolves service fields from their KIMI_* env vars', async () => {
     const { config, disposables } = createConfig({
       [WEB_SEARCH_BASE_URL_ENV]: 'https://search-env.example/search',
       [WEB_SEARCH_API_KEY_ENV]: 'env-search-key',
       [WEB_FETCH_BASE_URL_ENV]: 'https://fetch-env.example/fetch',
       [WEB_FETCH_API_KEY_ENV]: 'env-fetch-key',
+      [BRAVE_BASE_URL_ENV]: 'https://brave-env.example/res/v1',
+      [BRAVE_API_KEY_ENV]: 'env-brave-key',
     });
     await config.ready;
 
     expect(config.get<ServicesConfig>(SERVICES_SECTION)).toEqual({
       moonshotSearch: { baseUrl: 'https://search-env.example/search', apiKey: 'env-search-key' },
       moonshotFetch: { baseUrl: 'https://fetch-env.example/fetch', apiKey: 'env-fetch-key' },
+      brave: { baseUrl: 'https://brave-env.example/res/v1', apiKey: 'env-brave-key' },
     });
 
     disposables.dispose();
@@ -635,12 +640,19 @@ describe('services config section env bindings', () => {
         oauth: { storage: 'file', key: 'oauth/fetch' },
         customHeaders: { Authorization: 'Bearer configured-fetch-secret' },
       },
+      brave: {
+        baseUrl: 'https://file.example/brave',
+        apiKey: 'file-brave-key',
+        customHeaders: { Authorization: 'Bearer configured-brave-secret' },
+      },
     });
     Object.assign(env, {
       [WEB_SEARCH_BASE_URL_ENV]: 'https://search-env.example/search',
       [WEB_SEARCH_API_KEY_ENV]: 'env-search-key',
       [WEB_FETCH_BASE_URL_ENV]: 'https://fetch-env.example/fetch',
       [WEB_FETCH_API_KEY_ENV]: 'env-fetch-key',
+      [BRAVE_BASE_URL_ENV]: 'https://brave-env.example/res/v1',
+      [BRAVE_API_KEY_ENV]: 'env-brave-key',
     });
 
     expect(config.get<ServicesConfig>(SERVICES_SECTION)).toEqual({
@@ -651,6 +663,10 @@ describe('services config section env bindings', () => {
       moonshotFetch: {
         baseUrl: 'https://fetch-env.example/fetch',
         apiKey: 'env-fetch-key',
+      },
+      brave: {
+        baseUrl: 'https://brave-env.example/res/v1',
+        apiKey: 'env-brave-key',
       },
     });
 
@@ -694,24 +710,40 @@ describe('services config section env bindings', () => {
   });
 
   it('strips env-derived fields before persisting a round-tripped effective value', async () => {
-    const { config, disposables } = createConfig({
-      [WEB_FETCH_BASE_URL_ENV]: 'https://fetch-env.example/fetch',
-      [WEB_FETCH_API_KEY_ENV]: 'env-fetch-key',
-    });
+    const env: Record<string, string> = {};
+    const { config, disposables } = createConfig(env);
     await config.ready;
     await config.set(SERVICES_SECTION, {
       moonshotSearch: { baseUrl: 'https://file.example/search' },
+      brave: {
+        baseUrl: 'https://brave-file.example/res/v1',
+        apiKey: 'file-brave-key',
+        customHeaders: { 'X-Service': 'brave' },
+      },
     });
+    env[WEB_FETCH_BASE_URL_ENV] = 'https://fetch-env.example/fetch';
+    env[WEB_FETCH_API_KEY_ENV] = 'env-fetch-key';
+    env[BRAVE_BASE_URL_ENV] = 'https://brave-env.example/res/v1';
+    env[BRAVE_API_KEY_ENV] = 'env-brave-key';
 
     const effective = config.get<ServicesConfig>(SERVICES_SECTION);
     expect(effective?.moonshotFetch).toEqual({
       baseUrl: 'https://fetch-env.example/fetch',
       apiKey: 'env-fetch-key',
     });
+    expect(effective?.brave).toEqual({
+      baseUrl: 'https://brave-env.example/res/v1',
+      apiKey: 'env-brave-key',
+    });
 
     await config.replace(SERVICES_SECTION, effective);
     expect(config.inspect<ServicesConfig>(SERVICES_SECTION).userValue).toEqual({
       moonshotSearch: { baseUrl: 'https://file.example/search' },
+      brave: {
+        baseUrl: 'https://brave-file.example/res/v1',
+        apiKey: 'file-brave-key',
+        customHeaders: { 'X-Service': 'brave' },
+      },
     });
 
     disposables.dispose();

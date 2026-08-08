@@ -10,6 +10,7 @@ import {
   formatConfigValidationError,
   getDefaultConfig,
   type BackgroundConfig,
+  type BraveServiceConfig,
   type ExperimentalConfig,
   type HookDefConfig,
   type ImageConfig,
@@ -646,6 +647,7 @@ function permissionRuleToToml(
 
 function servicesToToml(services: ServicesConfig, rawServices: unknown): Record<string, unknown> {
   const out = cloneRecord(rawServices);
+  setDefined(out, 'active_search_provider', services.activeSearchProvider);
   if (services.moonshotSearch !== undefined) {
     out['moonshot_search'] = serviceToToml(services.moonshotSearch);
   } else {
@@ -661,6 +663,11 @@ function servicesToToml(services: ServicesConfig, rawServices: unknown): Record<
   } else {
     delete out['langsearch'];
   }
+  if (services.brave !== undefined) {
+    out['brave'] = serviceToToml(services.brave);
+  } else {
+    delete out['brave'];
+  }
   if (services.rerank !== undefined) {
     out['rerank'] = serviceToToml(services.rerank);
   } else {
@@ -670,7 +677,11 @@ function servicesToToml(services: ServicesConfig, rawServices: unknown): Record<
 }
 
 function serviceToToml(
-  service: MoonshotServiceConfig | LangSearchServiceConfig | NonNullable<ServicesConfig['rerank']>,
+  service:
+    | MoonshotServiceConfig
+    | LangSearchServiceConfig
+    | BraveServiceConfig
+    | NonNullable<ServicesConfig['rerank']>,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(service)) {

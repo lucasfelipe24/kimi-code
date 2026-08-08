@@ -233,6 +233,7 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
 
   private kaos: Promise<Kaos> | undefined;
   private runtime: ToolServices | undefined;
+  private runtimeHasExplicitSearchProvider: boolean | undefined;
   private config: KimiConfig;
   private configWarnings: readonly string[] = [];
   private readonly runtimeOverride: ToolServices | undefined;
@@ -285,7 +286,11 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
       throw loaded.fileError;
     }
     this.config = loaded.config;
-    this.configWarnings = [...loaded.fileWarnings, ...loaded.envWarnings];
+    this.configWarnings = [
+      ...loaded.fileWarnings,
+      ...loaded.envWarnings,
+      ...legacySearchProviderWarnings(loaded.config),
+    ];
     if (this.configWarnings.length > 0) {
       log.warn('config load degraded', { warnings: this.configWarnings });
     }
@@ -1390,15 +1395,22 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
   }
 
   private async resolveRuntime(config: KimiConfig): Promise<ToolServices> {
-    if (this.runtime !== undefined) return this.runtime;
-    const runtime = await createRuntimeConfig({
-      config,
-      langSearchEnabled: this.experimentalFlags.enabled('langsearch-web-search'),
-      kimiRequestHeaders: this.kimiRequestHeaders,
-      resolveOAuthTokenProvider: this.resolveOAuthTokenProvider,
-    });
+    const hasExplicitSearchProvider = config.services?.activeSearchProvider !== undefined;
+    let runtime =
+      this.runtimeHasExplicitSearchProvider === hasExplicitSearchProvider
+        ? this.runtime
+        : undefined;
+    runtime ??=
+      this.runtimeOverride ??
+      (await createRuntimeConfig({
+        config,
+        langSearchEnabled: this.experimentalFlags.enabled('langsearch-web-search'),
+        kimiRequestHeaders: this.kimiRequestHeaders,
+        resolveOAuthTokenProvider: this.resolveOAuthTokenProvider,
+      }));
     this.runtime = runtime;
-    return runtime;
+    this.runtimeHasExplicitSearchProvider = hasExplicitSearchProvider;
+    return hasExplicitSearchProvider ? { ...runtime, webSearcher: undefined } : runtime;
   }
 
   private getKaos(): Promise<Kaos> {
@@ -1503,6 +1515,7 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
       this.configWarnings = [
         ...loaded.fileWarnings,
         ...loaded.envWarnings,
+        ...legacySearchProviderWarnings(this.config),
         'config.toml has errors; keeping the previously loaded configuration.',
       ];
       log.warn('config reload degraded; keeping previous config', {
@@ -1510,7 +1523,10 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
       });
       return this.config;
     }
-    this.configWarnings = loaded.envWarnings;
+    this.configWarnings = [
+      ...loaded.envWarnings,
+      ...legacySearchProviderWarnings(loaded.config),
+    ];
     return this.setRuntimeConfig(loaded.config);
   }
 
@@ -1534,6 +1550,7 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
   private clearRuntimeCache(): void {
     if (this.runtimeOverride !== undefined) return;
     this.runtime = undefined;
+    this.runtimeHasExplicitSearchProvider = undefined;
   }
 
   private async refreshSessionRuntimeConfig(
@@ -1667,6 +1684,8 @@ function createWebSearchProvider(
   limiter: RateLimiter | undefined,
 ): WebSearchProvider | undefined {
   const services = input.config.services;
+  if (services?.activeSearchProvider !== undefined) return undefined;
+
   const langsearch = services?.langsearch;
   const langsearchApiKey = nonEmptyString(langsearch?.apiKey);
   if (input.langSearchEnabled && langsearchApiKey !== undefined) {
@@ -1785,6 +1804,15 @@ function serviceCredentials(
 function nonEmptyString(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed === undefined || trimmed.length === 0 ? undefined : trimmed;
+}
+
+function legacySearchProviderWarnings(config: KimiConfig): readonly string[] {
+  const selected = config.services?.activeSearchProvider;
+  return selected === undefined
+    ? []
+    : [
+        `Web search provider "${selected}" is configured, but explicit provider selection requires engine v2. The legacy engine has disabled WebSearch for this configuration.`,
+      ];
 }
 
 function requiredWorkDir(operation: string, value: string): string {

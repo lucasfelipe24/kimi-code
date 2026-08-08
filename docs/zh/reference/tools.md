@@ -53,9 +53,28 @@
 | `WebSearch` | 自动放行 | 网络搜索 |
 | `FetchURL` | 自动放行 | 获取指定 URL 的内容 |
 
-**`WebSearch`** 接受 `query`（搜索词）。需要宿主提供搜索实现，未注入时不会出现在工具列表中。
+**`WebSearch`** 接受 `query`（搜索词）。需要宿主提供搜索实现，未注入时不会出现在工具列表中。后端由 [`active_search_provider`](../configuration/config-files.md#services) 指定（Brave、LangSearch 或 Moonshot）；未选择后端时按旧的优先级决定。
 
 **`FetchURL`** 接受单个 `url` 参数，返回页面内容。对 HTML 页面，宿主会提取正文而非返回完整 HTML；纯文本或 Markdown 页面直接透传。同样需要宿主注入实现。
+
+### Brave Search 工具
+
+当 [Brave Search](../configuration/config-files.md#brave-search) 为当前后端时，`WebSearch` 由 Brave 提供，engine v2 还会在模型的工具注册表中提供一组专用工具，映射其他 Brave Search API 端点。它们仅在 Brave 被选中（`active_search_provider = "brave"`）且存在 API 密钥时提供（除非 `brave-search` flag 已被关闭），且仅在默认的 `agent-core-v2` 引擎上：
+
+| 工具 | 说明 |
+| --- | --- |
+| `BraveWebSearch` | 通用网页搜索 |
+| `BraveNewsSearch` | 新闻文章搜索 |
+| `BraveImageSearch` | 图片搜索 |
+| `BraveVideoSearch` | 视频搜索 |
+| `BraveLLMContext` | 获取供 LLM 使用的接地上下文 |
+| `BraveAnswers` | 针对查询的直接答案 |
+| `BraveSuggest` | 查询自动补全建议 |
+| `BraveSpellcheck` | 查询拼写纠正 |
+| `BraveLocalSearch` | 本地商家和地点搜索 |
+| `BraveRichResults` | 富结构化结果 |
+
+每个端点都有各自的限流，请在 [Brave Search API 控制台](https://api-dashboard.search.brave.com/) 中查看。本地搜索返回的位置 ID 为临时 ID，Brave 保留其有效性约 8 小时。已废弃的 Summarizer 端点不予提供。
 
 ## Plan 模式
 

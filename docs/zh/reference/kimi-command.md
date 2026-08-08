@@ -298,25 +298,30 @@ kimi vis --host 0.0.0.0 --port 8123 --no-open
 
 ### `kimi search`
 
-无需打开 TUI 即可管理网页搜索后端和语义重排。在 **Settings → Web Search** 中，顶部会显示当前供应商：**Web search provider** 用于配置 Moonshot 或 LangSearch，**Rerank provider** 则独立管理重排状态和 API 密钥。Moonshot 配置可以复用当前 Kimi Code OAuth 登录，也可以使用中国区或全球区 API 密钥。CLI 和 TUI 都会把更改持久化到 `config.toml` 的 `[services]` 中。LangSearch 搜索和重排属于实验功能；配置前请在 **Settings → Experiments** 中启用 **LangSearch web search**，或设置 `KIMI_CODE_EXPERIMENTAL_LANGSEARCH_WEB_SEARCH=1`。
+无需打开 TUI 即可管理网页搜索后端和语义重排。在 **Settings → Web Search** 中，顶部会显示当前供应商：**Web search provider** 只用于配置或编辑 Moonshot、LangSearch 或 Brave（并保留当前选择），**Active web search provider** 用于显式切换由哪个已配置后端提供 `WebSearch`，**Rerank provider** 则独立管理重排状态和 API 密钥。配置 Moonshot 时可以复用当前 Kimi Code OAuth 登录，也可以使用中国区或全球区 API 密钥。CLI 和 TUI 都会把更改持久化到 `config.toml` 的 `[services]` 中；在 CLI 上，`kimi search set brave|langsearch` 会同时配置并选择后端（写入 `active_search_provider`），而 `kimi search use` 只切换选择。Brave 搜索默认启用；设置 `KIMI_CODE_EXPERIMENTAL_BRAVE_SEARCH=0` 可将其关闭。LangSearch 网页搜索仍属于实验功能；配置前请在 **Settings → Experiments** 中启用 **LangSearch web search**（或设置 `KIMI_CODE_EXPERIMENTAL_LANGSEARCH_WEB_SEARCH=1`）。Brave 搜索和显式供应商选择需要默认的 `agent-core-v2` 引擎；传统引擎会保留配置但不会执行。
 
 | 命令 | 说明 |
 | --- | --- |
-| `kimi search status` | 显示当前搜索后端和重排状态 |
-| `kimi search set langsearch --api-key <key>` | 配置 LangSearch 网页搜索 |
+| `kimi search status` | 显示已选择和当前生效的搜索后端及重排状态 |
+| `kimi search set langsearch --api-key <key>` | 配置并选择 LangSearch 网页搜索 |
+| `kimi search set brave --api-key <key>` | 配置并选择 Brave Search |
 | `kimi search set rerank` | 配置 LangSearch 语义重排；默认复用搜索 API 密钥 |
-| `kimi search clear langsearch` | 移除 `[services.langsearch]`，并在 Moonshot 可用时回退到 Moonshot |
+| `kimi search use <provider>` | 选择已配置的后端：`brave`、`langsearch` 或 `moonshot` |
+| `kimi search clear langsearch` | 移除 `[services.langsearch]`；若其为当前选择则一并清除选择 |
+| `kimi search clear brave` | 移除 `[services.brave]`；若其为当前选择则一并清除选择 |
 | `kimi search clear rerank` | 移除 `[services.rerank]` |
 | `kimi search limits` | 显示 LangSearch 各档位公布的配额 |
 
-`kimi search set langsearch` 接受 `--tier <free|tier1|tier2|tier3>` 和 `--count <1-10>`。`kimi search set rerank` 接受 `--provider langsearch`、可选的 `--api-key <key>` 以及 `--enabled <true|false>`。
+`kimi search set langsearch` 接受 `--tier <free|tier1|tier2|tier3>` 和 `--count <1-10>`。`kimi search set brave` 接受可选的 `--base-url <url>`。`kimi search set rerank` 接受 `--provider langsearch`、可选的 `--api-key <key>` 以及 `--enabled <true|false>`。
 
 ```sh
 kimi search set langsearch --api-key YOUR_API_KEY --tier free --count 10
+kimi search set brave --api-key YOUR_API_KEY
+kimi search use brave
 kimi search set rerank
 kimi search status
 kimi search clear rerank
-kimi search clear langsearch
+kimi search clear brave
 ```
 
 完整配置字段和后端优先级见 [`services`](../configuration/config-files.md#services)。

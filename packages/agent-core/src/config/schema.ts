@@ -290,6 +290,18 @@ export const LangSearchServiceConfigSchema = z.object({
 
 export type LangSearchServiceConfig = z.infer<typeof LangSearchServiceConfigSchema>;
 
+export const BraveServiceConfigSchema = z.object({
+  apiKey: z.string().optional(),
+  baseUrl: z.string().optional(),
+  customHeaders: StringRecordSchema.optional(),
+});
+
+export type BraveServiceConfig = z.infer<typeof BraveServiceConfigSchema>;
+
+export const SearchProviderSchema = z.enum(['brave', 'langsearch', 'moonshot']);
+
+export type SearchProvider = z.infer<typeof SearchProviderSchema>;
+
 export const RerankServiceConfigSchema = z.object({
   enabled: z.boolean().optional(),
   provider: z.enum(['langsearch']).optional(),
@@ -301,9 +313,11 @@ export const RerankServiceConfigSchema = z.object({
 export type RerankServiceConfig = z.infer<typeof RerankServiceConfigSchema>;
 
 export const ServicesConfigSchema = z.object({
+  activeSearchProvider: SearchProviderSchema.optional(),
   moonshotSearch: MoonshotServiceConfigSchema.optional(),
   moonshotFetch: MoonshotServiceConfigSchema.optional(),
   langsearch: LangSearchServiceConfigSchema.optional(),
+  brave: BraveServiceConfigSchema.optional(),
   rerank: RerankServiceConfigSchema.optional(),
 });
 
@@ -425,11 +439,14 @@ const ModelCatalogConfigPatchSchema = ModelCatalogConfigSchema.partial();
 const ExperimentalConfigPatchSchema = ExperimentalConfigSchema;
 const MoonshotServiceConfigPatchSchema = MoonshotServiceConfigSchema.partial();
 const LangSearchServiceConfigPatchSchema = LangSearchServiceConfigSchema.partial();
+const BraveServiceConfigPatchSchema = BraveServiceConfigSchema.partial();
 const RerankServiceConfigPatchSchema = RerankServiceConfigSchema.partial();
 const ServicesConfigPatchSchema = z.object({
+  activeSearchProvider: SearchProviderSchema.optional(),
   moonshotSearch: MoonshotServiceConfigPatchSchema.optional(),
   moonshotFetch: MoonshotServiceConfigPatchSchema.optional(),
   langsearch: LangSearchServiceConfigPatchSchema.optional(),
+  brave: BraveServiceConfigPatchSchema.optional(),
   rerank: RerankServiceConfigPatchSchema.optional(),
 });
 

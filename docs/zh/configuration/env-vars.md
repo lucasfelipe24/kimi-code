@@ -145,6 +145,10 @@ kimi
 | `KIMI_WEB_SEARCH_API_KEY` | 网页搜索（`WebSearch`）服务的 API 密钥；设置后同时替换配置中的 API 密钥和 OAuth 凭据 | 非空字符串；空白值被忽略 |
 | `KIMI_WEB_FETCH_BASE_URL` | 网页抓取（`FetchURL`）服务的 API URL；优先级高于 `[services.moonshot_fetch] base_url`。文件中持久化的凭据和自定义 header 不会发送到环境变量指定的端点。环境变量和配置都没有指定端点时，已登录用户会先尝试 Kimi OAuth 托管抓取服务，再回退到本地直接请求 | 非空字符串；空白值被忽略 |
 | `KIMI_WEB_FETCH_API_KEY` | 网页抓取（`FetchURL`）服务的 API 密钥；设置后同时替换配置中的 API 密钥和 OAuth 凭据 | 非空字符串；空白值被忽略 |
+| `KIMI_BRAVE_BASE_URL` | Brave Search 后端的 API URL；优先级高于 `config.toml` 的 `[services.brave] base_url`。文件中持久化的凭据和自定义 header 不会发送到环境变量指定的端点。仅由默认的 `agent-core-v2` 引擎读取 | 非空字符串；空白值被忽略 |
+| `KIMI_BRAVE_API_KEY` | Brave Search 后端的 API 密钥；优先级高于 `[services.brave] api_key`。需要 `active_search_provider = "brave"` 才会为 `WebSearch` 提供服务。仅由默认的 `agent-core-v2` 引擎读取 | 非空字符串；空白值被忽略 |
+| `KIMI_CODE_EXPERIMENTAL_BRAVE_SEARCH` | 开关 Brave Search 后端（`brave-search` flag），默认已启用；设为假值即可关闭 Brave。仅在默认的 `agent-core-v2` 引擎上生效 | 真值：`1`/`true`/`yes`/`on`；假值：`0`/`false`/`no`/`off` |
+| `KIMI_CODE_EXPERIMENTAL_LANGSEARCH_WEB_SEARCH` | 启用实验性的 LangSearch 网页搜索后端及其可选的语义重排（`langsearch-web-search` flag）；master `KIMI_CODE_EXPERIMENTAL_FLAG=1` 也会启用它 | 真值：`1`/`true`/`yes`/`on`；假值：`0`/`false`/`no`/`off` |
 | `KIMI_CODE_EXPERIMENTAL_FLAG` | 在当前进程启用所有已注册的实验功能；不用于选择 Agent 引擎 | `1`、`true`、`yes`、`on` |
 | `KIMI_CODE_LEGACY_FLAG` | 让 `kimi`、`kimi -p`、`kimi doctor`、`kimi acp`、`kimi export` 和 `kimi provider` 使用旧版 `agent-core` 引擎；这些命令默认使用 `agent-core-v2` | `1`、`true`、`yes`、`on` |
 | `KIMI_SHELL_PATH` | Windows 上覆盖 Git Bash 路径（自动探测失败时使用） | 绝对路径 |

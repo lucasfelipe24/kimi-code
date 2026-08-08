@@ -137,10 +137,18 @@ timeout = 5
 event = "Stop"
 command = "echo stop"
 
+[services]
+active_search_provider = "brave"
+
 [services.moonshot_search]
 base_url = "https://api.kimi.com/coding/v1/search"
 api_key = "sk-search"
 custom_headers = { "X-Search" = "1" }
+
+[services.brave]
+base_url = "https://api.search.brave.com/res/v1"
+api_key = "brave-test-key"
+custom_headers = { "X-Brave-Test" = "1" }
 
 [services.moonshot_fetch]
 base_url = "https://api.kimi.com/coding/v1/fetch"
@@ -220,7 +228,13 @@ describe('harness config TOML loader', () => {
         command: 'echo stop',
       },
     ]);
+    expect(config.services?.activeSearchProvider).toBe('brave');
     expect(config.services?.moonshotSearch?.customHeaders).toEqual({ 'X-Search': '1' });
+    expect(config.services?.brave).toEqual({
+      baseUrl: 'https://api.search.brave.com/res/v1',
+      apiKey: 'brave-test-key',
+      customHeaders: { 'X-Brave-Test': '1' },
+    });
     expect(config.services?.moonshotFetch?.apiKey).toBe('sk-fetch');
 
     expect('theme' in config).toBe(false);
@@ -372,6 +386,9 @@ removed_flag = true
     expect(text).toContain('default_permission_mode = "auto"');
     expect(text).toContain('extra_skill_dirs = [ "~/team-skills", ".agents/team-skills" ]');
     expect(text).toContain('telemetry = false');
+    expect(text).toContain('active_search_provider = "brave"');
+    expect(text).toContain('[services.brave]');
+    expect(text).toContain('base_url = "https://api.search.brave.com/res/v1"');
     expect(text).not.toContain('default_yolo');
     expect(text).toContain('[[permission.rules]]');
     expect(text).toContain('pattern = "Bash(rm *)"');

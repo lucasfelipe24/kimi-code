@@ -301,6 +301,7 @@ describe('SDKRpcClientV2 (agent-core-v2 wiring MVP)', () => {
     try {
       await harness.setConfig({
         services: {
+          activeSearchProvider: 'brave',
           moonshotSearch: {
             baseUrl: 'https://search.example.test',
             apiKey: 'sk-search',
@@ -312,6 +313,11 @@ describe('SDKRpcClientV2 (agent-core-v2 wiring MVP)', () => {
           langsearch: {
             apiKey: 'sk-langsearch-stale',
             baseUrl: 'https://stale-langsearch.example.test',
+            customHeaders: { 'X-Stale': 'true' },
+          },
+          brave: {
+            apiKey: 'brave-stale-key',
+            baseUrl: 'https://stale-brave.example.test',
             customHeaders: { 'X-Stale': 'true' },
           },
           rerank: {
@@ -347,6 +353,17 @@ describe('SDKRpcClientV2 (agent-core-v2 wiring MVP)', () => {
         provider: 'langsearch',
       });
       expect(next.services?.langsearch?.apiKey).toBe('sk-langsearch');
+
+      next = await harness.replaceService('brave', {
+        apiKey: 'brave-key',
+        baseUrl: 'https://api.search.brave.com/res/v1',
+      });
+      expect(next.services?.brave).toEqual({
+        apiKey: 'brave-key',
+        baseUrl: 'https://api.search.brave.com/res/v1',
+      });
+      expect(next.services?.brave?.customHeaders).toBeUndefined();
+      expect(next.services?.activeSearchProvider).toBe('brave');
 
       const reread = await harness.getConfig({ reload: true });
       expect(reread.services).toEqual(next.services);
@@ -384,15 +401,20 @@ describe('SDKRpcClientV2 (agent-core-v2 wiring MVP)', () => {
       await harness.setConfig({
         services: {
           langsearch: { apiKey: 'sk-langsearch', tier: 'tier1' },
+          brave: { apiKey: 'brave-key' },
           rerank: { enabled: true, provider: 'langsearch', apiKey: 'sk-rerank' },
         },
       });
 
       let next = await harness.removeService('langsearch');
       expect(next.services?.langsearch).toBeUndefined();
+      expect(next.services?.brave?.apiKey).toBe('brave-key');
       expect(next.services?.rerank?.apiKey).toBe('sk-rerank');
 
       next = await harness.removeService('rerank');
+      expect(next.services?.brave?.apiKey).toBe('brave-key');
+
+      next = await harness.removeService('brave');
       expect(next.services).toEqual({});
       expect((await harness.getConfig({ reload: true })).services).toEqual({});
       expect(await readFile(join(homeDir, 'config.toml'), 'utf-8')).not.toContain('[services');

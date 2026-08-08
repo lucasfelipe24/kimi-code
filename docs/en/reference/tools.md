@@ -53,9 +53,28 @@ Foreground mode blocks the current turn until the command completes or times out
 | `WebSearch` | Auto-allow | Web search |
 | `FetchURL` | Auto-allow | Fetch the content of a specified URL |
 
-**`WebSearch`** accepts `query` (search terms). Requires the host to provide a search implementation; when not injected, the tool does not appear in the tool list.
+**`WebSearch`** accepts `query` (search terms). Requires the host to provide a search implementation; when not injected, the tool does not appear in the tool list. The backend is the one named by [`active_search_provider`](../configuration/config-files.md#services) (Brave, LangSearch, or Moonshot), or the legacy precedence when no backend is selected.
 
 **`FetchURL`** accepts a single `url` parameter and returns the page content. For HTML pages, the host extracts the body text rather than returning the full HTML; plain text or Markdown pages are passed through directly. Also requires a host-provided implementation.
+
+### Brave Search tools
+
+When [Brave Search](../configuration/config-files.md#brave-search) is the active backend, `WebSearch` is served by Brave, and engine v2 makes a set of specialized tools available in the model's tool registry that map the other Brave Search API endpoints. They are offered only when Brave is selected (`active_search_provider = "brave"`) and an API key is present, unless the `brave-search` flag has been turned off — and only on the default `agent-core-v2` engine:
+
+| Tool | Description |
+| --- | --- |
+| `BraveWebSearch` | General web search |
+| `BraveNewsSearch` | News article search |
+| `BraveImageSearch` | Image search |
+| `BraveVideoSearch` | Video search |
+| `BraveLLMContext` | Retrieve grounding context for LLM use |
+| `BraveAnswers` | Direct answers to a query |
+| `BraveSuggest` | Query autocomplete suggestions |
+| `BraveSpellcheck` | Spelling correction for a query |
+| `BraveLocalSearch` | Local business and place search |
+| `BraveRichResults` | Rich structured results |
+
+Each endpoint carries its own rate limit; review them on the [Brave Search API dashboard](https://api-dashboard.search.brave.com/). Local search returns ephemeral location IDs that Brave keeps valid for roughly 8 hours. The deprecated Summarizer endpoint is not offered.
 
 ## Plan Mode
 

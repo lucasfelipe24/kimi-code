@@ -17,6 +17,7 @@ import type { SwarmModeTrigger } from '#/agent/swarm';
 import type { WorkflowModeTrigger } from '#/agent/workflow';
 import type { ToolDisclosure, ToolInfo } from '#/agent/tool';
 import type {
+  BraveServiceConfig,
   KimiConfig,
   KimiConfigPatch,
   LangSearchServiceConfig,
@@ -599,6 +600,7 @@ export interface RemoveKimiProviderPayload {
 export interface ReplaceableKimiServices {
   readonly moonshotSearch: MoonshotServiceConfig;
   readonly langsearch: LangSearchServiceConfig;
+  readonly brave: BraveServiceConfig;
   readonly rerank: RerankServiceConfig;
 }
 

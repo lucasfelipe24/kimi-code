@@ -20,6 +20,8 @@ interface HostExtras {
     setConfig: ReturnType<typeof vi.fn>;
     replaceService: ReturnType<typeof vi.fn>;
     removeService: ReturnType<typeof vi.fn>;
+    supportsAtomicSectionReplace: ReturnType<typeof vi.fn>;
+    replaceConfigSections: ReturnType<typeof vi.fn>;
   };
   showStatus: ReturnType<typeof vi.fn>;
   showNotice: ReturnType<typeof vi.fn>;
@@ -37,6 +39,7 @@ const DOWN = '\u001B[B';
 function makeHost(
   config: TestConfig = {},
   session?: { reloadSession: ReturnType<typeof vi.fn> },
+  options: { supportsAtomic?: boolean } = {},
 ): { host: SlashCommandHost & HostExtras; getMounted: () => MountedPanel | null } {
   let mounted: MountedPanel | null = null;
   const normalized = {
@@ -49,6 +52,8 @@ function makeHost(
       setConfig: vi.fn(async () => normalized),
       replaceService: vi.fn(async () => normalized),
       removeService: vi.fn(async () => normalized),
+      supportsAtomicSectionReplace: vi.fn(() => options.supportsAtomic ?? true),
+      replaceConfigSections: vi.fn(async () => {}),
     },
     session,
     showStatus: vi.fn(),
@@ -83,12 +88,16 @@ async function type(panel: MountedPanel, value: string): Promise<void> {
 
 describe('showWebSearchConfig', () => {
   beforeEach(() => {
-    setExperimentalFeatures([{ id: 'langsearch-web-search', enabled: true }]);
+    setExperimentalFeatures([
+      { id: 'langsearch-web-search', enabled: true },
+      { id: 'brave-search', enabled: true },
+    ]);
   });
 
-  it('shows current provider state at the top and only the two provider menus', async () => {
+  it('shows current provider state and configuration, activation, and rerank menus', async () => {
     const { host, getMounted } = makeHost({
       services: {
+        activeSearchProvider: 'langsearch',
         langsearch: { apiKey: 'sk-test', tier: 'tier2' },
         rerank: { provider: 'langsearch', enabled: true },
       },
@@ -102,6 +111,7 @@ describe('showWebSearchConfig', () => {
     expect(text).toContain('Current web search: LangSearch (tier: tier2)');
     expect(text).toContain('Current rerank: LangSearch enabled');
     expect(text).toContain('Web search provider');
+    expect(text).toContain('Active web search provider');
     expect(text).toContain('Rerank provider');
     expect(text).not.toContain('Show current backend');
     expect(text).not.toContain('Activate LangSearch');
@@ -110,9 +120,10 @@ describe('showWebSearchConfig', () => {
     await pending;
   });
 
-  it('shows a missing-key warning when rerank depended on removed LangSearch config', async () => {
+  it('shows a missing-key warning when rerank depends on an unconfigured LangSearch key', async () => {
     const { host, getMounted } = makeHost({
       services: {
+        activeSearchProvider: 'moonshot',
         moonshotSearch: {
           baseUrl: 'https://api.example.test/v1/search',
           apiKey: 'sk-search',
@@ -130,15 +141,38 @@ describe('showWebSearchConfig', () => {
     await pending;
   });
 
-  it('marks the active search provider as current', async () => {
+  it('treats a Moonshot base URL without credentials as configured', async () => {
     const { host, getMounted } = makeHost({
-      services: { langsearch: { apiKey: 'sk-test' } },
+      services: {
+        activeSearchProvider: 'moonshot',
+        moonshotSearch: { baseUrl: 'https://search.example.test' },
+      },
     });
     const pending = showWebSearchConfig(host);
     await settle();
 
+    expect(renderedText(getMounted()!)).toContain(
+      'Current web search: Moonshot (configured endpoint)',
+    );
+    await input(getMounted()!, DOWN); // Active web search provider
     await input(getMounted()!, ENTER);
+    expect(renderedText(getMounted()!)).toContain('Moonshot ← current');
+    expect(renderedText(getMounted()!)).toContain('Configured and available.');
+
+    await input(getMounted()!, ESC);
+    await pending;
+  });
+
+  it('marks the active search provider as current', async () => {
+    const { host, getMounted } = makeHost({
+      services: { activeSearchProvider: 'langsearch', langsearch: { apiKey: 'sk-test' } },
+    });
+    const pending = showWebSearchConfig(host);
+    await settle();
+
+    await input(getMounted()!, ENTER); // Web search provider
     const text = renderedText(getMounted()!);
+    expect(text).toContain('Brave'); // Brave now offered in the menu
     expect(text).toContain('LangSearch ← current');
     expect(text).not.toContain('Moonshot ← current');
 
@@ -146,7 +180,129 @@ describe('showWebSearchConfig', () => {
     await pending;
   });
 
-  it('preserves the LangSearch key used by rerank when switching to Moonshot', async () => {
+  it('gates Brave behind its experimental flag without changing config', async () => {
+    setExperimentalFeatures([
+      { id: 'langsearch-web-search', enabled: true },
+      { id: 'brave-search', enabled: false },
+    ]);
+    const { host, getMounted } = makeHost();
+    const pending = showWebSearchConfig(host);
+    await settle();
+
+    await input(getMounted()!, ENTER); // Web search provider
+    await input(getMounted()!, DOWN); // LangSearch
+    await input(getMounted()!, DOWN); // Brave
+    await input(getMounted()!, ENTER);
+    await pending;
+
+    expect(host.showNotice).toHaveBeenCalledWith(
+      'Enable “Brave Search” under Settings → Experiments before configuring Brave.',
+    );
+    expect(host.harness.replaceConfigSections).not.toHaveBeenCalled();
+  });
+
+  it('configures Brave and atomically preserves the inactive providers', async () => {
+    const { host, getMounted } = makeHost({
+      services: {
+        activeSearchProvider: 'moonshot',
+        moonshotSearch: {
+          baseUrl: 'https://api.example.test/v1/search',
+          apiKey: 'sk-search',
+        },
+        langsearch: { apiKey: 'sk-langsearch' },
+      },
+    });
+    const pending = showWebSearchConfig(host);
+    await settle();
+
+    await input(getMounted()!, ENTER); // Web search provider
+    await input(getMounted()!, DOWN); // LangSearch
+    await input(getMounted()!, DOWN); // Brave
+    await input(getMounted()!, ENTER);
+    await type(getMounted()!, 'brave-test');
+    await input(getMounted()!, ENTER);
+    expect(renderedText(getMounted()!)).toContain('Default endpoint');
+    await input(getMounted()!, ENTER);
+    await pending;
+
+    expect(host.harness.replaceConfigSections).toHaveBeenCalledWith({
+      services: {
+        activeSearchProvider: 'moonshot',
+        moonshotSearch: {
+          baseUrl: 'https://api.example.test/v1/search',
+          apiKey: 'sk-search',
+        },
+        langsearch: { apiKey: 'sk-langsearch' },
+        brave: { apiKey: 'brave-test', baseUrl: undefined },
+      },
+    });
+    // Only the [services] section is rewritten — experimental flags are untouched.
+    expect(Object.keys(host.harness.replaceConfigSections.mock.calls[0]![0])).toEqual([
+      'services',
+    ]);
+    expect(host.harness.removeService).not.toHaveBeenCalled();
+    expect(host.showStatus).toHaveBeenCalledWith(
+      'Brave web search configured. Select it under Active web search provider to use it.',
+    );
+  });
+
+  it('configures a custom Brave base URL', async () => {
+    const { host, getMounted } = makeHost();
+    const pending = showWebSearchConfig(host);
+    await settle();
+
+    await input(getMounted()!, ENTER); // Web search provider
+    await input(getMounted()!, DOWN);
+    await input(getMounted()!, DOWN); // Brave
+    await input(getMounted()!, ENTER);
+    await type(getMounted()!, 'brave-test');
+    await input(getMounted()!, ENTER);
+    await input(getMounted()!, DOWN); // Custom base URL
+    await input(getMounted()!, ENTER);
+    await type(getMounted()!, 'https://brave.example.test/res/v1');
+    await input(getMounted()!, ENTER);
+    await pending;
+
+    expect(host.harness.replaceConfigSections).toHaveBeenCalledWith({
+      services: {
+        brave: {
+          apiKey: 'brave-test',
+          baseUrl: 'https://brave.example.test/res/v1',
+        },
+      },
+    });
+  });
+
+  it('switches the active provider without deleting inactive credentials', async () => {
+    const { host, getMounted } = makeHost({
+      services: {
+        activeSearchProvider: 'brave',
+        brave: { apiKey: 'brave-test' },
+        langsearch: { apiKey: 'sk-langsearch' },
+      },
+    });
+    const pending = showWebSearchConfig(host);
+    await settle();
+
+    await input(getMounted()!, DOWN); // Active web search provider
+    await input(getMounted()!, ENTER);
+    expect(renderedText(getMounted()!)).toContain('Brave ← current');
+    await input(getMounted()!, UP); // LangSearch
+    await input(getMounted()!, ENTER);
+    await pending;
+
+    expect(host.harness.replaceConfigSections).toHaveBeenCalledWith({
+      services: {
+        activeSearchProvider: 'langsearch',
+        brave: { apiKey: 'brave-test' },
+        langsearch: { apiKey: 'sk-langsearch' },
+      },
+    });
+    expect(host.harness.removeService).not.toHaveBeenCalled();
+    expect(host.showStatus).toHaveBeenCalledWith('LangSearch selected for web search.');
+  });
+
+  it('atomically writes Moonshot OAuth and reloads the session once', async () => {
     const session = { reloadSession: vi.fn(async () => {}) };
     const { host, getMounted } = makeHost(
       {
@@ -158,13 +314,8 @@ describe('showWebSearchConfig', () => {
           },
         },
         services: {
+          activeSearchProvider: 'langsearch',
           langsearch: { apiKey: 'sk-langsearch' },
-          rerank: {
-            provider: 'langsearch',
-            enabled: true,
-            baseUrl: 'https://rerank.example.test/v1',
-            customHeaders: { 'X-Test': 'test' },
-          },
         },
       },
       session,
@@ -173,67 +324,28 @@ describe('showWebSearchConfig', () => {
     await settle();
 
     await input(getMounted()!, ENTER); // Web search provider
-    await input(getMounted()!, UP); // Moonshot (LangSearch starts selected)
-    await input(getMounted()!, ENTER);
+    await input(getMounted()!, UP); // Moonshot (LangSearch starts selected as active)
+    await input(getMounted()!, ENTER); // Moonshot (not yet configured)
     expect(renderedText(getMounted()!)).toContain('Kimi Code OAuth');
-    await input(getMounted()!, ENTER);
-    await pending;
-
-    expect(host.harness.replaceService).toHaveBeenCalledWith('moonshotSearch', {
-      baseUrl: 'https://api.kimi.com/coding/v1/search',
-      apiKey: '',
-      oauth: { storage: 'file', key: 'oauth/kimi-code' },
-    });
-    expect(host.harness.replaceService).toHaveBeenCalledWith('rerank', {
-      provider: 'langsearch',
-      enabled: true,
-      apiKey: 'sk-langsearch',
-      baseUrl: 'https://rerank.example.test/v1',
-      customHeaders: { 'X-Test': 'test' },
-    });
-    expect(host.harness.replaceService.mock.invocationCallOrder[1]).toBeLessThan(
-      host.harness.removeService.mock.invocationCallOrder[0]!,
-    );
-    expect(host.harness.removeService).toHaveBeenCalledWith('langsearch');
-    expect(session.reloadSession).toHaveBeenCalledTimes(1);
-    expect(host.reloadCurrentSessionView).toHaveBeenCalledWith(
-      session,
-      'Moonshot web search configured. Session reloaded.',
-    );
-  });
-
-  it('keeps a dedicated rerank key unchanged when switching to Moonshot', async () => {
-    const { host, getMounted } = makeHost({
-      providers: {
-        'managed:kimi-code': {
-          type: 'kimi',
-          baseUrl: 'https://api.kimi.com/coding/v1',
-          oauth: { storage: 'file', key: 'oauth/kimi-code' },
-        },
-      },
-      services: {
-        langsearch: { apiKey: 'sk-langsearch' },
-        rerank: {
-          provider: 'langsearch',
-          enabled: true,
-          apiKey: 'sk-rerank',
-        },
-      },
-    });
-    const pending = showWebSearchConfig(host);
-    await settle();
-
-    await input(getMounted()!, ENTER); // Web search provider
-    await input(getMounted()!, UP); // Moonshot
-    await input(getMounted()!, ENTER);
     await input(getMounted()!, ENTER); // Kimi Code OAuth
     await pending;
 
-    expect(host.harness.replaceService).not.toHaveBeenCalledWith(
-      'rerank',
-      expect.anything(),
+    expect(host.harness.replaceConfigSections).toHaveBeenCalledWith({
+      services: {
+        activeSearchProvider: 'langsearch',
+        langsearch: { apiKey: 'sk-langsearch' },
+        moonshotSearch: {
+          baseUrl: 'https://api.kimi.com/coding/v1/search',
+          apiKey: '',
+          oauth: { storage: 'file', key: 'oauth/kimi-code' },
+        },
+      },
+    });
+    expect(session.reloadSession).toHaveBeenCalledTimes(1);
+    expect(host.reloadCurrentSessionView).toHaveBeenCalledWith(
+      session,
+      'Moonshot web search configured. Select it under Active web search provider to use it. Session reloaded.',
     );
-    expect(host.harness.removeService).toHaveBeenCalledWith('langsearch');
   });
 
   it('configures Moonshot manually with an automatically derived search URL', async () => {
@@ -253,62 +365,67 @@ describe('showWebSearchConfig', () => {
     await input(getMounted()!, ENTER);
     await pending;
 
-    expect(host.harness.replaceService).toHaveBeenCalledWith('moonshotSearch', {
-      baseUrl: 'https://api.moonshot.cn/v1/search',
-      apiKey: 'sk-test',
-    });
-    expect(host.showStatus).toHaveBeenCalledWith('Moonshot web search configured.');
-  });
-
-  it('keeps Moonshot as fallback when configuring LangSearch', async () => {
-    const { host, getMounted } = makeHost({
+    expect(host.harness.replaceConfigSections).toHaveBeenCalledWith({
       services: {
         moonshotSearch: {
-          baseUrl: 'https://api.example.test/v1/search',
-          apiKey: 'sk-search',
+          baseUrl: 'https://api.moonshot.cn/v1/search',
+          apiKey: 'sk-test',
         },
+      },
+    });
+    expect(host.showStatus).toHaveBeenCalledWith(
+      'Moonshot web search configured. Select it under Active web search provider to use it.',
+    );
+  });
+
+  it('reports that provider selection needs engine v2 without corrupting config', async () => {
+    const { host, getMounted } = makeHost(
+      { services: { moonshotSearch: { baseUrl: 'https://x/search', apiKey: 'k' } } },
+      undefined,
+      { supportsAtomic: false },
+    );
+    const pending = showWebSearchConfig(host);
+    await settle();
+
+    await input(getMounted()!, DOWN); // Active web search provider
+    await input(getMounted()!, ENTER);
+    await input(getMounted()!, ENTER); // Moonshot
+    await pending;
+
+    expect(host.showError).toHaveBeenCalledWith(
+      'Brave Search and explicit provider selection require engine v2. No configuration was changed.',
+    );
+    expect(host.harness.replaceConfigSections).not.toHaveBeenCalled();
+    expect(host.harness.replaceService).not.toHaveBeenCalled();
+    expect(host.harness.removeService).not.toHaveBeenCalled();
+  });
+
+  it('removes the active search provider and clears the selection', async () => {
+    const { host, getMounted } = makeHost({
+      services: {
+        activeSearchProvider: 'langsearch',
+        langsearch: { apiKey: 'sk-test' },
       },
     });
     const pending = showWebSearchConfig(host);
     await settle();
 
     await input(getMounted()!, ENTER); // Web search provider
-    await input(getMounted()!, DOWN); // LangSearch
-    await input(getMounted()!, ENTER);
-    await type(getMounted()!, 'sk-langsearch');
-    await input(getMounted()!, ENTER);
-    await input(getMounted()!, ENTER); // free tier
-    await pending;
-
-    expect(host.harness.replaceService).toHaveBeenCalledWith('langsearch', {
-      apiKey: 'sk-langsearch',
-      tier: 'free',
-    });
-    expect(host.harness.removeService).not.toHaveBeenCalledWith('moonshotSearch');
-  });
-
-  it('opens management for the current provider and removes it', async () => {
-    const { host, getMounted } = makeHost({
-      services: { langsearch: { apiKey: 'sk-test' } },
-    });
-    const pending = showWebSearchConfig(host);
-    await settle();
-
-    await input(getMounted()!, ENTER); // Web search provider
-    await input(getMounted()!, ENTER); // current LangSearch
+    await input(getMounted()!, ENTER); // LangSearch (active + current, cursor starts here)
     expect(renderedText(getMounted()!)).toContain('Edit configuration');
-    expect(renderedText(getMounted()!)).toContain('Remove provider');
-    await input(getMounted()!, DOWN);
+    expect(renderedText(getMounted()!)).not.toContain('Select for web search');
+    await input(getMounted()!, DOWN); // Remove provider
     await input(getMounted()!, ENTER);
     await pending;
 
-    expect(host.harness.removeService).toHaveBeenCalledWith('langsearch');
+    expect(host.harness.replaceConfigSections).toHaveBeenCalledWith({ services: {} });
     expect(host.showStatus).toHaveBeenCalledWith('LangSearch web search removed.');
   });
 
   it('configures rerank independently while Moonshot is the search provider', async () => {
     const { host, getMounted } = makeHost({
       services: {
+        activeSearchProvider: 'moonshot',
         moonshotSearch: {
           baseUrl: 'https://api.example.test/v1/search',
           apiKey: 'sk-search',
@@ -318,6 +435,7 @@ describe('showWebSearchConfig', () => {
     const pending = showWebSearchConfig(host);
     await settle();
 
+    await input(getMounted()!, DOWN);
     await input(getMounted()!, DOWN);
     await input(getMounted()!, ENTER); // Rerank provider
     await input(getMounted()!, ENTER); // LangSearch
@@ -331,13 +449,14 @@ describe('showWebSearchConfig', () => {
       enabled: true,
       apiKey: 'sk-rerank',
     });
-    expect(host.harness.removeService).not.toHaveBeenCalled();
+    expect(host.harness.replaceConfigSections).not.toHaveBeenCalled();
     expect(host.showStatus).toHaveBeenCalledWith('Rerank configured.');
   });
 
   it('edits the current rerank provider status', async () => {
     const { host, getMounted } = makeHost({
       services: {
+        activeSearchProvider: 'langsearch',
         langsearch: { apiKey: 'sk-search' },
         rerank: { provider: 'langsearch', enabled: true },
       },
@@ -345,6 +464,7 @@ describe('showWebSearchConfig', () => {
     const pending = showWebSearchConfig(host);
     await settle();
 
+    await input(getMounted()!, DOWN);
     await input(getMounted()!, DOWN); // Rerank provider
     await input(getMounted()!, ENTER);
     expect(renderedText(getMounted()!)).toContain('LangSearch ← current');
@@ -366,6 +486,7 @@ describe('showWebSearchConfig', () => {
   it('clears the dedicated rerank key so it reuses the search key', async () => {
     const { host, getMounted } = makeHost({
       services: {
+        activeSearchProvider: 'langsearch',
         langsearch: { apiKey: 'sk-search' },
         rerank: {
           provider: 'langsearch',
@@ -377,6 +498,7 @@ describe('showWebSearchConfig', () => {
     const pending = showWebSearchConfig(host);
     await settle();
 
+    await input(getMounted()!, DOWN);
     await input(getMounted()!, DOWN);
     await input(getMounted()!, ENTER); // Rerank provider
     await input(getMounted()!, ENTER); // Current LangSearch
@@ -407,6 +529,7 @@ describe('showWebSearchConfig', () => {
     const pending = showWebSearchConfig(host);
     await settle();
 
+    await input(getMounted()!, DOWN);
     await input(getMounted()!, DOWN);
     await input(getMounted()!, ENTER); // Rerank provider
     await input(getMounted()!, ENTER); // Current LangSearch
