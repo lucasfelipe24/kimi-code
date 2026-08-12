@@ -1127,7 +1127,7 @@ export class AgentTestContext {
       this.serviceOverrides,
       'app',
     );
-    this.root = createAppScope({ extra: appSeeds });
+    this.root = createAppScope({ seeds: appSeeds });
 
     const initialConfig = this.root.accessor.get(IConfigService);
     this.root.accessor
@@ -1150,7 +1150,7 @@ export class AgentTestContext {
       .withContext({ agent_id: agentId });
     const sessionScope = `${bootstrap.scope('sessions')}/${workspaceId}/${sessionId}`;
     this.session = this.root.createChild(LifecycleScope.Session, sessionId, {
-      extra: collectScopeSeed(
+      seeds: collectScopeSeed(
         [
           (reg) => {
             reg.defineInstance(ISessionContext, {
@@ -1251,7 +1251,7 @@ export class AgentTestContext {
     const workspace = this.session.accessor.get(ISessionWorkspaceContext);
 
     this.agent = this.session.createChild(LifecycleScope.Agent, agentId, {
-      extra: collectScopeSeed(
+      seeds: collectScopeSeed(
         [
           (reg) => {
             reg.defineDescriptor(

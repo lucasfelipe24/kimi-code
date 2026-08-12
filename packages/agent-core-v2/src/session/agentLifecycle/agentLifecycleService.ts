@@ -156,7 +156,7 @@ export class AgentLifecycleService extends Disposable implements IAgentLifecycle
       LifecycleScope.Agent,
       agentId,
       {
-        extra: [
+        seeds: [
           [IAgentScopeContext, makeAgentScopeContext({ agentId, agentScope })],
           [
             ISessionMemoryAccess,
