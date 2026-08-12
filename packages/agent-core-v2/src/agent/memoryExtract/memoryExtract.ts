@@ -162,8 +162,8 @@ export interface IAgentMemoryExtractService {
   /**
    * Explicitly persist a pending proposal through the trust-gated catalog
    * (atomic). This is the only write path; it is never invoked automatically.
-   * Resolves to the persisted id, or `undefined` when the id is not pending or a
-   * gate (flag/agent identity) rejects the commit.
+   * Resolves to the persisted id, or `undefined` when the id is not pending or
+   * the caller is not the main agent.
    */
   commitProposal(id: string): Promise<string | undefined>;
 }

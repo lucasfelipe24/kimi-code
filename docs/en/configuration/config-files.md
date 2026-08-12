@@ -385,7 +385,7 @@ recall_max_session_bytes = 61440
 extraction_max_turns = 5
 ```
 
-Automatic extraction produces pending proposals only; it never writes them to persistent memory automatically. It is opt-in through the explicit-env `KIMI_CODE_EXPERIMENTAL_PERSISTENT_MEMORY_AUTO_EXTRACT` flag. The master `KIMI_CODE_EXPERIMENTAL_FLAG` does not enable automatic extraction.
+Automatic extraction is a native engine-v2 capability that runs after each completed main-agent turn. It produces pending proposals only and never writes them to persistent memory automatically; each proposal still requires an explicit commit.
 
 <!--
 ## `experimental`

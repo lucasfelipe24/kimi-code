@@ -385,7 +385,7 @@ recall_max_session_bytes = 61440
 extraction_max_turns = 5
 ```
 
-自动提取只会生成待处理 proposal，不会自动写入持久化 memory。它通过 explicit-env 的 `KIMI_CODE_EXPERIMENTAL_PERSISTENT_MEMORY_AUTO_EXTRACT` flag 选择性开启；master `KIMI_CODE_EXPERIMENTAL_FLAG` 不会启用自动提取。
+自动提取是 engine v2 的原生能力，会在主 Agent 的每个已完成轮次后运行。它只会生成待处理 proposal，不会自动写入持久化 memory；每条 proposal 仍需显式提交。
 
 <!--
 ## `experimental`

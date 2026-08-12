@@ -13,11 +13,6 @@ import {
 import { IFlagRegistry, type FlagDefinitionInput } from '#/app/flag/flagRegistry';
 import { FlagRegistryService } from '#/app/flag/flagRegistryService';
 import { FlagService, MASTER_ENV } from '#/app/flag/flagService';
-import {
-  PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ENV,
-  PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID,
-  persistentMemoryAutoExtractFlag,
-} from '#/app/persistentMemory/autoExtractFlag';
 import { ILogService } from '#/_base/log/log';
 import { IAtomicTomlDocumentStore } from '#/persistence/interface/atomicDocumentStore';
 import { TomlAtomicDocumentStore } from '#/persistence/backends/node-fs/atomicDocumentStore';
@@ -36,17 +31,23 @@ const exampleFlag: FlagDefinitionInput = {
   surface: 'core',
 };
 
+const explicitEnvFlag: FlagDefinitionInput = {
+  id: 'explicit_env_flag',
+  title: 'Explicit environment flag',
+  description: 'Example flag enabled only through its dedicated environment variable.',
+  env: 'KIMI_CODE_EXPERIMENTAL_EXPLICIT_ENV_FLAG',
+  default: false,
+  surface: 'core',
+  activation: 'explicit-env',
+};
+
 describe('FlagRegistryService', () => {
   it('registers and resolves by id', () => {
     const reg = new FlagRegistryService();
     reg.register(exampleFlag);
-    expect(reg.list().map((d) => d.id)).toEqual(
-      expect.arrayContaining([
-        PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID,
-        'example_flag',
-      ]),
-    );
+    expect(reg.list().map((d) => d.id)).toContain('example_flag');
     expect(reg.list().map((d) => d.id)).not.toContain('persistent-memory');
+    expect(reg.list().map((d) => d.id)).not.toContain('persistent-memory-auto-extract');
     expect(reg.get('example_flag')?.env).toBe('KIMI_CODE_EXPERIMENTAL_EXAMPLE_FLAG');
   });
 
@@ -90,6 +91,7 @@ describe('FlagService', () => {
     ix.set(IFlagRegistry, new SyncDescriptor(FlagRegistryService));
     ix.set(IFlagService, new SyncDescriptor(FlagService));
     ix.get(IFlagRegistry).register(exampleFlag);
+    ix.get(IFlagRegistry).register(explicitEnvFlag);
     return {
       registry: ix.get(IConfigRegistry),
       config: ix.get(IConfigService),
@@ -149,10 +151,8 @@ describe('FlagService', () => {
 
   it('keeps explicit-env flags off under defaults, config, and the master env', async () => {
     const { config, flags } = makeFlags({ [MASTER_ENV]: '1' });
-    await config.set(EXPERIMENTAL_SECTION, {
-      [PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID]: true,
-    });
-    const state = flags.explain(PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID);
+    await config.set(EXPERIMENTAL_SECTION, { explicit_env_flag: true });
+    const state = flags.explain('explicit_env_flag');
     expect(state?.enabled).toBe(false);
     expect(state?.source).toBe('default');
     expect(state?.configValue).toBeUndefined();
@@ -160,21 +160,17 @@ describe('FlagService', () => {
 
   it('enables an explicit-env flag only through its dedicated env', () => {
     const { flags } = makeFlags({
-      [PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ENV]: 'true',
+      KIMI_CODE_EXPERIMENTAL_EXPLICIT_ENV_FLAG: 'true',
     });
-    const state = flags.explain(PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID);
+    const state = flags.explain('explicit_env_flag');
     expect(state?.enabled).toBe(true);
     expect(state?.source).toBe('env');
   });
 
-  it('registers the auto-extract flag but not the removed persistent-memory flag', () => {
+  it('does not register flags for native persistent-memory capabilities', () => {
     const { flags } = makeFlags();
-    expect(flags.registry.get(PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID)).toMatchObject(
-      persistentMemoryAutoExtractFlag,
-    );
-    expect(flags.enabled(PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID)).toBe(false);
-    // Persistent memory is native now — its gate flag is gone from the registry.
     expect(flags.registry.get('persistent-memory')).toBeUndefined();
+    expect(flags.registry.get('persistent-memory-auto-extract')).toBeUndefined();
   });
 
   it('refreshes overrides when the experimental config section changes', async () => {
@@ -204,15 +200,13 @@ describe('FlagService', () => {
     const { flags } = makeFlags();
     expect(flags.snapshot()).toMatchObject({
       example_flag: true,
-      [PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID]: false,
+      explicit_env_flag: false,
     });
     expect(flags.snapshot()).not.toHaveProperty('persistent-memory');
+    expect(flags.snapshot()).not.toHaveProperty('persistent-memory-auto-extract');
     expect(flags.enabledIds()).toEqual(['example_flag']);
     expect(flags.explainAll().map((s) => s.id)).toEqual(
-      expect.arrayContaining([
-        'example_flag',
-        PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID,
-      ]),
+      expect.arrayContaining(['example_flag', 'explicit_env_flag']),
     );
   });
 
@@ -245,7 +239,7 @@ describe('FlagService', () => {
 
     expect(flags.snapshot()).toMatchObject({
       example_flag: false,
-      [PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID]: false,
+      explicit_env_flag: false,
     });
     expect(flags.explain('obsolete_flag')).toBeUndefined();
   });

@@ -106,6 +106,7 @@ import {
   IAgentContextMemoryService,
   IAgentContextProjectorService,
   IAgentExternalHooksService,
+  IAgentMemoryExtractService,
   IExternalHooksRunnerService,
   IAgentFullCompactionService,
   IAgentLLMRequesterService,
@@ -1355,6 +1356,7 @@ export class AgentTestContext {
     const permissionRules = this.get(IAgentPermissionRulesService);
     const cron = this.get(ISessionCronService);
     const plan = this.get(IAgentPlanService);
+    this.get(IAgentMemoryExtractService).setExtractor(() => Promise.resolve([]));
     void this.get(IAgentToolActivationService).activate();
     this.get(IAgentToolDedupeService);
     this.get(IAgentExternalHooksService);

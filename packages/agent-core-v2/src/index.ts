@@ -403,7 +403,6 @@ import '#/agent/tools/cron/cron-delete/cronDeleteTool';
 export * from '#/app/persistentMemory/errors';
 export * from '#/app/persistentMemory/memoryStore';
 export * from '#/app/persistentMemory/memoryStoreService';
-export * from '#/app/persistentMemory/autoExtractFlag';
 export * from '#/app/persistentMemory/configSection';
 export * from '#/app/persistentMemory/redact';
 export * from '#/workspace/persistentMemory/memoryCatalog';

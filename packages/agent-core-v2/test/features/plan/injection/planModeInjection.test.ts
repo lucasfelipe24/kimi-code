@@ -11,10 +11,6 @@ import {
   type TestAgentContext,
 } from '../../../harness';
 
-type InjectableDynamicInjector = {
-  inject(boundary: undefined, isNewTurn: boolean): Promise<void>;
-};
-
 async function enterPlan(
   plan: IAgentPlanService,
   id = 'test-plan',
@@ -27,8 +23,8 @@ async function enterPlan(
   return status.path;
 }
 
-async function injectDynamic(injector: InjectableDynamicInjector): Promise<void> {
-  await injector.inject(undefined, false);
+async function injectDynamic(injector: IAgentContextInjectorService): Promise<void> {
+  await injector.reconcileWhenIdle('plan_mode');
 }
 
 function appendAssistantTurn(
@@ -56,7 +52,7 @@ function lastPlanReminder(context: IAgentContextMemoryService): string {
 describe('PlanModeService dynamic injection content', () => {
   let ctx: TestAgentContext;
   let context: IAgentContextMemoryService;
-  let injector: InjectableDynamicInjector;
+  let injector: IAgentContextInjectorService;
   let plan: IAgentPlanService;
   let readText: (path: string) => Promise<string>;
 
@@ -70,7 +66,7 @@ describe('PlanModeService dynamic injection content', () => {
       }),
     }));
     context = ctx.get(IAgentContextMemoryService);
-    injector = ctx.get(IAgentContextInjectorService) as unknown as InjectableDynamicInjector;
+    injector = ctx.get(IAgentContextInjectorService);
     plan = ctx.get(IAgentPlanService);
   });
 
@@ -140,7 +136,7 @@ describe('PlanModeService dynamic injection content', () => {
 describe('PlanModeService dynamic injection cadence', () => {
   let ctx: TestAgentContext;
   let context: IAgentContextMemoryService;
-  let injector: InjectableDynamicInjector;
+  let injector: IAgentContextInjectorService;
   let plan: IAgentPlanService;
 
   beforeEach(() => {
@@ -152,7 +148,7 @@ describe('PlanModeService dynamic injection cadence', () => {
       }),
     }));
     context = ctx.get(IAgentContextMemoryService);
-    injector = ctx.get(IAgentContextInjectorService) as unknown as InjectableDynamicInjector;
+    injector = ctx.get(IAgentContextInjectorService);
     plan = ctx.get(IAgentPlanService);
   });
 

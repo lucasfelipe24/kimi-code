@@ -4,17 +4,16 @@
  * Owns automatic end-of-turn memory extraction (plan §6). Subscribes to
  * `turn.ended` on the per-agent `eventBus` and acts ONLY on `reason:
  * 'completed'` turns (a cancelled/failed/blocked turn is not mined). Persistent
- * memory is native, so extraction runs when the granular
- * `persistent-memory-auto-extract` opt-in flag is on and only for the MAIN agent
- * (`scopeContext`). Each run reads the CURRENT turn transcript from
+ * memory and automatic extraction are native, and extraction runs only for the
+ * MAIN agent (`scopeContext`). Each run reads the CURRENT turn transcript from
  * `contextMemory` (never file reads), skips when the main agent already
  * SUCCESSFULLY wrote memory this turn (a `Memory remember` correlated to a
  * non-error result), builds a redacted, byte-capped, turn-bounded excerpt, and
  * generates drafts through the installed `MemoryExtractor` — the default being a
  * DIRECT `llmRequester` call with an EMPTY toolset, a small `maxOutputSize`, and
- * a real timeout/abort. It COALESCES (≤1 run in flight per scope; a burst
- * collapses to one trailing run) and keeps a transcript CURSOR that only
- * advances after a successful run and is REBASED on `context.spliced` so a
+ * a real timeout/abort. It SERIALIZES completed transcript boundaries (≤1 run in
+ * flight per scope) and keeps a transcript CURSOR that only advances after a
+ * successful run and is REBASED on `context.spliced` so a
  * clear/undo/compaction shrink never freezes it or re-sends all history. Drafts
  * are sanitized/redacted/quarantined and deduped, then PROPOSED (not persisted):
  * they land as pending proposals (globally capped, oldest evicted) and fire a
@@ -38,13 +37,11 @@ import { IAgentLLMRequesterService } from '#/agent/llmRequester/llmRequester';
 import { IAgentScopeContext } from '#/agent/scopeContext/scopeContext';
 import { IConfigService } from '#/app/config/config';
 import { IEventBus } from '#/app/event/eventBus';
-import { IFlagService } from '#/app/flag/flag';
 import {
   DEFAULT_MEMORY_CONFIG,
   MEMORY_SECTION,
   type MemoryConfig,
 } from '#/app/persistentMemory/configSection';
-import { PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID } from '#/app/persistentMemory/autoExtractFlag';
 import { MemoryError } from '#/app/persistentMemory/memoryStore';
 import { looksLikeSecret } from '#/app/persistentMemory/redact';
 import { ITelemetryService } from '#/app/telemetry/telemetry';
@@ -80,9 +77,9 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
 
   private extractor: MemoryExtractor | undefined;
 
-  /** Coalescing: a single in-flight run per scope, plus a trailing rerun flag. */
+  /** Coalescing: a single in-flight run per scope and completed transcript boundaries. */
   private running: Promise<void> | undefined;
-  private rerunRequested = false;
+  private completedBoundaries: number[] = [];
 
   /**
    * The cursor: transcript length already extracted. Only advances after a
@@ -103,6 +100,7 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
   private timeoutMs = DEFAULT_MEMORY_EXTRACT_TIMEOUT_MS;
 
   private proposals: MemoryProposal[] = [];
+  private readonly commits = new Map<string, Promise<string | undefined>>();
   private readonly proposeEmitter = this._register(new Emitter<MemoryProposalNotice>());
   readonly onDidProposeMemory = this.proposeEmitter.event;
 
@@ -114,7 +112,6 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
     @IAgentScopeContext scopeContext: IAgentScopeContext,
     @ISessionMemoryAccess private readonly access: ISessionMemoryAccess,
     @IAgentLLMRequesterService private readonly llmRequester: IAgentLLMRequesterService,
-    @IFlagService private readonly flags: IFlagService,
     @IConfigService private readonly config: IConfigService,
     @ITelemetryService private readonly telemetry: ITelemetryService,
     @ILogService private readonly log: ILogService,
@@ -143,6 +140,9 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
           };
           const newLength = this.context.get().length;
           this.cursor = rebaseCursor(this.cursor, splice, newLength);
+          this.completedBoundaries = this.completedBoundaries.map((boundary) =>
+            rebaseCursor(boundary, splice, newLength),
+          );
           if (this.runAnchor !== undefined) {
             this.runAnchor = rebaseCursor(this.runAnchor, splice, newLength);
           }
@@ -187,58 +187,34 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
     });
   }
 
-  private baseEnabled(): boolean {
-    // Persistent memory is a native v2 capability — always enabled.
-    return true;
-  }
-
-  private autoEnabled(): boolean {
-    return this.flags.enabled(PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID);
-  }
-
-  private bothFlagsEnabled(): boolean {
-    return this.baseEnabled() && this.autoEnabled();
-  }
-
   /**
-   * `turn.ended` handler (completed turns only). Coalesces onto a single
-   * in-flight promise. A burst while a run is in flight sets one trailing rerun.
-   * When the auto flag is off, any pending proposals are invalidated so a
-   * disabled feature never leaves stale suggestions around.
+   * `turn.ended` handler (completed turns only). Captures the completed transcript
+   * boundary and serializes extraction so an active following turn is never mined.
    */
   private onTurnEnded(): void {
-    if (!this.autoEnabled()) {
-      // Auto extraction disabled: drop any pending proposals rather than keep
-      // stale suggestions from a previous enablement.
-      if (this.proposals.length > 0) this.proposals = [];
-      return;
-    }
-    if (!this.baseEnabled()) return;
-    if (this.running !== undefined) {
-      this.rerunRequested = true;
-      return;
-    }
-    this.running = this.runChain();
+    this.completedBoundaries.push(this.context.get().length);
+    if (this.running === undefined) this.running = this.runChain();
   }
 
   private async runChain(): Promise<void> {
     try {
-      do {
-        this.rerunRequested = false;
-        await this.runOnce();
-      } while (this.rerunRequested && this.bothFlagsEnabled());
+      while (this.completedBoundaries.length > 0) {
+        const boundary = this.completedBoundaries[0];
+        if (boundary === undefined) return;
+        const succeeded = await this.runOnce(boundary);
+        if (!succeeded) return;
+        this.completedBoundaries.shift();
+      }
     } finally {
       this.running = undefined;
     }
   }
 
-  private async runOnce(): Promise<void> {
-    if (!this.bothFlagsEnabled()) return;
-
-    const messages = this.context.get();
+  private async runOnce(boundary: number): Promise<boolean> {
+    const messages = this.context.get().slice(0, boundary);
     if (messages.length <= this.cursor) {
       // Nothing new since the last successful extraction.
-      return;
+      return true;
     }
 
     const caps = this.resolveCaps();
@@ -253,7 +229,7 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
         outcome: 'skipped',
       });
       this.cursor = messages.length;
-      return;
+      return true;
     }
 
     const excerpt = buildTranscriptExcerpt(messages, caps.maxTurns, caps.maxExcerptBytes);
@@ -264,7 +240,7 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
         outcome: 'skipped',
       });
       this.cursor = messages.length;
-      return;
+      return true;
     }
 
     // SECURITY PRE-SEND GATE: the deny-list redaction is best-effort, so the
@@ -283,7 +259,7 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
         outcome: 'skipped',
       });
       this.cursor = messages.length;
-      return;
+      return true;
     }
 
     const controller = new AbortController();
@@ -296,9 +272,6 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
 
     try {
       const rawDrafts = await this.generate(excerpt.text, excerpt.turnCount, controller.signal);
-      // Revalidate the gates AFTER the await: flags may have flipped, or a
-      // shrink may have moved the transcript, during the (possibly slow) call.
-      if (!this.bothFlagsEnabled()) return;
       const drafts = sanitizeDrafts(rawDrafts, caps);
       const proposed = this.propose(drafts);
       // A proposal is NOT a write: written_count is always 0 for a run.
@@ -318,6 +291,7 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
       // so content appended DURING the run — even across a shrink+append — stays
       // unconsumed for the trailing rerun. Clamp to the current length.
       this.cursor = Math.min(this.runAnchor, this.context.get().length);
+      return true;
     } catch {
       this.log.debug('memory extract: run failed');
       this.telemetry.track2('memory_extract', {
@@ -325,6 +299,7 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
         written_count: 0,
         outcome: 'error',
       });
+      return false;
     } finally {
       clearTimeout(timer);
       this.runAbort.value = undefined;
@@ -397,25 +372,34 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
     }
     if (fresh.length === 0) return [];
     this.proposals = [...this.proposals, ...fresh];
-    // Global cap: evict the oldest proposals past the ceiling (deterministic).
-    if (this.proposals.length > MEMORY_EXTRACT_MAX_PENDING) {
-      this.proposals = this.proposals.slice(this.proposals.length - MEMORY_EXTRACT_MAX_PENDING);
+    // Global cap: evict the oldest non-committing proposals past the ceiling.
+    while (this.proposals.length > MEMORY_EXTRACT_MAX_PENDING) {
+      const index = this.proposals.findIndex((proposal) => !this.commits.has(proposal.id));
+      if (index === -1) break;
+      this.proposals.splice(index, 1);
     }
     return fresh;
   }
 
-  async commitProposal(id: string): Promise<string | undefined> {
-    // The commit is a real write, so it requires at least the base flag AND main
-    // agent identity (the sensitive `user`-scope escalation guard). The auto
-    // flag may be off — a user can still commit a suggestion that was drafted
-    // while it was on — but a subagent or a disabled feature cannot write.
-    if (!this.isMainAgent || !this.baseEnabled()) return undefined;
+  commitProposal(id: string): Promise<string | undefined> {
+    // Only the main agent may commit a proposal, preserving the sensitive
+    // `user`-scope escalation guard.
+    if (!this.isMainAgent) return Promise.resolve(undefined);
 
-    const index = this.proposals.findIndex((proposal) => proposal.id === id);
-    if (index === -1) return undefined;
-    const proposal = this.proposals[index];
-    if (proposal === undefined) return undefined;
+    const existing = this.commits.get(id);
+    if (existing !== undefined) return existing;
 
+    const proposal = this.proposals.find((candidate) => candidate.id === id);
+    if (proposal === undefined) return Promise.resolve(undefined);
+
+    const commit = this.commit(proposal).finally(() => {
+      this.commits.delete(id);
+    });
+    this.commits.set(id, commit);
+    return commit;
+  }
+
+  private async commit(proposal: MemoryProposal): Promise<string> {
     try {
       const created = await this.access.create({
         scope: proposal.scope,
@@ -426,7 +410,7 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
       });
       // Remove from pending only on a successful write; a trust/gate failure
       // keeps the proposal pending so it can be retried after trusting.
-      this.proposals.splice(index, 1);
+      this.proposals = this.proposals.filter((candidate) => candidate.id !== proposal.id);
       // A commit is a WRITE — emit memory_write, not another extract event.
       this.telemetry.track2('memory_write', {
         scope: proposal.scope,

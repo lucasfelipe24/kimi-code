@@ -4,20 +4,19 @@
  * Exercises the real `AgentMemoryExtractService` end-to-end through a real
  * `EventBusService` and the in-memory context stub, with a fake session-memory
  * access, a fake LLM requester (that captures the request overrides), and
- * stubbed flag/config/telemetry/log. Covers: coalescing under a burst of
- * `turn.ended` (≤1 run per scope) INCLUDING a genuinely-new-transcript rerun;
- * completed-only gating (cancelled/failed/blocked are ignored); the cursor
- * advancing only after success and REBASING on a transcript shrink (undo/clear/
- * compaction) — no freeze, no full-history resend; skip only on a SUCCESSFUL
- * `Memory remember` (not a bare call / list / forget / failed remember);
- * both-flags gating (either off ⇒ no-op) and clearing pending when auto flag is
- * off; flags revalidated after the await; the `extractionMaxTurns` config bound
- * read via the service; transcript-only input; the EMPTY-toolset + small
- * maxOutputSize + timeout of the default generation call; credential redaction
- * and quarantine of drafts that still look secret; content-free proposal notice
- * (ids/count only); dedupe + global pending cap; propose-before-persist; commit
- * emitting memory_write (not extract) and requiring base flag + main agent; and
- * trust-failure keeping the proposal pending.
+ * stubbed config/telemetry/log. Covers: native extraction without a feature gate;
+ * coalescing under a burst of `turn.ended` (≤1 run per scope) INCLUDING a
+ * genuinely-new-transcript rerun; completed-only gating (cancelled/failed/blocked
+ * are ignored); the cursor advancing only after success and REBASING on a
+ * transcript shrink (undo/clear/compaction) — no freeze, no full-history resend;
+ * skip only on a SUCCESSFUL `Memory remember` (not a bare call / list / forget /
+ * failed remember); the `extractionMaxTurns` config bound read via the service;
+ * transcript-only input; the EMPTY-toolset + small maxOutputSize + timeout of the
+ * default generation call; credential redaction and quarantine of drafts that
+ * still look secret; content-free proposal notice (ids/count only); dedupe +
+ * global pending cap; propose-before-persist; commit emitting memory_write (not
+ * extract) and requiring the main agent; and trust-failure keeping the proposal
+ * pending.
  *
  * Run: `pnpm --filter @moonshot-ai/agent-core-v2 exec vitest run
  * test/agent/memoryExtract/memoryExtract.test.ts`.
@@ -41,8 +40,6 @@ import {
 import { IAgentScopeContext, makeAgentScopeContext } from '#/agent/scopeContext/scopeContext';
 import { IConfigService } from '#/app/config/config';
 import { IEventBus } from '#/app/event/eventBus';
-import { IFlagService } from '#/app/flag/flag';
-import { PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID } from '#/app/persistentMemory/autoExtractFlag';
 import {
   DEFAULT_MEMORY_CONFIG,
   type MemoryConfig,
@@ -112,12 +109,14 @@ class FakeMemoryAccess implements ISessionMemoryAccess {
 
   readonly createCalls: MemoryCreateInput[] = [];
   createError: MemoryError | undefined;
+  createOverride: ((input: MemoryCreateInput) => Promise<EffectiveMemory>) | undefined;
 
   list(): Promise<readonly EffectiveMemory[]> {
     return Promise.resolve([]);
   }
   create(input: MemoryCreateInput): Promise<EffectiveMemory> {
     this.createCalls.push(input);
+    if (this.createOverride !== undefined) return this.createOverride(input);
     if (this.createError !== undefined) return Promise.reject(this.createError);
     const now = Date.now();
     return Promise.resolve({
@@ -217,7 +216,6 @@ describe('AgentMemoryExtractService', () => {
   let eventBus: IEventBus;
   let access: FakeMemoryAccess;
   let requester: FakeLLMRequester;
-  let autoFlag: boolean;
   let configValue: MemoryConfig;
   let tracked: TrackedEvent[];
   let agentId: string;
@@ -233,9 +231,6 @@ describe('AgentMemoryExtractService', () => {
           IAgentScopeContext,
           makeAgentScopeContext({ agentId, agentScope: `agents/${agentId}` }),
         );
-        reg.definePartialInstance(IFlagService, {
-          enabled: (id) => id === PERSISTENT_MEMORY_AUTO_EXTRACT_FLAG_ID && autoFlag,
-        });
         reg.definePartialInstance(IConfigService, {
           get: (<T,>() => configValue as T) as IConfigService['get'],
         });
@@ -270,7 +265,6 @@ describe('AgentMemoryExtractService', () => {
     disposables = new DisposableStore();
     access = new FakeMemoryAccess();
     requester = new FakeLLMRequester();
-    autoFlag = true;
     configValue = { ...DEFAULT_MEMORY_CONFIG };
     tracked = [];
     agentId = MAIN_AGENT_ID;
@@ -278,34 +272,34 @@ describe('AgentMemoryExtractService', () => {
   });
   afterEach(() =>{  disposables.dispose(); });
 
-  it('coalesces a burst of turn.ended into one run, then reruns for genuinely new transcript', async () => {
+  it('serializes completed boundaries without mining a following active turn', async () => {
     context.append(userMessage('how do I deploy the service'));
     const gate = deferred<readonly MemoryExtractDraft[]>();
     let calls = 0;
-    const seen: number[] = [];
+    const excerpts: string[] = [];
     const extractor: MemoryExtractor = ({ excerpt }) => {
       calls += 1;
-      seen.push(excerpt.length);
+      excerpts.push(excerpt);
       return calls === 1 ? gate.promise : Promise.resolve([]);
     };
     service().setExtractor(extractor);
 
-    // Burst while the first run is in flight.
-    endTurn();
-    endTurn();
     endTurn();
     expect(calls).toBe(1);
 
-    // New transcript arrives DURING the in-flight run, then it resolves.
     context.append(assistantMessage('here is how'));
     context.append(userMessage('and how do I roll it back safely'));
     gate.resolve([]);
     await service().whenIdle();
 
-    // The trailing rerun fired exactly once because there was genuinely new
-    // transcript after the cursor advanced.
+    expect(calls).toBe(1);
+    expect(excerpts[0]).not.toContain('roll it back safely');
+
+    endTurn();
+    await service().whenIdle();
+
     expect(calls).toBe(2);
-    expect(seen[1]).toBeGreaterThan(seen[0]!);
+    expect(excerpts[1]).toContain('roll it back safely');
   });
 
   it('quarantines a suspicious excerpt before it reaches the requester (pre-send gate)', async () => {
@@ -478,41 +472,15 @@ describe('AgentMemoryExtractService', () => {
     expect(extractEvents().at(-1)?.properties?.['outcome']).toBe('skipped');
   });
 
-  it('is a no-op when the granular auto-extract flag is off, and clears pending proposals', async () => {
-    // First, draft a proposal while both flags are on.
+  it('runs natively without a feature flag and keeps proposals pending', async () => {
     context.append(userMessage('how do I deploy the service'));
     service().setExtractor(() => Promise.resolve([DRAFT_ONE]));
+
     endTurn();
     await service().whenIdle();
+
     expect(service().pendingProposals()).toHaveLength(1);
-
-    // Now turn the auto flag off and end a turn: no run, and pending cleared.
-    autoFlag = false;
-    let calls = 0;
-    service().setExtractor(() => {
-      calls += 1;
-      return Promise.resolve([]);
-    });
-    endTurn();
-    await service().whenIdle();
-
-    expect(calls).toBe(0);
-    expect(service().pendingProposals()).toHaveLength(0);
-  });
-
-  it('revalidates the auto-extract flag after the await before proposing or advancing the cursor', async () => {
-    context.append(userMessage('how do I deploy the service'));
-    const gate = deferred<readonly MemoryExtractDraft[]>();
-    service().setExtractor(() => gate.promise);
-
-    endTurn();
-    // Flip the auto-extract flag off while the generation is in flight, then resolve.
-    autoFlag = false;
-    gate.resolve([DRAFT_ONE]);
-    await service().whenIdle();
-
-    // Post-await gate: nothing proposed because the flag went off mid-run.
-    expect(service().pendingProposals()).toHaveLength(0);
+    expect(access.createCalls).toHaveLength(0);
   });
 
   it('never installs the hook for a subagent', async () => {
@@ -733,6 +701,35 @@ describe('AgentMemoryExtractService', () => {
     const id = await service().commitProposal(proposalId);
     expect(id).toBeDefined();
     expect(access.createCalls).toHaveLength(1);
+  });
+
+  it('coalesces concurrent commits of the same proposal into one write', async () => {
+    context.append(userMessage('how do I deploy the service'));
+    service().setExtractor(() => Promise.resolve([DRAFT_ONE]));
+    endTurn();
+    await service().whenIdle();
+    const proposalId = service().pendingProposals()[0]!.id;
+    const gate = deferred<EffectiveMemory>();
+    access.createOverride = () => gate.promise;
+
+    const first = service().commitProposal(proposalId);
+    const second = service().commitProposal(proposalId);
+    expect(access.createCalls).toHaveLength(1);
+
+    const now = Date.now();
+    gate.resolve({
+      id: ulid(),
+      ...DRAFT_ONE,
+      origin: DRAFT_ONE.scope,
+      createdAt: now,
+      updatedAt: now,
+      version: 1,
+    });
+
+    const [firstId, secondId] = await Promise.all([first, second]);
+    expect(firstId).toBe(secondId);
+    expect(access.createCalls).toHaveLength(1);
+    expect(service().pendingProposals()).toHaveLength(0);
   });
 
   it('keeps a proposal pending when the commit hits a trust failure', async () => {

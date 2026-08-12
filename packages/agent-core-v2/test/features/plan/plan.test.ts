@@ -71,15 +71,11 @@ function createPlanFileFakes(
   };
 }
 
-type InjectableDynamicInjector = {
-  inject(boundary: undefined, isNewTurn: boolean): Promise<void>;
-};
-
 describe('Plan service', () => {
   let activeFakes: PlanFakes;
   let context: IAgentContextMemoryService;
   let ctx: TestAgentContext;
-  let injector: InjectableDynamicInjector;
+  let injector: IAgentContextInjectorService;
   let permissionRules: IAgentPermissionRulesService;
   let plan: IAgentPlanService;
   let profile: IAgentProfileService;
@@ -95,7 +91,7 @@ describe('Plan service', () => {
       }),
     );
     context = ctx.get(IAgentContextMemoryService);
-    injector = ctx.get(IAgentContextInjectorService) as unknown as InjectableDynamicInjector;
+    injector = ctx.get(IAgentContextInjectorService);
     permissionRules = ctx.get(IAgentPermissionRulesService);
     plan = ctx.get(IAgentPlanService);
     profile = ctx.get(IAgentProfileService);
@@ -909,7 +905,7 @@ describe('Plan service', () => {
   }
 
   async function injectDynamic(): Promise<void> {
-    await injector.inject(undefined, false);
+    await injector.reconcileWhenIdle('plan_mode');
   }
 });
 
