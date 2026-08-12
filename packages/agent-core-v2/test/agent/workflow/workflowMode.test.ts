@@ -40,7 +40,7 @@ describe('WorkflowModeService', () => {
     ix.set(IAgentStateService, new AgentStateService());
     ix.stub(IAgentContextInjectorService, {
       register: () => ({ dispose: () => {} }),
-      injectAfterCompaction: async () => {},
+      reconcileWhenIdle: async () => {},
     });
     ix.set(IWorkflowModeService, new SyncDescriptor(WorkflowModeService));
   });

@@ -521,7 +521,12 @@ describe('AgentMemoryRecallService recall injection', () => {
     const controller = new AbortController();
     context.append(userMessage('how do I deploy the service'));
 
-    const pending = injector().injectAfterCompaction(controller.signal);
+    const pending = ix.get(IAgentLoopService).hooks.onWillBeginStep.run({
+      turnId: 0,
+      step: 0,
+      firstStepOfTurn: false,
+      signal: controller.signal,
+    });
     controller.abort();
 
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });

@@ -26,25 +26,24 @@ import { generate as runKosongGenerate } from '#/kosong/contract/generate';
 import type { ChatProvider, StreamedMessage } from '#/kosong/contract/provider';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { SyncDescriptor } from '#/_base/di/descriptors';
 import { Event } from '#/_base/event';
+import { IAgentContextInjectorService } from '#/agent/contextInjector/contextInjector';
+import { COMPACTION_SUMMARY_PREFIX } from '#/agent/contextMemory/compactionHandoff';
 import {
   DefaultCompactionStrategy,
 } from '#/agent/fullCompaction/strategy';
-import { COMPACTION_SUMMARY_PREFIX } from '#/agent/contextMemory/compactionHandoff';
 import { IAgentMemoryRecallService } from '#/agent/memoryRecall/memoryRecall';
-import { IAgentContextInjectorService } from '#/agent/contextInjector/contextInjector';
-import type { EffectiveMemory } from '#/workspace/persistentMemory/memoryCatalog';
-
-import { IFlagService } from '#/app/flag/flag';
-import { ISessionMemoryAccess } from '#/session/persistentMemory/memorySeed';
-import { stubFlag } from '../../app/flag/stubs';
-import { makeHookRunner } from '../externalHooks/runner-stub';
+import { AgentMemoryRecallService } from '#/agent/memoryRecall/memoryRecallService';
 import type { IExternalHooksRunnerService } from '#/app/externalHooksRunner/externalHooksRunner';
 import { MASTER_ENV } from '#/app/flag/flagService';
 import { estimateTokensForMessages } from '#/kosong/contract/tokens';
+import { ISessionMemoryAccess } from '#/session/persistentMemory/memorySeed';
+import type { EffectiveMemory } from '#/workspace/persistentMemory/memoryCatalog';
 import { recordingTelemetry, type TelemetryRecord } from '../../app/telemetry/stubs';
 import type { TestAgentContext, TestAgentOptions, TestAgentServiceOverride } from '../../harness';
 import { agentService, appServices, createCommandRunner, execEnvServices, hostEnvironmentServices, sessionServices, testAgent } from '../../harness';
+import { makeHookRunner } from '../externalHooks/runner-stub';
 import { IAgentToolSelectAnnouncementsService } from '#/agent/toolSelect/toolSelectAnnouncements';
 import {
   IAgentFullCompactionService,
@@ -362,7 +361,7 @@ describe('FullCompaction', () => {
       properties: expect.objectContaining({
         agent_id: 'main',
         source: 'manual',
-        tokens_before: 3_405,
+        tokens_before: 3_400,
         tokens_after: expect.any(Number),
         duration_ms: expect.any(Number),
         compacted_count: 6,
@@ -377,7 +376,7 @@ describe('FullCompaction', () => {
     await ctx.expectResumeMatches();
   });
 
-  it('reinjects persistent memory after the summary and preserves the summary envelope', async () => {
+  it('reconciles persistent memory at the first step after compaction', async () => {
     const records: TelemetryRecord[] = [];
     const access = new FullCompactionMemoryAccess();
     vi.spyOn(Math, 'random').mockReturnValue(0.123456789);
@@ -390,17 +389,14 @@ describe('FullCompaction', () => {
       }),
     );
     const ctx = testAgent(
-      appServices((reg) => {
-        reg.defineInstance(
-          IFlagService,
-          stubFlag(() => false),
-        );
-      }),
       sessionServices((reg) => {
         reg.defineInstance(ISessionMemoryAccess, access);
       }),
+      agentService(IAgentMemoryRecallService, new SyncDescriptor(AgentMemoryRecallService)),
       { telemetry: recordingTelemetry(records) },
     );
+    expect(ctx.get(ISessionMemoryAccess)).toBe(access);
+    expect((ctx.get(IAgentMemoryRecallService) as AgentMemoryRecallService)['access']).toBe(access);
     ctx.get(IAgentContextInjectorService).register('test_reminder', () => 'registered reminder');
     ctx.configure({
       provider: CATALOGUED_PROVIDER,
@@ -410,16 +406,26 @@ describe('FullCompaction', () => {
     ctx.appendExchange(1, 'old user one', 'old assistant one', 20);
     ctx.appendToolExchange();
     ctx.appendUserMessage([{ type: 'text', text: 'how do I deploy the service' }]);
-    // Keep recall deterministic: without an explicit reranker the always-on
-    // default rerank service fires a real, unmocked secondary-model generate
-    // call, which fails and drops every candidate. Disabling the reranker
-    // exercises the deterministic recall path this test asserts.
-    ctx.get(IAgentMemoryRecallService).setReranker(undefined);
     ctx.mockNextResponse({ type: 'text', text: 'Compacted summary.' });
 
     await ctx.rpc.beginCompaction({});
     await ctx.once('compaction.completed');
 
+    expect(
+      ctx.context.get().filter((message) => message.origin?.kind === 'injection'),
+    ).toHaveLength(0);
+    ctx.get(IAgentMemoryRecallService).setReranker(({ candidates }) =>
+      Promise.resolve(candidates.map((candidate) => candidate.id)),
+    );
+
+    ctx.mockNextResponse({ type: 'text', text: 'Reply after compaction.' });
+    await ctx.rpc.prompt({ input: [{ type: 'text', text: 'continue the deploy plan' }] });
+    await ctx.untilTurnEnd();
+
+    expect(records).toContainEqual({
+      event: 'memory_recall',
+      properties: expect.objectContaining({ selected_count: 1, outcome: 'success' }),
+    });
     const history = ctx.context.get();
     const summaryIndex = history.findIndex(
       (message) => message.origin?.kind === 'compaction_summary',
@@ -429,11 +435,7 @@ describe('FullCompaction', () => {
         message.origin?.kind === 'injection' && message.origin.variant === 'persistent_memory',
     );
     expect(summaryIndex).toBeGreaterThanOrEqual(0);
-    expect(memoryIndex).toBe(summaryIndex + 1);
-    expect(history[summaryIndex]?.content[0]).toMatchObject({
-      type: 'text',
-      text: expect.stringContaining('Compacted summary.'),
-    });
+    expect(memoryIndex).toBeGreaterThan(summaryIndex);
     expect(history[memoryIndex]?.content[0]).toMatchObject({
       type: 'text',
       text: expect.stringContaining('UNTRUSTED REFERENCE DATA'),
@@ -442,12 +444,6 @@ describe('FullCompaction', () => {
       type: 'text',
       text: expect.stringContaining('deploy runbook'),
     });
-    expect(history.every((message) => message.toolCalls.length === 0)).toBe(true);
-    expect(history.some((message) => message.role === 'tool' && message.toolCallId === 'call_lookup')).toBe(false);
-    expect(history.filter((message) => message.origin?.kind === 'injection')).toHaveLength(2);
-    expect(history.filter((message) => message.origin?.kind === 'injection' && message.origin.variant === 'persistent_memory')).toHaveLength(1);
-    expect(memoryIndex).toBe(summaryIndex + 1);
-    expect(history.findIndex((message) => message.origin?.kind === 'injection' && message.origin.variant === 'test_reminder')).toBe(summaryIndex + 2);
     const memoryText = history[memoryIndex]?.content[0];
     expect(memoryText?.type).toBe('text');
     if (memoryText?.type === 'text') {
@@ -468,29 +464,19 @@ describe('FullCompaction', () => {
       expect(record.properties).not.toHaveProperty('description');
       expect(record.properties).not.toHaveProperty('body');
     }
-
-    await ctx.get(IAgentContextInjectorService).injectAfterCompaction();
-    expect(
-      ctx.context.get().filter(
-        (message) => message.origin?.kind === 'injection' && message.origin.variant === 'persistent_memory',
-      ),
-    ).toHaveLength(1);
   });
 
   it.each([
     ['empty recall', []],
     ['recall unavailable', 'error'],
-  ] as const)('degrades after compaction when persistent memory has %s', async (_case, records) => {
+  ] as const)('degrades at the first post-compaction step when persistent memory has %s', async (_case, records) => {
     const access = new FullCompactionMemoryAccess();
     if (records === 'error') {
       access.listError = new Error('memory catalog unavailable');
-    } else if (records !== undefined) {
+    } else {
       access.records.push(...records);
     }
     const ctx = testAgent(
-      appServices((reg) => {
-        reg.defineInstance(IFlagService, stubFlag(() => false));
-      }),
       sessionServices((reg) => {
         reg.defineInstance(ISessionMemoryAccess, access);
       }),
@@ -502,141 +488,39 @@ describe('FullCompaction', () => {
     ctx.appendExchange(1, 'old user one', 'old assistant one', 20);
     ctx.appendUserMessage([{ type: 'text', text: 'how do I deploy the service' }]);
     ctx.mockNextResponse({ type: 'text', text: 'Compacted summary.' });
-
-    await expect(ctx.rpc.beginCompaction({})).resolves.toBe(true);
-    await ctx.once('compaction.completed');
-
-    expect(
-      ctx.context.get().some(
-        (message) =>
-          message.origin?.kind === 'injection' && message.origin.variant === 'persistent_memory',
-      ),
-    ).toBe(false);
-    expect(ctx.context.get().some((message) => message.origin?.kind === 'compaction_summary')).toBe(
-      true,
-    );
-    expect(access.createCalls).toBe(0);
-    expect(access.updateCalls).toBe(0);
-    expect(access.forgetCalls).toBe(0);
-    await ctx.expectResumeMatches();
-  });
-
-  it('times out a pending recall lookup without hanging compaction', async () => {
-    const access = new FullCompactionMemoryAccess();
-    access.listImpl = () => new Promise<readonly EffectiveMemory[]>(() => {});
-    const ctx = testAgent(
-      appServices((reg) => {
-        reg.defineInstance(IFlagService, stubFlag(() => false));
-      }),
-      sessionServices((reg) => {
-        reg.defineInstance(ISessionMemoryAccess, access);
-      }),
-    );
-    ctx.configure({ provider: CATALOGUED_PROVIDER, modelCapabilities: CATALOGUED_MODEL_CAPABILITIES });
-    ctx.appendExchange(1, 'old user one', 'old assistant one', 20);
-    ctx.appendUserMessage([{ type: 'text', text: 'how do I deploy the service' }]);
-    const recall = ctx.get(IAgentMemoryRecallService) as IAgentMemoryRecallService & {
-      setLookupTimeoutForTests(ms: number): void;
-    };
-    recall.setLookupTimeoutForTests(5);
-    ctx.mockNextResponse({ type: 'text', text: 'Compacted summary.' });
-
-    await expect(ctx.rpc.beginCompaction({})).resolves.toBe(true);
-    await ctx.once('compaction.completed');
-
-    expect(ctx.context.get().some((message) => message.origin?.kind === 'compaction_summary')).toBe(true);
-    expect(countEvents(ctx.newEvents(), 'compaction.completed')).toBe(1);
-    expect(access.createCalls).toBe(0);
-    expect(access.updateCalls).toBe(0);
-    expect(access.forgetCalls).toBe(0);
-  });
-
-  it('cancels compaction while recall lookup is pending without completing it', async () => {
-    const access = new FullCompactionMemoryAccess();
-    access.listImpl = () => new Promise<readonly EffectiveMemory[]>(() => {});
-    const ctx = testAgent(
-      appServices((reg) => {
-        reg.defineInstance(IFlagService, stubFlag(() => false));
-      }),
-      sessionServices((reg) => {
-        reg.defineInstance(ISessionMemoryAccess, access);
-      }),
-    );
-    ctx.configure({ provider: CATALOGUED_PROVIDER, modelCapabilities: CATALOGUED_MODEL_CAPABILITIES });
-    ctx.appendExchange(1, 'old user one', 'old assistant one', 20);
-    ctx.appendUserMessage([{ type: 'text', text: 'how do I deploy the service' }]);
-    const recall = ctx.get(IAgentMemoryRecallService) as IAgentMemoryRecallService & {
-      setLookupTimeoutForTests(ms: number): void;
-    };
-    recall.setLookupTimeoutForTests(10_000);
-    ctx.mockNextResponse({ type: 'text', text: 'Compacted summary.' });
-    const cancelled = ctx.once('compaction.cancelled');
 
     await ctx.rpc.beginCompaction({});
-    await vi.waitFor(() =>{  expect(ctx.context.get().some((message) => message.origin?.kind === 'compaction_summary')).toBe(true); });
-    await ctx.rpc.cancelCompaction({});
-    await cancelled;
-
-    expect(countEvents(ctx.newEvents(), 'compaction.completed')).toBe(0);
-    expect(access.createCalls).toBe(0);
-    expect(access.updateCalls).toBe(0);
-    expect(access.forgetCalls).toBe(0);
-  });
-
-  it('keeps context and compaction successful when recall is unavailable after replacement', async () => {
-    const access = new FullCompactionMemoryAccess();
-    access.records.push(persistentMemoryRecord());
-    const ctx = testAgent(
-      appServices((reg) => {
-        reg.defineInstance(
-          IFlagService,
-          stubFlag(() => false),
-        );
-      }),
-      sessionServices((reg) => {
-        reg.defineInstance(ISessionMemoryAccess, access);
-      }),
-    );
-    ctx.configure({
-      provider: CATALOGUED_PROVIDER,
-      modelCapabilities: CATALOGUED_MODEL_CAPABILITIES,
-    });
-    ctx.appendExchange(1, 'old user one', 'old assistant one', 20);
-    ctx.appendUserMessage([{ type: 'text', text: 'how do I deploy the service' }]);
-    access.listError = new Error('store timeout');
-    ctx.mockNextResponse({ type: 'text', text: 'Compacted summary.' });
-
-    await expect(ctx.rpc.beginCompaction({})).resolves.toBe(true);
     await ctx.once('compaction.completed');
+    ctx.mockNextResponse({ type: 'text', text: 'Reply after compaction.' });
+    await ctx.rpc.prompt({ input: [{ type: 'text', text: 'continue the deploy plan' }] });
+    await ctx.untilTurnEnd();
 
-    expect(ctx.compactHistory()).toEqual([
-      { role: 'user', text: 'old user one' },
-      { role: 'user', text: 'how do I deploy the service' },
-      { role: 'user', text: expect.stringContaining('Compacted summary.') },
-    ]);
     expect(
       ctx.context.get().some(
         (message) =>
           message.origin?.kind === 'injection' && message.origin.variant === 'persistent_memory',
       ),
     ).toBe(false);
+    expect(ctx.context.get().some((message) => message.origin?.kind === 'compaction_summary')).toBe(
+      true,
+    );
+    expect(access.createCalls).toBe(0);
+    expect(access.updateCalls).toBe(0);
+    expect(access.forgetCalls).toBe(0);
     await ctx.expectResumeMatches();
   });
 
-  it.each([
-    ['rerank timeout', 'timeout'],
-    ['rerank error', 'error'],
-    ['rerank abort', 'abort'],
-  ] as const)('does not fail compaction when recall has a %s', async (_case, failure) => {
+  it('aborts pending persistent-memory reconciliation at the step boundary', async () => {
+    let lookupStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      lookupStarted = resolve;
+    });
     const access = new FullCompactionMemoryAccess();
-    access.records.push(persistentMemoryRecord());
+    access.listImpl = () => {
+      lookupStarted();
+      return new Promise<readonly EffectiveMemory[]>(() => {});
+    };
     const ctx = testAgent(
-      appServices((reg) => {
-        reg.defineInstance(
-          IFlagService,
-          stubFlag(() => false),
-        );
-      }),
       sessionServices((reg) => {
         reg.defineInstance(ISessionMemoryAccess, access);
       }),
@@ -646,34 +530,61 @@ describe('FullCompaction', () => {
       modelCapabilities: CATALOGUED_MODEL_CAPABILITIES,
     });
     ctx.appendExchange(1, 'old user one', 'old assistant one', 20);
-    ctx.appendUserMessage([{ type: 'text', text: 'how do I deploy the service' }]);
-
-    const recall = ctx.get(IAgentMemoryRecallService) as IAgentMemoryRecallService & {
-      setRerankTimeoutForTests(ms: number): void;
-    };
-    if (failure === 'timeout') {
-      recall.setRerankTimeoutForTests(1);
-      recall.setReranker(() => new Promise<readonly string[]>(() => {}));
-    } else if (failure === 'abort') {
-      recall.setReranker(() => Promise.reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
-    } else {
-      recall.setReranker(() => Promise.reject(new Error('rerank failed')));
-    }
     ctx.mockNextResponse({ type: 'text', text: 'Compacted summary.' });
-
-    await expect(ctx.rpc.beginCompaction({})).resolves.toBe(true);
+    await ctx.rpc.beginCompaction({});
     await ctx.once('compaction.completed');
 
-    expect(ctx.context.get().some((message) => message.origin?.kind === 'compaction_summary')).toBe(
-      true,
-    );
+    const prompt = ctx.rpc.prompt({ input: [{ type: 'text', text: 'continue deployment' }] });
+    await started;
+    ctx.get(IAgentLoopService).cancel();
+    await prompt;
+    await ctx.untilTurnEnd();
+
     expect(
       ctx.context.get().some(
         (message) =>
           message.origin?.kind === 'injection' && message.origin.variant === 'persistent_memory',
       ),
-    ).toBe(failure === 'timeout');
-    await ctx.expectResumeMatches();
+    ).toBe(false);
+    expect(ctx.get(IAgentLoopService).status().activeTurnId).toBeUndefined();
+  });
+
+  it('holds the loop quiescence lease for the full manual compaction', async () => {
+    const ctx = testAgent();
+    ctx.configure({
+      provider: CATALOGUED_PROVIDER,
+      modelCapabilities: CATALOGUED_MODEL_CAPABILITIES,
+    });
+    ctx.appendExchange(1, 'old user one', 'old assistant one', 20);
+    ctx.appendExchange(2, 'recent user two', 'recent assistant two', 80);
+    let release!: () => void;
+    const canCompact = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started!: () => void;
+    const compactionStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const hook = ctx.get(IAgentFullCompactionService).hooks.onWillCompact.register(
+      'test-quiescence',
+      async (_task, next) => {
+        started();
+        await canCompact;
+        await next();
+      },
+    );
+    ctx.mockNextResponse({ type: 'text', text: 'Compacted summary.' });
+
+    expect(ctx.get(IAgentFullCompactionService).begin({ source: 'manual' })).toBe(true);
+    await compactionStarted;
+    expect(ctx.get(IAgentLoopService).tryAcquireQuiescence()).toBeUndefined();
+
+    release();
+    await ctx.get(IAgentFullCompactionService).compacting?.promise;
+    const lease = ctx.get(IAgentLoopService).tryAcquireQuiescence();
+    expect(lease).toBeDefined();
+    lease?.dispose();
+    hook.dispose();
   });
 
   it('refreshes the active profile system prompt after compaction without resetting active tools', async () => {
@@ -902,7 +813,7 @@ describe('FullCompaction', () => {
       session_id: 'test-session',
       cwd: dir,
       trigger: 'auto',
-      token_count: 3_405,
+      token_count: 3_400,
     });
     expect(post).toMatchObject({
       hook_event_name: 'PostCompact',
@@ -988,7 +899,7 @@ describe('FullCompaction', () => {
       event: 'compaction_finished',
       properties: expect.objectContaining({
         source: 'manual',
-        tokens_before: 15_007,
+        tokens_before: 15_002,
         retry_count: 1,
         trace_id: 'trace-compact-1',
       }),
@@ -1371,7 +1282,7 @@ describe('FullCompaction', () => {
       properties: expect.objectContaining({
         agent_id: 'main',
         source: 'manual',
-        tokens_before: 15_007,
+        tokens_before: 15_002,
         duration_ms: expect.any(Number),
         round: 1,
         retry_count: 0,
@@ -1596,7 +1507,7 @@ describe('FullCompaction', () => {
       event: 'compaction_failed',
       properties: expect.objectContaining({
         source: 'manual',
-        tokens_before: 15_007,
+        tokens_before: 15_002,
         duration_ms: expect.any(Number),
         retry_count: 4,
         error_type: 'APIConnectionError',
@@ -1818,6 +1729,7 @@ describe('FullCompaction', () => {
 
     ctx.get(IAgentFullCompactionService).begin({ source: 'auto', instruction: undefined });
     await completed;
+    await ctx.wire.flush();
 
     const events = ctx.newEvents();
     const compactedPrefixSizes = ctx.llmCalls.map((call) =>
@@ -1971,13 +1883,12 @@ describe('FullCompaction', () => {
       event: 'compaction_finished',
       properties: expect.objectContaining({
         source: 'auto',
-        tokens_before: 3_412,
-        // 3366 estimated request-overhead tokens (system prompt + tools,
-        // including the native Memory tool schema) + 9 measured summary output
-        // tokens (scripted compaction exchange) + 21 estimated tokens for the
-        // kept user messages — the summary component is the REAL provider
-        // count, not a text estimate.
-        tokens_after: 3_396,
+        tokens_before: 3_407,
+        // 3361 estimated request-overhead tokens (system prompt + tools) +
+        // 9 measured summary output tokens (scripted compaction exchange) +
+        // 21 estimated tokens for the kept user messages — the summary
+        // component is the REAL provider count, not a text estimate.
+        tokens_after: 3_391,
         compacted_count: 7,
         retry_count: 0,
       }),
@@ -3666,11 +3577,13 @@ describe('goal reminder re-injection after full compaction', () => {
     await ctx.untilTurnEnd();
 
     expect(ctx.llmCalls.length).toBeGreaterThanOrEqual(2);
-    expect(goalReminderCount(ctx.llmCalls[0]!.history)).toBe(0);
+    // The goal reminder now enters at the first step head (before the
+    // overflow triggers compaction), so the summarizer request sees it too.
+    expect(goalReminderCount(ctx.llmCalls[0]!.history)).toBe(1);
     expect(goalReminderCount(ctx.llmCalls[1]!.history)).toBe(1);
   });
 
-  it('counts the re-injected goal reminder into the post-compaction token floor', async () => {
+  it('re-injects the goal reminder at the first step after compaction', async () => {
     const records: TelemetryRecord[] = [];
     const ctx = testAgent({ telemetry: recordingTelemetry(records) });
     ctx.configure({
@@ -3686,12 +3599,14 @@ describe('goal reminder re-injection after full compaction', () => {
     await ctx.rpc.beginCompaction({});
     await completed;
 
+    // Re-injection is deferred to the next step head, so nothing is appended
+    // at compaction time and the token floor is exactly the compaction result.
     const reminderMessages = ctx.context
       .get()
       .filter(
         (message) => message.origin?.kind === 'injection' && message.origin.variant === 'goal',
       );
-    expect(reminderMessages).toHaveLength(1);
+    expect(reminderMessages).toHaveLength(0);
 
     const tokensAfter = records.find((record) => record.event === 'compaction_finished')
       ?.properties?.['tokens_after'];
@@ -3702,12 +3617,12 @@ describe('goal reminder re-injection after full compaction', () => {
       }
     ).lastCompactedTokenCount;
     expect(floor).toBe(ctx.get(IAgentTokenCountingService).get().size);
-    expect(floor!).toBeGreaterThan(tokensAfter as number);
+    expect(floor).toBe(tokensAfter);
 
     ctx.mockNextResponse({ type: 'text', text: 'Reply after compaction.' });
     await ctx.rpc.prompt({ input: [{ type: 'text', text: 'next prompt' }] });
     await ctx.untilTurnEnd();
-    expect(goalReminderCount(ctx.llmCalls.at(-1)!.history)).toBe(2);
+    expect(goalReminderCount(ctx.llmCalls.at(-1)!.history)).toBe(1);
   });
 
   it('replays a deferred prompt whose first request carries the re-injected goal reminder', async () => {
