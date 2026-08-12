@@ -111,6 +111,24 @@ const webSearchChip: ChipProvider = (_toolCall, result) => {
   return pluralize(count, 'result');
 };
 
+const braveWebSearchChip: ChipProvider = (_toolCall, result) => {
+  try {
+    const payload: unknown = JSON.parse(result.output);
+    if (typeof payload === 'object' && payload !== null && !Array.isArray(payload)) {
+      const web = Reflect.get(payload, 'web');
+      if (typeof web === 'object' && web !== null && !Array.isArray(web)) {
+        const results = Reflect.get(web, 'results');
+        if (Array.isArray(results)) {
+          return results.length === 0 ? 'no results' : pluralize(results.length, 'result');
+        }
+      }
+    }
+  } catch {
+    // Fall through to the generic label for unexpected provider output.
+  }
+  return result.output.trim().length === 0 ? 'no results' : 'web result';
+};
+
 const goalStatusOutputChip: ChipProvider = (_toolCall, result) =>
   result.is_error ? '' : goalStatusChip(result.output);
 
@@ -123,6 +141,7 @@ const REGISTRY: Record<string, ChipProvider> = {
   Glob: globChip,
   FetchURL: fetchChip,
   WebSearch: webSearchChip,
+  BraveWebSearch: braveWebSearchChip,
   CreateGoal: goalStatusOutputChip,
   GetGoal: goalStatusOutputChip,
 };

@@ -76,6 +76,24 @@ describe('chip registry', () => {
     );
   });
 
+  it('BraveWebSearch chip shows web result count', () => {
+    const output = JSON.stringify({
+      web: { results: [{ title: 'Alpha' }, { title: 'Beta' }] },
+    });
+    expect(chipFor('BraveWebSearch', { q: 'kimi' }, result(output))).toBe('2 results');
+  });
+
+  it('BraveWebSearch chip shows no results for an empty web result list', () => {
+    const output = JSON.stringify({ web: { results: [] } });
+    expect(chipFor('BraveWebSearch', { q: 'kimi' }, result(output))).toBe('no results');
+  });
+
+  it('BraveWebSearch chip falls back for unexpected output', () => {
+    expect(chipFor('BraveWebSearch', { q: 'kimi' }, result('unexpected output'))).toBe(
+      'web result',
+    );
+  });
+
   it('Think tool has no chip', () => {
     expect(pickChip('Think')).toBeUndefined();
   });
@@ -89,7 +107,13 @@ describe('chip registry', () => {
   });
 
   it('CreateGoal chip shows the created status', () => {
-    expect(chipFor('CreateGoal', { objective: 'Ship feature X' }, result('{"goal":{"status":"active"}}'))).toBe('active');
+    expect(
+      chipFor(
+        'CreateGoal',
+        { objective: 'Ship feature X' },
+        result('{"goal":{"status":"active"}}'),
+      ),
+    ).toBe('active');
   });
 
   it('SetGoalBudget has no chip because the budget is in the header argument', () => {
