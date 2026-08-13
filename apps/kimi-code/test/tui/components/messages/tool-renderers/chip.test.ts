@@ -76,6 +76,21 @@ describe('chip registry', () => {
     );
   });
 
+  it('WebSearch chip counts Title-prefixed results from the real output format', () => {
+    const output = [
+      'Title: Alpha',
+      'URL: https://example.com/a',
+      'Snippet: first',
+      '',
+      '---',
+      '',
+      'Title: Beta',
+      'URL: https://example.com/b',
+      'Snippet: second',
+    ].join('\n');
+    expect(chipFor('WebSearch', { query: 'kimi' }, result(output))).toBe('2 results');
+  });
+
   it('BraveWebSearch chip shows web result count', () => {
     const output = JSON.stringify({
       web: { results: [{ title: 'Alpha' }, { title: 'Beta' }] },

@@ -105,7 +105,9 @@ const webSearchChip: ChipProvider = (_toolCall, result) => {
   const lines = result.output.split('\n').filter((l) => l.trim().length > 0);
   let count = 0;
   for (const line of lines) {
-    if (/^\s*(\d+\.|[-*])\s+/.test(line)) count++;
+    // Each result renders a leading `Title:` line; fall back to numbered or
+    // bulleted lines for any other formatting.
+    if (/^\s*Title:\s+/.test(line) || /^\s*(\d+\.|[-*])\s+/.test(line)) count++;
   }
   if (count === 0) return lines.length === 0 ? 'no results' : 'web result';
   return pluralize(count, 'result');
