@@ -494,7 +494,7 @@ export class TasksBrowserApp extends Container implements Focusable {
 
     const description =
       singleLine(task.description) ||
-      (task.kind === 'process' ? singleLine(task.command) : '') ||
+      (task.kind === 'process' || task.kind === 'monitor' ? singleLine(task.command) : '') ||
       '(no description)';
     const desc = truncateToWidth(description, descBudget, ELLIPSIS);
     return fitExactly(`${prefix} ${currentTheme.fg('text', desc)}`, innerWidth);
@@ -553,6 +553,16 @@ export class TasksBrowserApp extends Container implements Focusable {
     ];
     if (task.kind === 'process' && task.command && task.command !== task.description) {
       lines.push(`${label('Command:')}${value(singleLine(task.command))}`);
+    }
+    if (task.kind === 'monitor') {
+      lines.push(`${label('Command:')}${value(singleLine(task.command))}`);
+      lines.push(`${label('Monitor kind:')}${value(task.monitorKind)}`);
+      lines.push(`${label('Persistent:')}${value(String(task.persistent))}`);
+      lines.push(`${label('Events:')}${value(String(task.eventCount))}`);
+      lines.push(`${label('PID:')}${value(String(task.pid))}`);
+      if (task.exitCode !== null) {
+        lines.push(`${label('Exit code:')}${value(String(task.exitCode))}`);
+      }
     }
     if (task.kind === 'agent' && task.agentId !== undefined) {
       lines.push(`${label('Agent ID:')}${value(task.agentId)}`);

@@ -2164,7 +2164,12 @@ export class KimiTUI {
     this.stopTurnTimingClock();
     this.tasksBrowserController.close();
     this.btwPanelController.clear();
-    this.state.footer.setBackgroundCounts({ bashTasks: 0, agentTasks: 0, workflowTasks: 0 });
+    this.state.footer.setBackgroundCounts({
+      bashTasks: 0,
+      agentTasks: 0,
+      workflowTasks: 0,
+      monitorTasks: 0,
+    });
     this.streamingUI.setTodoList([]);
     this.streamingUI.setTurnId(undefined);
     this.setAppState({ mcpServersSummary: null });

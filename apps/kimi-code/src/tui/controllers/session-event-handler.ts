@@ -1329,7 +1329,7 @@ export class SessionEventHandler {
         }
       }
       if (!this.backgroundTaskTranscriptedTerminal.has(info.taskId)) {
-        if (info.kind === 'process' || info.kind === 'question') {
+        if (info.kind === 'process' || info.kind === 'question' || info.kind === 'monitor') {
           this.appendBackgroundTaskEntry(info);
         }
         this.backgroundTaskTranscriptedTerminal.add(info.taskId);
@@ -1364,6 +1364,7 @@ export class SessionEventHandler {
     let bashTasks = 0;
     let agentTasks = 0;
     let workflowTasks = 0;
+    let monitorTasks = 0;
     for (const info of this.backgroundTasks.values()) {
       if (
         info.status === 'completed' ||
@@ -1378,11 +1379,13 @@ export class SessionEventHandler {
         agentTasks += 1;
       } else if (info.kind === 'workflow') {
         workflowTasks += 1;
+      } else if (info.kind === 'monitor') {
+        monitorTasks += 1;
       } else {
         bashTasks += 1;
       }
     }
-    state.footer.setBackgroundCounts({ bashTasks, agentTasks, workflowTasks });
+    state.footer.setBackgroundCounts({ bashTasks, agentTasks, workflowTasks, monitorTasks });
     state.ui.requestRender();
   }
 }

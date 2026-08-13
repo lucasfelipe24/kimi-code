@@ -214,7 +214,7 @@ export const transcriptItemSchema = z.discriminatedUnion('kind', [
 
 export const transcriptTaskSchema = z.object({
   taskId: taskIdSchema,
-  kind: z.enum(['shell', 'subagent', 'tool', 'other']),
+  kind: z.enum(['shell', 'subagent', 'tool', 'other', 'monitor']),
   state: z.enum(['running', 'completed', 'failed', 'timed_out', 'killed', 'lost']),
   detached: z.boolean(),
   description: z.string().optional(),

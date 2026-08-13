@@ -45,11 +45,22 @@ export interface BackgroundTaskInfoBase {
   readonly timeoutMs?: number;
 }
 
+export interface MonitorBackgroundTaskInfo extends BackgroundTaskInfoBase {
+  readonly kind: 'monitor';
+  readonly command: string;
+  readonly monitorKind: 'log' | 'poll' | 'watch' | 'other';
+  readonly pid: number;
+  readonly exitCode: number | null;
+  readonly persistent: boolean;
+  readonly eventCount: number;
+}
+
 export type BackgroundTaskInfo =
   | ProcessBackgroundTaskInfo
   | AgentBackgroundTaskInfo
   | QuestionBackgroundTaskInfo
-  | WorkflowBackgroundTaskInfo;
+  | WorkflowBackgroundTaskInfo
+  | MonitorBackgroundTaskInfo;
 
 export interface BackgroundTaskSink {
   readonly signal: AbortSignal;

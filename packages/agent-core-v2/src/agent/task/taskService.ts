@@ -167,8 +167,12 @@ interface ManagedTask {
   timedOut: boolean;
   readonly waiters: Array<() => void>;
   handleSubscription?: { dispose(): void };
+  eventSeq: number;
+  readonly pendingMonitorKeys: string[];
+  monitorEventCount: number;
 }
 
+const MAX_PENDING_MONITOR_NOTIFICATIONS = 3;
 const MAX_OUTPUT_BYTES = 1024 * 1024;
 
 const TERMINAL_OUTPUT_TAIL_BYTES = 4 * 1024;
@@ -402,6 +406,9 @@ export class AgentTaskService extends Disposable implements IAgentTaskService {
       waiters: [],
       terminalFired: false,
       timedOut: false,
+      eventSeq: 0,
+      pendingMonitorKeys: [],
+      monitorEventCount: 0,
     };
     this.tasks.set(entry.taskId, entry);
     this.ghosts.delete(entry.taskId);
@@ -416,6 +423,9 @@ export class AgentTaskService extends Disposable implements IAgentTaskService {
           signal: entry.abortController.signal,
           appendOutput: (chunk) => {
             this.appendOutput(entry, chunk);
+          },
+          notifyEvent: (text, opts) => {
+            this.notifyMonitorEvent(entry, text, opts);
           },
           settle: (settlement) =>
             this.settleTask(entry, coerceTimeoutSettlement(entry, settlement)),
@@ -478,6 +488,9 @@ export class AgentTaskService extends Disposable implements IAgentTaskService {
       waiters: [],
       terminalFired: false,
       timedOut: false,
+      eventSeq: 0,
+      pendingMonitorKeys: [],
+      monitorEventCount: 0,
     };
     this.tasks.set(taskId, entry);
     this.ghosts.delete(taskId);
@@ -1101,6 +1114,71 @@ export class AgentTaskService extends Disposable implements IAgentTaskService {
     });
   }
 
+  private notifyMonitorEvent(
+    entry: ManagedTask,
+    text: string,
+    opts: { readonly notificationId: string; readonly coalescedCount: number },
+  ): void {
+    if (TERMINAL_STATUSES.has(entry.status) || entry.terminalNotificationSuppressed === true) return;
+    const info = this.toInfo(entry);
+    if (info.kind !== 'monitor') return;
+    const origin: TaskOrigin = {
+      kind: 'task',
+      taskId: entry.taskId,
+      status: 'running',
+      notificationId: `task:${entry.taskId}:event:${opts.notificationId}`,
+    };
+    const notification: AgentTaskNotification = {
+      id: origin.notificationId,
+      category: 'task',
+      type: 'task.monitor.event',
+      source_kind: 'background_task',
+      source_id: entry.taskId,
+      title: `Monitor ${info.monitorKind} event`,
+      severity: 'info',
+      body:
+        `${info.description}\n${text}` +
+        (opts.coalescedCount > 0 ? `\n(+${String(opts.coalescedCount)} earlier lines)` : ''),
+    };
+    const content: ContentPart[] = [{ type: 'text', text: renderNotificationXml(notification) }];
+    const request = new TaskNotificationStepRequest(
+      { role: 'user', content, toolCalls: [], origin },
+      () => { this.fireNotificationHook(notification); },
+    );
+    const key = notificationKey(origin);
+    this.pendingNotificationRequests.set(key, request);
+    entry.pendingMonitorKeys.push(key);
+    entry.monitorEventCount += 1;
+    while (entry.pendingMonitorKeys.length > MAX_PENDING_MONITOR_NOTIFICATIONS) {
+      const oldKey = entry.pendingMonitorKeys.shift();
+      if (oldKey === undefined) break;
+      const oldRequest = this.pendingNotificationRequests.get(oldKey);
+      if (oldRequest !== undefined) {
+        oldRequest.abort();
+        this.clearPendingNotification(oldKey, oldRequest);
+      }
+    }
+    try {
+      const receipt = this.loop.enqueue(request);
+      void receipt.assigned
+        .then(({ step }) => step.result)
+        .then(
+          () => {
+            if (request.aborted) this.clearPendingNotification(key, request);
+            removePendingMonitorKey(entry, key);
+          },
+          () => {
+            this.clearPendingNotification(key, request);
+            removePendingMonitorKey(entry, key);
+          },
+        );
+    } catch (error) {
+      this.clearPendingNotification(key, request);
+      removePendingMonitorKey(entry, key);
+      throw error;
+    }
+  }
+
   private async notifyAgentTask(info: AgentTaskInfo): Promise<void> {
     const context = await this.buildAgentTaskNotificationContext(info);
     if (context === undefined) return;
@@ -1388,6 +1466,11 @@ function isTaskOrigin(origin: unknown): origin is TaskNotificationOrigin {
 
 function notificationKey(origin: TaskNotificationOrigin): string {
   return `${origin.taskId}\0${origin.status}\0${origin.notificationId}`;
+}
+
+function removePendingMonitorKey(entry: ManagedTask, key: string): void {
+  const index = entry.pendingMonitorKeys.indexOf(key);
+  if (index >= 0) entry.pendingMonitorKeys.splice(index, 1);
 }
 
 function taskOriginFromMessage(message: unknown): TaskNotificationOrigin | undefined {

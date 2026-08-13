@@ -317,6 +317,9 @@ function mapKind(k: AgentTaskInfo['kind']): TaskKind {
     case 'workflow':
       // Same situation as 'question': no dedicated spec literal yet.
       return 'tool';
+    case 'monitor':
+      // The REST schema has no dedicated 'monitor' literal yet.
+      return 'tool';
   }
 }
 

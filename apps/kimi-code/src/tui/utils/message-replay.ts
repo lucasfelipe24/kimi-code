@@ -87,21 +87,25 @@ export function countActiveBackgroundTasks(tasks: ReadonlyMap<string, Background
   bashTasks: number;
   agentTasks: number;
   workflowTasks: number;
+  monitorTasks: number;
 } {
   let bashTasks = 0;
   let agentTasks = 0;
   let workflowTasks = 0;
+  let monitorTasks = 0;
   for (const info of tasks.values()) {
     if (isTerminalBackgroundTask(info)) continue;
     if (info.kind === 'agent') {
       agentTasks += 1;
     } else if (info.kind === 'workflow') {
       workflowTasks += 1;
+    } else if (info.kind === 'monitor') {
+      monitorTasks += 1;
     } else {
       bashTasks += 1;
     }
   }
-  return { bashTasks, agentTasks, workflowTasks };
+  return { bashTasks, agentTasks, workflowTasks, monitorTasks };
 }
 
 export function replayBackgroundProjection(

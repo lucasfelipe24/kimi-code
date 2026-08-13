@@ -109,7 +109,7 @@ export class ProcessTask implements AgentTask {
   }
 }
 
-async function waitForStreamDrain(streamDrained: Promise<void>): Promise<void> {
+export async function waitForStreamDrain(streamDrained: Promise<void>): Promise<void> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
@@ -131,7 +131,7 @@ async function waitForStreamDrainSettled(streamDrained: Promise<void>): Promise<
   }
 }
 
-function observeProcessStream(
+export function observeProcessStream(
   stream: Readable,
   kind: ProcessTaskOutputKind,
   sink: AgentTaskSink,
@@ -287,12 +287,12 @@ async function disposeProcess(proc: IProcess): Promise<void> {
   try { await proc.dispose(); } catch {   }
 }
 
-function createPrematureCloseError(): Error {
+export function createPrematureCloseError(): Error {
   const error = new Error('Premature close') as NodeJS.ErrnoException;
   error.code = 'ERR_STREAM_PREMATURE_CLOSE';
   return error;
 }
 
-function errorMessage(err: unknown): string {
+export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }

@@ -209,6 +209,16 @@ export const agentTaskInfoSchema = z.discriminatedUnion('kind', [
     agentCalls: z.number().optional(),
     ...taskInfoBaseFields,
   }),
+  z.object({
+    kind: z.literal('monitor'),
+    command: z.string(),
+    monitorKind: z.enum(['log', 'poll', 'watch', 'other']),
+    pid: z.number(),
+    exitCode: z.union([z.number(), z.null()]),
+    persistent: z.boolean(),
+    eventCount: z.number(),
+    ...taskInfoBaseFields,
+  }),
 ]);
 
 export const stopTaskPayloadSchema = z.object({

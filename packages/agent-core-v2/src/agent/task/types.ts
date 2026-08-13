@@ -41,6 +41,10 @@ export type AgentTaskInfo = AgentTaskInfoByKind[AgentTaskKind];
 export interface AgentTaskSink {
   readonly signal: AbortSignal;
   appendOutput(chunk: string): void;
+  notifyEvent?(
+    text: string,
+    opts: { readonly notificationId: string; readonly coalescedCount: number },
+  ): void;
   settle(settlement: AgentTaskSettlement): Promise<boolean>;
 }
 

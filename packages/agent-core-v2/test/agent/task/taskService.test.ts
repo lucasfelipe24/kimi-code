@@ -7,7 +7,7 @@
  * `pnpm --filter @moonshot-ai/agent-core-v2 exec vitest run test/agent/task/taskService.test.ts`.
  */
 
-import { Readable, type Writable } from 'node:stream';
+import { PassThrough, Readable, type Writable } from 'node:stream';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -28,6 +28,7 @@ import {
 } from '#/agent/task/task';
 import { renderNotificationXml } from '#/agent/task/notificationXml';
 import { AgentTaskService } from '#/agent/task/taskService';
+import { MonitorTask } from '#/agent/tools/monitor/monitor-task';
 import { ProcessTask } from '#/agent/tools/os/bash/process-task';
 import type { IProcess } from '#/session/process/processRunner';
 import { IConfigRegistry, IConfigService } from '#/app/config/config';
@@ -162,7 +163,105 @@ describe('AgentTaskService', () => {
     ix.set(IAgentStateService, new AgentStateService());
     ix.set(IAgentTaskService, new SyncDescriptor(AgentTaskService));
   });
-  afterEach(() =>{  disposables.dispose(); });
+  afterEach(() => {
+    disposables.dispose();
+    vi.useRealTimers();
+  });
+
+  it('routes monitor events into loop step requests', async () => {
+    const loop = stubLoopWithHooks();
+    ix.stub(IAgentLoopService, loop);
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    let resolveWait: (exitCode: number) => void = () => {};
+    const wait = new Promise<number>((resolve) => {
+      resolveWait = resolve;
+    });
+    const proc: IProcess = {
+      stdin: { write: vi.fn(), end: vi.fn() } as unknown as Writable,
+      stdout,
+      stderr,
+      pid: 7001,
+      exitCode: null,
+      wait: () => wait,
+      kill: vi.fn().mockResolvedValue(undefined) as IProcess['kill'],
+      dispose: vi.fn().mockResolvedValue(undefined) as IProcess['dispose'],
+    };
+    const svc = ix.get(IAgentTaskService);
+    const taskId = svc.registerTask(new MonitorTask(proc, 'tail log', 'log', 'service monitor', true));
+
+    await Promise.resolve();
+    stdout.write('service event\n');
+    await vi.waitFor(() => {
+      expect(loop.queue.hasPendingRequests()).toBe(true);
+    });
+
+    const context = { append: vi.fn() };
+    const batch = loop.drainNextBatch(context);
+    expect(batch).toBeDefined();
+    expect(context.append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        origin: {
+          kind: 'task',
+          taskId,
+          status: 'running',
+          notificationId: expect.stringMatching(new RegExp(`^task:${taskId}:event:`)),
+        },
+      }),
+    );
+
+    stdout.end();
+    stderr.end();
+    resolveWait(0);
+    await svc.wait(taskId);
+  });
+
+  it('limits pending monitor notifications to the latest three requests', async () => {
+    vi.useFakeTimers();
+    const loop = stubLoopWithHooks();
+    vi.spyOn(loop, 'enqueue').mockImplementation((request, options) => {
+      loop.queue.enqueue(request, options?.at ?? 'tail');
+      return {
+        assigned: new Promise(() => {}),
+        abort: () => request.abort(),
+      };
+    });
+    ix.stub(IAgentLoopService, loop);
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    let resolveWait: (exitCode: number) => void = () => {};
+    const wait = new Promise<number>((resolve) => {
+      resolveWait = resolve;
+    });
+    const proc: IProcess = {
+      stdin: { write: vi.fn(), end: vi.fn() } as unknown as Writable,
+      stdout,
+      stderr,
+      pid: 7002,
+      exitCode: null,
+      wait: () => wait,
+      kill: vi.fn().mockResolvedValue(undefined) as IProcess['kill'],
+      dispose: vi.fn().mockResolvedValue(undefined) as IProcess['dispose'],
+    };
+    const svc = ix.get(IAgentTaskService);
+    const taskId = svc.registerTask(new MonitorTask(proc, 'watch log', 'watch', 'cap monitor', true));
+
+    await Promise.resolve();
+    for (let index = 1; index <= 5; index += 1) {
+      stdout.write(`event ${String(index)}\n`);
+      await vi.advanceTimersByTimeAsync(250);
+    }
+
+    const requests = loop.queue.drain();
+    expect(requests).toHaveLength(5);
+    expect(requests.filter((request) => !request.aborted)).toHaveLength(3);
+    expect(requests.slice(0, 2).every((request) => request.aborted)).toBe(true);
+
+    stdout.end();
+    stderr.end();
+    resolveWait(0);
+    await svc.wait(taskId);
+  });
 
   it('registerTask / list / readOutput / stop', async () => {
     const svc = ix.get(IAgentTaskService);

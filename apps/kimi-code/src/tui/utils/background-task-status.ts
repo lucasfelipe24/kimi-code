@@ -42,6 +42,7 @@ function phaseFromStatus(status: BackgroundTaskStatus): BackgroundAgentStatusPha
 function subjectFor(info: BackgroundTaskInfo): string {
   if (info.kind === 'agent') return 'agent task';
   if (info.kind === 'question') return 'question task';
+  if (info.kind === 'monitor') return 'monitor task';
   return 'bash task';
 }
 
@@ -68,6 +69,13 @@ function detailFor(info: BackgroundTaskInfo): string | undefined {
   const description = truncate(info.description);
   if (description !== undefined) parts.push(description);
 
+  if (info.kind === 'monitor' && info.status === 'running') {
+    parts.push(info.persistent ? `persistent · ${info.eventCount} events` : `${info.eventCount} events`);
+  }
+  if (info.kind === 'monitor' && info.status !== 'running') {
+    if (info.exitCode !== null) parts.push(`exit ${info.exitCode}`);
+    parts.push(`${info.eventCount} events`);
+  }
   if (info.status === 'completed' || info.status === 'failed') {
     if (info.kind === 'process' && info.exitCode !== null) {
       parts.push(`exit ${info.exitCode}`);

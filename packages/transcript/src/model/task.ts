@@ -9,7 +9,7 @@
 import type { AgentId, TaskId } from './ids';
 import type { StepUsage } from './turn';
 
-export type TaskKind = 'shell' | 'subagent' | 'tool' | 'other';
+export type TaskKind = 'shell' | 'subagent' | 'tool' | 'other' | 'monitor';
 
 export type TaskState =
   | 'running'

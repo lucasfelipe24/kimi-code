@@ -151,6 +151,8 @@ function mapTaskKind(kind: unknown): TranscriptTask['kind'] {
       return 'shell';
     case 'agent':
       return 'subagent';
+    case 'monitor':
+      return 'monitor';
     default:
       return 'other';
   }

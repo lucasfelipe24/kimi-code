@@ -60,6 +60,9 @@ function mapKind(k: BackgroundTaskInfo['kind']): BackgroundTaskKind {
     case 'workflow':
       // SCHEMAS §7 has no 'workflow' literal either; 'tool' is the closest.
       return 'tool';
+    case 'monitor':
+      // SCHEMAS §7 has no 'monitor' literal either; 'tool' is the closest.
+      return 'tool';
   }
 }
 
@@ -124,7 +127,11 @@ export function toProtocolTask(
   if (info.endedAt !== null && info.endedAt !== undefined) {
     base.completed_at = new Date(info.endedAt).toISOString();
   }
-  if (info.kind === 'process' && 'command' in info && typeof info.command === 'string') {
+  if (
+    (info.kind === 'process' || info.kind === 'monitor') &&
+    'command' in info &&
+    typeof info.command === 'string'
+  ) {
     base.command = info.command;
   }
   if (output !== undefined) {

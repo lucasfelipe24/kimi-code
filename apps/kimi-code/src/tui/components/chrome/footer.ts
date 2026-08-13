@@ -200,14 +200,14 @@ export class FooterComponent implements Component {
   private statusLineRunner: StatusLineCommandRunner | null = null;
   /**
    * Non-terminal background-task counts split by kind so the footer can
-   * render two distinct badges. `bashTasks` covers `bash-*` BPM tasks
-   * spawned via `Shell run_in_background=true`; `agentTasks` covers
-   * `agent-*` BPM tasks (background subagents). Either zero hides its
-   * respective badge.
+   * render distinct badges. `bashTasks` covers `bash-*` BPM tasks spawned
+   * via `Shell run_in_background=true`; `agentTasks` covers `agent-*` BPM
+   * tasks (background subagents). Either zero hides its respective badge.
    */
   private backgroundBashTaskCount = 0;
   private backgroundAgentCount = 0;
   private backgroundWorkflowCount = 0;
+  private backgroundMonitorCount = 0;
 
   constructor(state: AppState, onRefresh: () => void = () => {}) {
     this.state = state;
@@ -264,10 +264,16 @@ export class FooterComponent implements Component {
    * count produces its own bracketed badge on line 1; zeros hide them
    * independently.
    */
-  setBackgroundCounts(counts: { bashTasks: number; agentTasks: number; workflowTasks: number }): void {
+  setBackgroundCounts(counts: {
+    bashTasks: number;
+    agentTasks: number;
+    workflowTasks: number;
+    monitorTasks: number;
+  }): void {
     this.backgroundBashTaskCount = Math.max(0, counts.bashTasks);
     this.backgroundAgentCount = Math.max(0, counts.agentTasks);
     this.backgroundWorkflowCount = Math.max(0, counts.workflowTasks);
+    this.backgroundMonitorCount = Math.max(0, counts.monitorTasks);
   }
 
   invalidate(): void {}
@@ -439,6 +445,12 @@ export class FooterComponent implements Component {
       const noun = this.backgroundWorkflowCount === 1 ? 'workflow' : 'workflows';
       taskBadges.push(
         chalk.hex(colors.accent)(`[${String(this.backgroundWorkflowCount)} ${noun} running]`),
+      );
+    }
+    if (this.backgroundMonitorCount > 0) {
+      const noun = this.backgroundMonitorCount === 1 ? 'monitor' : 'monitors';
+      taskBadges.push(
+        chalk.hex(colors.accent)(`[${String(this.backgroundMonitorCount)} ${noun} running]`),
       );
     }
     slots['tasks'] = taskBadges;

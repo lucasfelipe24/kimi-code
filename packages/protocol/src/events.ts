@@ -399,11 +399,22 @@ export interface WorkflowTaskInfo extends TaskInfoBase {
   readonly agentCalls?: number;
 }
 
+export interface MonitorTaskInfo extends TaskInfoBase {
+  readonly kind: 'monitor';
+  readonly command: string;
+  readonly monitorKind: 'log' | 'poll' | 'watch' | 'other';
+  readonly pid: number;
+  readonly exitCode: number | null;
+  readonly persistent: boolean;
+  readonly eventCount: number;
+}
+
 export type TaskInfo =
   | ProcessTaskInfo
   | AgentTaskInfo
   | QuestionTaskInfo
-  | WorkflowTaskInfo;
+  | WorkflowTaskInfo
+  | MonitorTaskInfo;
 
 export interface CompactionResult {
   readonly summary: string;
@@ -1431,11 +1442,22 @@ export const workflowTaskInfoSchema = taskInfoBaseSchema.extend({
   agentCalls: z.number().optional(),
 }) satisfies z.ZodType<WorkflowTaskInfo>;
 
+export const monitorTaskInfoSchema = taskInfoBaseSchema.extend({
+  kind: z.literal('monitor'),
+  command: z.string(),
+  monitorKind: z.enum(['log', 'poll', 'watch', 'other']),
+  pid: z.number(),
+  exitCode: z.number().nullable(),
+  persistent: z.boolean(),
+  eventCount: z.number(),
+}) satisfies z.ZodType<MonitorTaskInfo>;
+
 export const taskInfoSchema = z.discriminatedUnion('kind', [
   processTaskInfoSchema,
   agentTaskInfoSchema,
   questionTaskInfoSchema,
   workflowTaskInfoSchema,
+  monitorTaskInfoSchema,
 ]) satisfies z.ZodType<TaskInfo>;
 
 export const compactionResultSchema = z.object({

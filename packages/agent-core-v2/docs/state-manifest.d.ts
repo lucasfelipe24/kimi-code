@@ -1169,6 +1169,23 @@ export interface AgentStateSnapshot {
     readonly stopReason?: string;
     readonly terminalNotificationSuppressed?: boolean;
     readonly timeoutMs?: number;
+  } | /* MonitorTaskInfo — packages/agent-core-v2/src/agent/tools/monitor/monitor-task.ts */ {
+    readonly kind: 'monitor';
+    readonly command: string;
+    readonly monitorKind: 'log' | 'poll' | 'watch' | 'other';
+    readonly pid: number;
+    readonly exitCode: number | null;
+    readonly persistent: boolean;
+    readonly eventCount: number;
+    readonly taskId: string;
+    readonly description: string;
+    readonly status: /* AgentTaskStatus — packages/agent-core-v2/src/agent/task/types.ts */ 'completed' | 'failed' | 'running' | 'timed_out' | 'killed' | 'lost';
+    readonly detached?: boolean;
+    readonly startedAt: number;
+    readonly endedAt: number | null;
+    readonly stopReason?: string;
+    readonly terminalNotificationSuppressed?: boolean;
+    readonly timeoutMs?: number;
   } | /* WorkflowRunTaskInfo — packages/agent-core-v2/src/session/workflow/workflowRunTask.ts */ {
     readonly kind: 'workflow';
     readonly runId: string;
