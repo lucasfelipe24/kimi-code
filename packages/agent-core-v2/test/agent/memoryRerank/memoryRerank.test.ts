@@ -28,7 +28,10 @@ import {
 import { AgentMemoryRerankService } from '#/agent/memoryRerank/memoryRerankService';
 import { IAgentProfileService } from '#/agent/profile/profile';
 import { IConfigService } from '#/app/config/config';
-import { SECONDARY_MODEL_SECTION, type SecondaryModelConfig } from '#/app/kosongConfig/configSection';
+import {
+  SECONDARY_MODEL_SECTION,
+  type SecondaryModelConfig,
+} from '#/session/subagent/configSection';
 import { UNKNOWN_CAPABILITY } from '#/kosong/contract/capability';
 import type { Message } from '#/kosong/contract/message';
 import { IModelCatalog } from '#/kosong/model/catalog';
@@ -172,7 +175,7 @@ describe('AgentMemoryRerankService', () => {
     expect(ids).toEqual([kept.id]);
   });
 
-  it('binds the derived entry when the secondary recipe carries patch fields', async () => {
+  it('binds the legacy model pointer with its configured effort', async () => {
     const kept = memory({ name: 'deploy runbook', body: 'run deploy.sh' });
     const h = build({
       secondary: { model: 'sonnet', defaultEffort: 'high' },
@@ -181,8 +184,20 @@ describe('AgentMemoryRerankService', () => {
 
     await h.reranker({ query: 'deploy', candidates: [kept], signal });
 
-    expect(h.calls[0]?.modelId).toBe('__secondary__');
+    expect(h.calls[0]?.modelId).toBe('sonnet');
     expect(h.calls[0]?.thinkingEffort).toBe('high');
+  });
+
+  it('binds the pool default_model when the subagent model pool is configured', async () => {
+    const kept = memory({ name: 'deploy runbook', body: 'run deploy.sh' });
+    const h = build({
+      secondary: { defaultModel: 'pool-fast', models: { 'pool-fast': 'fast and cheap' } },
+      responseText: JSON.stringify([kept.id]),
+    });
+
+    await h.reranker({ query: 'deploy', candidates: [kept], signal });
+
+    expect(h.calls[0]?.modelId).toBe('pool-fast');
   });
 
   it('falls back to the primary model when no secondary is configured', async () => {

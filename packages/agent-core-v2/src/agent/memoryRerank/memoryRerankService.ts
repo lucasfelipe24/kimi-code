@@ -5,9 +5,9 @@
  * recall candidates are reordered by relevance before injection. The rerank is
  * always on and independent of the `secondary-model` experiment: it reads the
  * `[secondary_model]` section directly through `config` and, when a secondary
- * model is configured, uses it (the derived entry when the recipe carries patch
- * fields, else the pointer); otherwise it falls back to the agent's
- * always-present primary model from `profile`. The chosen model is driven
+ * model is configured, uses it (the pool `default_model`, else the legacy
+ * `model` pointer); otherwise it falls back to the agent's always-present
+ * primary model from `profile`. The chosen model is driven
  * directly through `IModelCatalog`'s `ModelRequester` with an EMPTY toolset and
  * a small completion budget; the raw output is parsed to an id array, which the
  * recall service validates against the candidate set.
@@ -28,11 +28,7 @@ import { IConfigService } from '#/app/config/config';
 import {
   SECONDARY_MODEL_SECTION,
   type SecondaryModelConfig,
-} from '#/app/kosongConfig/configSection';
-import {
-  SECONDARY_DERIVED_MODEL_ID,
-  secondaryModelPatch,
-} from '#/app/kosongConfig/secondaryModelOverlay';
+} from '#/session/subagent/configSection';
 import { extractText } from '#/kosong/contract/message';
 import { IModelCatalog } from '#/kosong/model/catalog';
 import {
@@ -76,9 +72,9 @@ export class AgentMemoryRerankService extends Disposable implements IAgentMemory
   /**
    * Binding is independent of the `secondary-model` experiment: rerank is always
    * on, so it reads the `[secondary_model]` section directly. When a secondary
-   * model is configured it is used (the derived entry when the recipe carries
-   * patch fields, else the pointer); otherwise it falls back to the agent's
-   * always-present primary model.
+   * model is configured it is used (the pool `default_model`, else the legacy
+   * `model` pointer); otherwise it falls back to the agent's always-present
+   * primary model.
    */
   private resolveBinding(): RerankBinding {
     let secondary: SecondaryModelConfig | undefined;
@@ -87,14 +83,9 @@ export class AgentMemoryRerankService extends Disposable implements IAgentMemory
     } catch {
       secondary = undefined;
     }
-    if (secondary?.model !== undefined) {
-      return {
-        modelId:
-          secondaryModelPatch(secondary) === undefined
-            ? secondary.model
-            : SECONDARY_DERIVED_MODEL_ID,
-        thinking: secondary.defaultEffort,
-      };
+    const secondaryModelId = secondary?.defaultModel ?? secondary?.model;
+    if (secondaryModelId !== undefined) {
+      return { modelId: secondaryModelId, thinking: secondary?.defaultEffort };
     }
     const context = this.profile.resolveModelContext();
     return { modelId: context.modelAlias, thinking: context.thinkingLevel };
