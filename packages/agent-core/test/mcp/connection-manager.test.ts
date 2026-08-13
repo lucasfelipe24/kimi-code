@@ -376,19 +376,28 @@ describe('McpConnectionManager', () => {
 
   it('reconnectAfterCurrent queues one reconnect after the in-flight attempt', async () => {
     const cm = new McpConnectionManager();
-    let finishCurrent!: () => void;
-    const current = new Promise<void>((resolve) => {
-      finishCurrent = resolve;
-    });
-    const reconnect = vi.spyOn(cm, 'reconnect').mockReturnValueOnce(current).mockResolvedValueOnce();
+    const attempts: Promise<void>[] = [];
+    try {
+      await cm.connectAll({ server: stdioConfig() });
+      // Passthrough spy: `reconnect` owns the in-flight dedup map, so drive it
+      // against a real server rather than mocking it away. The first
+      // reconnect is still in flight when `reconnectAfterCurrent` reads the
+      // map, so it joins/queues instead of starting a second attempt.
+      const reconnect = vi.spyOn(cm, 'reconnect');
 
-    const first = cm.reconnectAndJoin('server');
-    const trailing = cm.reconnectAfterCurrent('server');
-    expect(reconnect).toHaveBeenCalledTimes(1);
-    finishCurrent();
-    await Promise.all([first, trailing]);
-    expect(reconnect).toHaveBeenCalledTimes(2);
-  });
+      const first = cm.reconnectAndJoin('server');
+      const trailing = cm.reconnectAfterCurrent('server');
+      attempts.push(first, trailing);
+      expect(reconnect).toHaveBeenCalledTimes(1);
+
+      await Promise.all([first, trailing]);
+      expect(reconnect).toHaveBeenCalledTimes(2);
+      expect(cm.get('server')?.status).toBe('connected');
+    } finally {
+      await Promise.allSettled(attempts);
+      await cm.shutdown();
+    }
+  }, 20_000);
 
   it('shutdown clears entries and is idempotent', async () => {
     const cm = new McpConnectionManager();

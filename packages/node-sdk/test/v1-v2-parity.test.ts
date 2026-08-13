@@ -434,9 +434,10 @@ function projectResumedAgents(
  *   of the path after the home scrub).
  * - `tools`: compared as sorted {name, active, source} triples. Tool
  *   DESCRIPTIONS are engine-owned constants that legitimately drift between
- *   the engines (the subagent/cron docs embed engine-specific facts), and
- *   v1 additionally registers the `select_tools` meta tool v2 has no
- *   counterpart for — both are engine design, not resume data. A model-less
+ *   the engines (the subagent/cron docs embed engine-specific facts); v1
+ *   additionally registers the `select_tools` meta tool v2 has no counterpart
+ *   for, and v2 registers the `Memory` / `Monitor` builtins v1 has no
+ *   counterpart for — all engine design, not resume data. A model-less
  *   agent's roster is not compared at all (v1 initializes builtin tools
  *   only on a profiled agent; v2 exposes them unbound).
  */
@@ -452,8 +453,12 @@ function projectResumedAgent(agent: ResumedAgentState, home: HomePair): unknown 
     projected['tools'] = [];
   } else {
     const tools = projected['tools'] as readonly Record<string, unknown>[];
+    // `select_tools` is v1-only; `Memory` / `Monitor` are v2-only builtins.
+    // None has a counterpart on the other engine, so drop them before the
+    // roster comparison (see the tools note above).
+    const engineOnlyTools = new Set(['select_tools', 'Memory', 'Monitor']);
     projected['tools'] = tools
-      .filter((tool) => tool['name'] !== 'select_tools')
+      .filter((tool) => !engineOnlyTools.has(tool['name'] as string))
       .map((tool) => ({ name: tool['name'], active: tool['active'], source: tool['source'] }))
       .toSorted((a, b) => String(a.name).localeCompare(String(b.name)));
   }

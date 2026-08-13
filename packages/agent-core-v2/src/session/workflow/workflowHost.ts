@@ -96,12 +96,14 @@ export class SubagentWorkflowHost implements WorkflowHost {
       if (callerData.modelAlias === undefined) {
         throw new Error('Caller agent has no model bound');
       }
-      const binding = resolveSubagentBinding(
-        config,
-        flags,
-        { modelAlias: callerData.modelAlias, thinkingLevel: callerData.thinkingLevel },
-        profile.modelPreference,
-      );
+      // Workflow subagents carry no per-call model choice, so they bind like
+      // the `Agent` tool with no `model` argument: the configured
+      // `[secondary_model.models]` pool default when one exists, else the
+      // caller's own model.
+      const binding = resolveSubagentBinding(config, flags, {
+        modelAlias: callerData.modelAlias,
+        thinkingLevel: callerData.thinkingLevel,
+      });
       let child: IAgentScopeHandle;
       try {
         modelCatalog.get(binding.model);
