@@ -56,10 +56,7 @@ type LangSearchTier = (typeof LANGSEARCH_TIERS)[number];
 const RERANK_PROVIDERS = ['langsearch'] as const;
 type RerankProvider = (typeof RERANK_PROVIDERS)[number];
 
-const BRAVE_EXPERIMENTAL_FLAG = 'brave-search';
 const LANGSEARCH_EXPERIMENTAL_FLAG = 'langsearch-web-search';
-const BRAVE_EXPERIMENTAL_MESSAGE =
-  'Brave Search is experimental. Enable it in Settings → Experiments or set [experimental].brave-search = true.\n';
 const LANGSEARCH_EXPERIMENTAL_MESSAGE =
   'LangSearch web search is experimental. Enable it in Settings → Experiments or set [experimental].langsearch-web-search = true.\n';
 const V2_SELECTION_MESSAGE =
@@ -95,28 +92,27 @@ export async function handleSearchStatus(deps: SearchDeps): Promise<void> {
     harness.getExperimentalFeatures(),
   ]);
   const services = config.services ?? {};
-  const braveEnabled = isExperimentalEnabled(features, BRAVE_EXPERIMENTAL_FLAG);
   const langSearchEnabled = isExperimentalEnabled(features, LANGSEARCH_EXPERIMENTAL_FLAG);
   const selected = services.activeSearchProvider;
   deps.stdout.write(`Selected web search provider: ${selected ?? 'not selected'}\n`);
   deps.stdout.write(
-    `Active web search provider: ${activeBackend(services, braveEnabled, langSearchEnabled)}\n`,
+    `Active web search provider: ${activeBackend(services, langSearchEnabled)}\n`,
   );
 
   if (services.brave !== undefined) {
     deps.stdout.write(
-      `Brave: ${providerStatus(hasValue(services.brave.apiKey), braveEnabled, selected === 'brave')}\n`,
+      `Brave: ${providerStatus(hasValue(services.brave.apiKey), selected === 'brave')}\n`,
     );
   }
   const langsearch = services.langsearch;
   if (langsearch !== undefined) {
     deps.stdout.write(
-      `LangSearch: tier=${langsearch.tier ?? 'free'}  count=${String(langsearch.count ?? 10)}  status=${providerStatus(hasValue(langsearch.apiKey), langSearchEnabled, selected === 'langsearch')}\n`,
+      `LangSearch: tier=${langsearch.tier ?? 'free'}  count=${String(langsearch.count ?? 10)}  status=${providerStatus(hasValue(langsearch.apiKey), selected === 'langsearch', langSearchEnabled)}\n`,
     );
   }
   if (services.moonshotSearch !== undefined) {
     deps.stdout.write(
-      `Moonshot: ${providerStatus(hasMoonshotConfig(services), true, selected === 'moonshot')}\n`,
+      `Moonshot: ${providerStatus(hasMoonshotConfig(services), selected === 'moonshot')}\n`,
     );
   }
 
@@ -182,7 +178,6 @@ export async function handleSearchSetBrave(
 
   const harness = deps.getHarness();
   await harness.ensureConfigFile();
-  await requireExperimental(harness, deps, BRAVE_EXPERIMENTAL_FLAG, BRAVE_EXPERIMENTAL_MESSAGE);
   const config = await requireAtomicSelection(harness, deps);
   await replaceServices(harness, config, {
     brave: { apiKey: opts.apiKey, baseUrl: hasValue(opts.baseUrl) ? opts.baseUrl : undefined },
@@ -199,9 +194,7 @@ export async function handleSearchUse(deps: SearchDeps, provider: string): Promi
 
   const harness = deps.getHarness();
   await harness.ensureConfigFile();
-  if (provider === 'brave') {
-    await requireExperimental(harness, deps, BRAVE_EXPERIMENTAL_FLAG, BRAVE_EXPERIMENTAL_MESSAGE);
-  } else if (provider === 'langsearch') {
+  if (provider === 'langsearch') {
     await requireLangSearchExperimental(harness, deps);
   }
   const config = await requireAtomicSelection(harness, deps);
@@ -310,7 +303,6 @@ export function handleSearchLimits(deps: SearchDeps): void {
 
 function activeBackend(
   services: NonNullable<KimiConfig['services']>,
-  braveEnabled: boolean,
   langSearchEnabled: boolean,
 ): string {
   const selected = services.activeSearchProvider;
@@ -319,7 +311,6 @@ function activeBackend(
     if (hasMoonshotConfig(services)) return 'Moonshot (legacy fallback)';
     return 'not configured';
   }
-  if (selected === 'brave' && !braveEnabled) return 'unavailable (experimental feature disabled)';
   if (selected === 'langsearch' && !langSearchEnabled) {
     return 'unavailable (experimental feature disabled)';
   }
@@ -328,10 +319,10 @@ function activeBackend(
     : 'unavailable (incomplete configuration)';
 }
 
-function providerStatus(configured: boolean, flagEnabled: boolean, selected: boolean): string {
+function providerStatus(configured: boolean, selected: boolean, experimentalEnabled = true): string {
   const state = !configured
     ? 'incomplete configuration'
-    : !flagEnabled
+    : !experimentalEnabled
       ? 'experimental feature disabled'
       : 'configured';
   return `${state}${selected ? ', selected' : ''}`;

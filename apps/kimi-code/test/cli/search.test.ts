@@ -34,7 +34,6 @@ function makeContext(config?: KimiConfig): TestContext {
   const ensureConfigFile = vi.fn(async () => {});
   const getConfig = vi.fn(async () => resolvedConfig);
   const getExperimentalFeatures = vi.fn(async () => [
-    { id: 'brave-search', enabled: true },
     { id: 'langsearch-web-search', enabled: true },
   ]);
   const supportsAtomicSectionReplace = vi.fn(() => true);
@@ -150,7 +149,7 @@ describe('kimi search', () => {
     expect(context.stdout()).toContain('LangSearch web search cleared.');
   });
 
-  it('configures Brave atomically and preserves inactive providers and rerank', async () => {
+  it('configures and selects Brave without a Brave experimental feature entry', async () => {
     const context = makeContext({
       providers: {},
       services: {
@@ -209,26 +208,26 @@ describe('kimi search', () => {
     expect(context.replaceService).not.toHaveBeenCalled();
   });
 
-  it('reports selected, configured, disabled, and incomplete provider states', async () => {
+  it('reports Brave as configured without an experimental feature entry', async () => {
     const context = makeContext({
       providers: {},
       services: {
         activeSearchProvider: 'brave',
-        brave: {},
+        brave: { apiKey: 'brave-test' },
         langsearch: { apiKey: 'sk-langsearch', tier: 'tier2' },
       },
     });
     context.getExperimentalFeatures.mockResolvedValue([
-      { id: 'brave-search', enabled: false },
       { id: 'langsearch-web-search', enabled: true },
     ]);
 
     await handleSearchStatus(context.deps);
 
     expect(context.stdout()).toContain('Selected web search provider: brave');
-    expect(context.stdout()).toContain('Active web search provider: unavailable');
-    expect(context.stdout()).toContain('Brave: incomplete configuration, selected');
+    expect(context.stdout()).toContain('Active web search provider: Brave');
+    expect(context.stdout()).toContain('Brave: configured, selected');
     expect(context.stdout()).toContain('LangSearch: tier=tier2  count=10  status=configured');
+    expect(context.stdout()).not.toContain('experimental feature disabled');
   });
 
   it('uses legacy LangSearch precedence when no provider is selected', async () => {

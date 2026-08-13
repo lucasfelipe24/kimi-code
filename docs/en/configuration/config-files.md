@@ -409,9 +409,9 @@ Automatic extraction is a native engine-v2 capability that runs after each compl
 
 Alongside the backend tables, the `active_search_provider` field of `[services]` selects which backend serves [`WebSearch`](../reference/tools.md#web-tools): `brave`, `langsearch`, or `moonshot`.
 
-Brave search is enabled by default; just configure a `[services.brave]` API key and select it. Set `KIMI_CODE_EXPERIMENTAL_BRAVE_SEARCH=0` or `brave-search = false` under `[experimental]` to turn it off. LangSearch web search is still experimental and disabled by default: enable **LangSearch web search** under **Settings → Experiments**, set `KIMI_CODE_EXPERIMENTAL_LANGSEARCH_WEB_SEARCH=1`, or add `langsearch-web-search = true` under `[experimental]`. Moonshot search remains available when neither is the active provider. Brave search and explicit provider selection run on the default `agent-core-v2` engine only — the legacy engine (`KIMI_CODE_LEGACY_FLAG=1`) preserves the config but does not execute them.
+Brave Search is a native, non-experimental backend, but it is not selected automatically: configure a `[services.brave]` API key and explicitly select Brave with `active_search_provider = "brave"` or `kimi search set brave`. LangSearch web search is still experimental and disabled by default: enable **LangSearch web search** under **Settings → Experiments**, set `KIMI_CODE_EXPERIMENTAL_LANGSEARCH_WEB_SEARCH=1`, or add `langsearch-web-search = true` under `[experimental]`. Moonshot search remains available when neither is the active provider. On the default `agent-core-v2` engine, selecting a search provider is atomic: the selected backend must have a valid API key or its `WebSearch` implementation and specialized tools are unavailable; there is no fallback to another backend.
 
-When `active_search_provider` names a backend, that backend serves `WebSearch` with no fallback: if its credentials or experiment flag are missing, web search is simply unavailable. When `active_search_provider` is absent, the runtime keeps the legacy precedence — configured LangSearch (with its experiment enabled) first, then configured Moonshot, then the managed Kimi OAuth search service. Running `kimi search set brave` or `kimi search set langsearch` both configures the backend and selects it (writes `active_search_provider`), migrating older configs to explicit selection.
+When `active_search_provider` names a backend, that backend serves `WebSearch` with no fallback: if its credentials are missing, web search is simply unavailable. LangSearch also requires its experiment to be enabled. When `active_search_provider` is absent, the runtime keeps the legacy precedence — configured LangSearch (with its experiment enabled) first, then configured Moonshot, then the managed Kimi OAuth search service. Running `kimi search set brave` or `kimi search set langsearch` both configures the backend and selects it (writes `active_search_provider`), migrating older configs to explicit selection.
 
 In the TUI, **Settings → Web Search** shows the current search and rerank providers at the top. **Web search provider** only configures or edits Moonshot, LangSearch, or Brave — it preserves the current selection and does not switch the active backend. Use **Active web search provider** to explicitly switch which configured backend serves `WebSearch`, and **Rerank provider** to configure, enable, disable, edit, or remove semantic reranking independently. Configuring Moonshot can reuse the current Kimi Code OAuth login or configure an API key for the China or Global API region.
 
@@ -454,7 +454,7 @@ api_key = "sk-xxx"
 
 ### Brave Search
 
-`brave` calls the [Brave Search API](https://brave.com/search/api/). It is enabled by default; configure it from **Settings → Web Search** in the TUI, with `kimi search set brave`, or by editing `config.toml`. Running `kimi search set brave` also selects it (`active_search_provider = "brave"`); in the TUI, configure it under **Web search provider** first, then switch to it with **Active web search provider**. To turn the backend off, set `KIMI_CODE_EXPERIMENTAL_BRAVE_SEARCH=0` or add `brave-search = false` under `[experimental]`.
+`brave` calls the [Brave Search API](https://brave.com/search/api/). It is a native, non-experimental backend, but it requires explicit selection and a valid API key. Configure it from **Settings → Web Search** in the TUI, with `kimi search set brave`, or by editing `config.toml`. Running `kimi search set brave` also selects it (`active_search_provider = "brave"`); in the TUI, configure it under **Web search provider** first, then switch to it with **Active web search provider**.
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -470,7 +470,7 @@ active_search_provider = "brave"
 api_key = "YOUR_API_KEY"
 ```
 
-When Brave is the active backend, `WebSearch` is served by Brave, and engine v2 also makes a set of specialized Brave tools available (when Brave is selected, an API key is present, and the `brave-search` flag has not been turned off). See [Brave Search tools](../reference/tools.md#brave-search-tools) for the tool list. Provision an API key and review the per-endpoint rate limits from the official [Brave Search API dashboard](https://api-dashboard.search.brave.com/); pricing and quotas are set by Brave, not by Kimi Code.
+When Brave is the active backend and its API key is valid, `WebSearch` is served by Brave, and engine v2 also makes a set of specialized Brave tools available. See [Brave Search tools](../reference/tools.md#brave-search-tools) for the tool list. Provision an API key and review the per-endpoint rate limits from the official [Brave Search API dashboard](https://api-dashboard.search.brave.com/); pricing and quotas are set by Brave, not by Kimi Code.
 
 ### Semantic rerank
 

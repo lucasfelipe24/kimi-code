@@ -409,9 +409,9 @@ extraction_max_turns = 5
 
 除后端配置表外，`[services]` 的 `active_search_provider` 字段用于选择由哪个后端提供 [`WebSearch`](../reference/tools.md#网络类)：`brave`、`langsearch` 或 `moonshot`。
 
-Brave 搜索默认启用，只需配置 `[services.brave]` 的 API 密钥并选中它即可。设置 `KIMI_CODE_EXPERIMENTAL_BRAVE_SEARCH=0` 或在 `[experimental]` 下添加 `brave-search = false` 可将其关闭。LangSearch 网页搜索仍属于实验功能，默认关闭：可在 **Settings → Experiments** 中启用 **LangSearch web search**，设置 `KIMI_CODE_EXPERIMENTAL_LANGSEARCH_WEB_SEARCH=1`，或在 `[experimental]` 下添加 `langsearch-web-search = true`。未选中上述后端时，Moonshot 搜索仍可正常使用。Brave 搜索和显式供应商选择仅在默认的 `agent-core-v2` 引擎上执行——传统引擎（`KIMI_CODE_LEGACY_FLAG=1`）会保留配置但不会执行。
+Brave Search 是原生、非实验性的后端，但不会自动选中：请配置 `[services.brave]` API 密钥，并通过 `active_search_provider = "brave"` 或 `kimi search set brave` 显式选择 Brave。LangSearch 网页搜索仍属于实验功能，默认关闭：可在 **Settings → Experiments** 中启用 **LangSearch web search**，设置 `KIMI_CODE_EXPERIMENTAL_LANGSEARCH_WEB_SEARCH=1`，或在 `[experimental]` 下添加 `langsearch-web-search = true`。未选中上述后端时，Moonshot 搜索仍可正常使用。在默认的 `agent-core-v2` 引擎上，搜索后端的选择是原子的：选中的后端必须有有效 API 密钥，否则其 `WebSearch` 实现和专用工具都不可用，不会回退到其他后端。
 
-当 `active_search_provider` 指定某个后端时，`WebSearch` 由该后端提供且不做回退：如果它的凭据或实验 flag 缺失，网页搜索将不可用。当 `active_search_provider` 缺省时，运行时保持旧的优先级——先是已配置的 LangSearch（且其实验已启用），然后是已配置的 Moonshot，最后是托管的 Kimi OAuth 搜索服务。运行 `kimi search set brave` 或 `kimi search set langsearch` 会同时配置并选择该后端（写入 `active_search_provider`），从而把旧配置迁移到显式选择。
+当 `active_search_provider` 指定某个后端时，`WebSearch` 由该后端提供且不做回退：如果其凭据缺失，网页搜索将不可用。LangSearch 还要求启用其实验功能。当 `active_search_provider` 缺省时，运行时保持旧的优先级——先是已配置的 LangSearch（且其实验已启用），然后是已配置的 Moonshot，最后是托管的 Kimi OAuth 搜索服务。运行 `kimi search set brave` 或 `kimi search set langsearch` 会同时配置并选择该后端（写入 `active_search_provider`），从而把旧配置迁移到显式选择。
 
 在 TUI 的 **Settings → Web Search** 中，顶部会显示当前搜索和重排供应商。**Web search provider** 只用于配置或编辑 Moonshot、LangSearch 或 Brave——它会保留当前选择，不会切换当前后端。使用 **Active web search provider** 可显式切换由哪个已配置后端提供 `WebSearch`；使用 **Rerank provider** 可独立配置、启用、禁用、编辑或移除语义重排。配置 Moonshot 时，可以复用当前 Kimi Code OAuth 登录，也可以为中国区或全球区 API 配置密钥。
 
@@ -454,7 +454,7 @@ api_key = "sk-xxx"
 
 ### Brave Search
 
-`brave` 调用 [Brave Search API](https://brave.com/search/api/)。它默认启用；可以在 TUI 的 **Settings → Web Search** 中配置，也可以运行 `kimi search set brave` 或直接编辑 `config.toml`。运行 `kimi search set brave` 会同时选择它（`active_search_provider = "brave"`）；在 TUI 中，请先在 **Web search provider** 下完成配置，再用 **Active web search provider** 切换到它。如需关闭该后端，可设置 `KIMI_CODE_EXPERIMENTAL_BRAVE_SEARCH=0` 或在 `[experimental]` 下添加 `brave-search = false`。
+`brave` 调用 [Brave Search API](https://brave.com/search/api/)。它是原生、非实验性的后端，但需要显式选择和有效 API 密钥。可以在 TUI 的 **Settings → Web Search** 中配置，也可以运行 `kimi search set brave` 或直接编辑 `config.toml`。运行 `kimi search set brave` 会同时选择它（`active_search_provider = "brave"`）；在 TUI 中，请先在 **Web search provider** 下完成配置，再用 **Active web search provider** 切换到它。
 
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
@@ -470,7 +470,7 @@ active_search_provider = "brave"
 api_key = "YOUR_API_KEY"
 ```
 
-当 Brave 为当前后端时，`WebSearch` 由 Brave 提供，engine v2 还会提供一组专用的 Brave 工具（当 Brave 被选中、存在 API 密钥且 `brave-search` flag 未被关闭时）。工具列表见 [Brave Search 工具](../reference/tools.md#brave-search-工具)。请在官方 [Brave Search API 控制台](https://api-dashboard.search.brave.com/) 中申请 API 密钥并查看各端点的限流；定价和配额由 Brave 决定，而非 Kimi Code。
+当 Brave 为当前后端且 API 密钥有效时，`WebSearch` 由 Brave 提供，engine v2 还会提供一组专用的 Brave 工具。工具列表见 [Brave Search 工具](../reference/tools.md#brave-search-工具)。请在官方 [Brave Search API 控制台](https://api-dashboard.search.brave.com/) 中申请 API 密钥并查看各端点的限流；定价和配额由 Brave 决定，而非 Kimi Code。
 
 ### 语义重排
 

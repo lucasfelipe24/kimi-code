@@ -4,8 +4,9 @@
  * Resolves an explicitly selected Brave, LangSearch, or Moonshot backend from
  * the `services` config without fallback when that selection is unavailable.
  * Without a selector it preserves the legacy LangSearch → configured Moonshot
- * → managed OAuth precedence. Brave and LangSearch availability is gated
- * through `flag`; optional reranking remains independent of provider choice.
+ * → managed OAuth precedence. LangSearch availability is gated through `flag`;
+ * Brave availability is determined by its configuration, and optional reranking
+ * remains independent of provider choice.
  * Moonshot OAuth references are resolved through `auth`, managed provider data
  * through `provider`, config through `config`, host headers through `bootstrap`
  * and `agentIdentity`, and rerank providers through `auth/webSearch`. Bound at
@@ -30,7 +31,7 @@ import { IProviderService, type ProviderConfig } from '#/kosong/provider/provide
 import { isOAuthCatalogVendor } from '#/kosong/provider/providerDefinition';
 
 import { SERVICES_SECTION, type ServicesConfig } from '../configSection';
-import { BRAVE_SEARCH_FLAG_ID, LANGSEARCH_WEB_SEARCH_FLAG_ID } from './flag';
+import { LANGSEARCH_WEB_SEARCH_FLAG_ID } from './flag';
 import { BraveWebSearchProvider } from './providers/brave-web-search';
 import { LangSearchWebSearchProvider } from './providers/langsearch-web-search';
 import { MoonshotWebSearchProvider } from './providers/moonshot-web-search';
@@ -105,7 +106,6 @@ export class WebSearchProviderService implements IWebSearchProviderService {
   }
 
   private braveApiKey(services: ServicesConfig | undefined): string | undefined {
-    if (!this.flags.enabled(BRAVE_SEARCH_FLAG_ID)) return undefined;
     return nonEmptyString(services?.brave?.apiKey);
   }
 

@@ -59,7 +59,7 @@ Foreground mode blocks the current turn until the command completes or times out
 
 ### Brave Search tools
 
-When [Brave Search](../configuration/config-files.md#brave-search) is the active backend, `WebSearch` is served by Brave, and engine v2 makes a set of specialized tools available in the model's tool registry that map the other Brave Search API endpoints. They are offered only when Brave is selected (`active_search_provider = "brave"`) and an API key is present, unless the `brave-search` flag has been turned off — and only on the default `agent-core-v2` engine:
+When [Brave Search](../configuration/config-files.md#brave-search) is the active backend, `WebSearch` is served by Brave, and engine v2 makes a set of specialized tools available in the model's tool registry that map the other Brave Search API endpoints. They are offered only when Brave is explicitly selected (`active_search_provider = "brave"`) and a valid API key is present, and only on the default `agent-core-v2` engine:
 
 | Tool | Description |
 | --- | --- |

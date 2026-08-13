@@ -5,11 +5,9 @@ import { ScopeActivation, type ServicesAccessor } from '#/_base/di/instantiation
 import type { InstantiationService } from '#/_base/di/instantiationService';
 import { _clearScopedRegistryForTests, registerScopedService } from '#/_base/di/scope';
 import { createScopedTestHost, stubPair } from '#/_base/di/test';
-import { BRAVE_SEARCH_FLAG_ID } from '#/app/auth/webSearch/flag';
 import { IConfigService } from '#/app/config/config';
 import { IFeatureManager } from '#/app/feature/featureManager';
 import { FeatureManagerService } from '#/app/feature/featureManagerService';
-import { IFlagService } from '#/app/flag/flag';
 import { LifecycleScope } from '#/app/scopes';
 import { AgentToolContribution } from '#/agent/toolRegistry/toolContribution';
 import { IFeatureAssemblyService } from '#/features/featureAssembly';
@@ -18,12 +16,9 @@ import { IBraveSearchService } from '#/features/brave-search/braveSearch';
 import { BraveSearchFeature, braveSearchEnabled } from '#/features/brave-search/braveSearchFeature';
 import { _clearFeatureRecipesForTests, registerFeature } from '#/features/featureRegistry';
 
-function accessor(flag: boolean, services: unknown): ServicesAccessor {
+function accessor(services: unknown): ServicesAccessor {
   return {
     get(id) {
-      if (id === IFlagService) {
-        return { enabled: (flagId: string) => flag && flagId === BRAVE_SEARCH_FLAG_ID } as never;
-      }
       if (id === IConfigService) return { get: () => services } as never;
       throw new Error(`Unexpected service: ${String(id)}`);
     },
@@ -60,19 +55,14 @@ describe('BraveSearchFeature', () => {
     expect(BraveSearchFeature.name).toBe('brave-search');
   });
 
-  it('requires flag, explicit Brave selection, and a nonblank key', () => {
+  it('requires explicit Brave selection and a nonblank key', () => {
     const configured = { activeSearchProvider: 'brave', brave: { apiKey: ' key ' } };
-    expect(braveSearchEnabled(accessor(true, configured))).toBe(true);
-    expect(braveSearchEnabled(accessor(false, configured))).toBe(false);
+    expect(braveSearchEnabled(accessor(configured))).toBe(true);
     expect(
-      braveSearchEnabled(
-        accessor(true, { activeSearchProvider: 'moonshot', brave: { apiKey: 'key' } }),
-      ),
+      braveSearchEnabled(accessor({ activeSearchProvider: 'moonshot', brave: { apiKey: 'key' } })),
     ).toBe(false);
     expect(
-      braveSearchEnabled(
-        accessor(true, { activeSearchProvider: 'brave', brave: { apiKey: '   ' } }),
-      ),
+      braveSearchEnabled(accessor({ activeSearchProvider: 'brave', brave: { apiKey: '   ' } })),
     ).toBe(false);
   });
 
@@ -81,25 +71,15 @@ describe('BraveSearchFeature', () => {
       activeSearchProvider: 'brave',
       brave: { apiKey: 'key', baseUrl: 'https://brave.example/res/v1' },
     };
-    let flagEnabled = true;
     const config = {
       get: () => services,
     } as unknown as IConfigService;
-    const flag = {
-      enabled: (id: string) => flagEnabled && id === BRAVE_SEARCH_FLAG_ID,
-    } as unknown as IFlagService;
-    const host = createScopedTestHost([
-      stubPair(IConfigService, config),
-      stubPair(IFlagService, flag),
-    ]);
+    const host = createScopedTestHost([stubPair(IConfigService, config)]);
     const agent = host.child(LifecycleScope.Agent, 'main');
     const records = contributions(agent).items;
     const braveSearch = host.app.accessor.get(IBraveSearchService);
 
     expect(braveSearch.getClient()).toBeDefined();
-    flagEnabled = false;
-    expect(braveSearch.getClient()).toBeUndefined();
-    flagEnabled = true;
     services = { ...services, activeSearchProvider: 'moonshot' };
     expect(braveSearch.getClient()).toBeUndefined();
     services = {
@@ -129,7 +109,7 @@ describe('BraveSearchFeature', () => {
       ].toSorted(),
     );
     for (const record of records) {
-      expect(record.options.when?.(accessor(true, config.get('services')))).toBe(true);
+      expect(record.options.when?.(accessor(config.get('services')))).toBe(true);
       expect(agent.accessor.get(record.id).name).toBe(record.options.name);
     }
     host.dispose();

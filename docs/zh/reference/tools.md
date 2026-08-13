@@ -59,7 +59,7 @@
 
 ### Brave Search 工具
 
-当 [Brave Search](../configuration/config-files.md#brave-search) 为当前后端时，`WebSearch` 由 Brave 提供，engine v2 还会在模型的工具注册表中提供一组专用工具，映射其他 Brave Search API 端点。它们仅在 Brave 被选中（`active_search_provider = "brave"`）且存在 API 密钥时提供（除非 `brave-search` flag 已被关闭），且仅在默认的 `agent-core-v2` 引擎上：
+当 [Brave Search](../configuration/config-files.md#brave-search) 为当前后端时，`WebSearch` 由 Brave 提供，engine v2 还会在模型的工具注册表中提供一组专用工具，映射其他 Brave Search API 端点。它们仅在显式选中 Brave（`active_search_provider = "brave"`）且存在有效 API 密钥时提供，且仅在默认的 `agent-core-v2` 引擎上：
 
 | 工具 | 说明 |
 | --- | --- |

@@ -88,10 +88,7 @@ async function type(panel: MountedPanel, value: string): Promise<void> {
 
 describe('showWebSearchConfig', () => {
   beforeEach(() => {
-    setExperimentalFeatures([
-      { id: 'langsearch-web-search', enabled: true },
-      { id: 'brave-search', enabled: true },
-    ]);
+    setExperimentalFeatures([{ id: 'langsearch-web-search', enabled: true }]);
   });
 
   it('shows current provider state and configuration, activation, and rerank menus', async () => {
@@ -180,11 +177,7 @@ describe('showWebSearchConfig', () => {
     await pending;
   });
 
-  it('gates Brave behind its experimental flag without changing config', async () => {
-    setExperimentalFeatures([
-      { id: 'langsearch-web-search', enabled: true },
-      { id: 'brave-search', enabled: false },
-    ]);
+  it('configures Brave without an experimental feature entry', async () => {
     const { host, getMounted } = makeHost();
     const pending = showWebSearchConfig(host);
     await settle();
@@ -193,12 +186,13 @@ describe('showWebSearchConfig', () => {
     await input(getMounted()!, DOWN); // LangSearch
     await input(getMounted()!, DOWN); // Brave
     await input(getMounted()!, ENTER);
+    await type(getMounted()!, 'brave-test');
+    await input(getMounted()!, ENTER);
+    await input(getMounted()!, ENTER); // Default endpoint
     await pending;
 
-    expect(host.showNotice).toHaveBeenCalledWith(
-      'Enable “Brave Search” under Settings → Experiments before configuring Brave.',
-    );
-    expect(host.harness.replaceConfigSections).not.toHaveBeenCalled();
+    expect(host.harness.replaceConfigSections).toHaveBeenCalled();
+    expect(host.showNotice).not.toHaveBeenCalled();
   });
 
   it('configures Brave and atomically preserves the inactive providers', async () => {

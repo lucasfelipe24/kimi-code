@@ -19,11 +19,7 @@ import { Error2, ErrorCodes } from '#/errors';
 import { IAuthSummaryService, IOAuthService, IOAuthToolkit } from '#/app/auth/auth';
 import { AuthSummaryService, OAuthService } from '#/app/auth/authService';
 import { BraveClient } from '#/app/auth/brave/braveClient';
-import {
-  BRAVE_SEARCH_FLAG_ENV,
-  BRAVE_SEARCH_FLAG_ID,
-  braveSearchFlag,
-} from '#/app/auth/webSearch/flag';
+import '#/app/auth/webSearch/flag';
 import {
   SERVICES_SECTION,
   servicesFromToml,
@@ -823,33 +819,18 @@ describe('OAuthService', () => {
   });
 });
 
-describe('Brave Search flag', () => {
-  it('registers as an on-by-default search-provider flag', () => {
-    expect(braveSearchFlag).toEqual({
-      id: BRAVE_SEARCH_FLAG_ID,
-      title: 'Brave Search',
-      description: 'Use Brave Search as a configurable WebSearch backend.',
-      env: BRAVE_SEARCH_FLAG_ENV,
-      default: true,
-      surface: 'both',
-    });
-  });
-});
-
 describe('WebSearchProviderService', () => {
   let disposables: DisposableStore;
   let ix: TestInstantiationService;
   let providers: Record<string, ProviderConfig>;
   let servicesConfig: ServicesConfig | undefined;
   let resolveTokenProvider: ReturnType<typeof vi.fn>;
-  let braveFlagEnabled: boolean;
   let langSearchFlagEnabled: boolean;
 
   beforeEach(() => {
     disposables = new DisposableStore();
     providers = {};
     servicesConfig = undefined;
-    braveFlagEnabled = true;
     langSearchFlagEnabled = true;
     resolveTokenProvider = vi
       .fn()
@@ -878,12 +859,7 @@ describe('WebSearchProviderService', () => {
           get: ((domain: string) =>
             domain === SERVICES_SECTION ? servicesConfig : undefined) as IConfigService['get'],
         });
-        reg.defineInstance(
-          IFlagService,
-          stubFlag((id) =>
-            id === BRAVE_SEARCH_FLAG_ID ? braveFlagEnabled : langSearchFlagEnabled,
-          ),
-        );
+        reg.defineInstance(IFlagService, stubFlag(() => langSearchFlagEnabled));
         reg.define(IWebSearchProviderService, WebSearchProviderService);
         reg.define(IRerankService, RerankService);
       },
@@ -1122,20 +1098,6 @@ describe('WebSearchProviderService', () => {
     expect(headers.get('X-Custom')).toBe('yes');
   });
 
-  it('does not activate explicitly selected Brave while its flag is disabled', () => {
-    braveFlagEnabled = false;
-    servicesConfig = {
-      activeSearchProvider: 'brave',
-      brave: { apiKey: 'brave-key' },
-      langsearch: { apiKey: 'ls-key' },
-      moonshotSearch: { baseUrl: 'https://moonshot.example/search', apiKey: 'ms-key' },
-    };
-
-    const service = createService();
-    expect(service.hasWebSearchProvider()).toBe(false);
-    expect(service.getWebSearchProvider()).toBeUndefined();
-  });
-
   // --- LangSearch provider tests ---
 
   function langsearchFetchMock(
@@ -1167,12 +1129,6 @@ describe('WebSearchProviderService', () => {
 
   it('returns undefined when langsearch has no apiKey', () => {
     servicesConfig = { langsearch: { baseUrl: 'https://api.langsearch.com' } };
-    expect(createService().getWebSearchProvider()).toBeUndefined();
-  });
-
-  it('does not activate LangSearch while its experimental flag is disabled', () => {
-    langSearchFlagEnabled = false;
-    servicesConfig = { langsearch: { apiKey: 'ls-key' } };
     expect(createService().getWebSearchProvider()).toBeUndefined();
   });
 
@@ -1392,9 +1348,7 @@ describe('WebSearchProviderService', () => {
         get: ((domain: string) =>
           domain === SERVICES_SECTION ? servicesConfig : undefined) as IConfigService['get'],
       } as IConfigService,
-      stubFlag((id) =>
-        id === BRAVE_SEARCH_FLAG_ID ? braveFlagEnabled : langSearchFlagEnabled,
-      ),
+      stubFlag(() => langSearchFlagEnabled),
       { getRerankProvider: () => undefined } as IRerankService,
       notFrozen,
     );

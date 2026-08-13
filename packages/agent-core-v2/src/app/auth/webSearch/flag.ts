@@ -1,26 +1,15 @@
 /**
- * `auth/webSearch` domain — experimental search-provider flag contributions.
+ * `auth/webSearch` domain — experimental LangSearch provider contribution.
  *
- * Registers the Brave and LangSearch search-provider gates, including the
- * LangSearch semantic-rerank capability. Bound at App scope.
+ * Registers the LangSearch search-provider and semantic-rerank gate. Bound at
+ * App scope.
  */
 
 import { type FlagDefinitionInput, registerFlagDefinition } from '#/app/flag/flagRegistry';
 
-export const BRAVE_SEARCH_FLAG_ID = 'brave-search';
-export const BRAVE_SEARCH_FLAG_ENV = 'KIMI_CODE_EXPERIMENTAL_BRAVE_SEARCH';
 export const LANGSEARCH_WEB_SEARCH_FLAG_ID = 'langsearch-web-search';
 export const LANGSEARCH_WEB_SEARCH_FLAG_ENV =
   'KIMI_CODE_EXPERIMENTAL_LANGSEARCH_WEB_SEARCH';
-
-export const braveSearchFlag: FlagDefinitionInput = {
-  id: BRAVE_SEARCH_FLAG_ID,
-  title: 'Brave Search',
-  description: 'Use Brave Search as a configurable WebSearch backend.',
-  env: BRAVE_SEARCH_FLAG_ENV,
-  default: true,
-  surface: 'both',
-};
 
 export const langSearchWebSearchFlag: FlagDefinitionInput = {
   id: LANGSEARCH_WEB_SEARCH_FLAG_ID,
@@ -32,5 +21,4 @@ export const langSearchWebSearchFlag: FlagDefinitionInput = {
   surface: 'both',
 };
 
-registerFlagDefinition(braveSearchFlag);
 registerFlagDefinition(langSearchWebSearchFlag);

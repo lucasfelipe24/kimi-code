@@ -24,7 +24,6 @@ import { promptApiKey, promptBaseUrl } from './prompts';
 // ---------------------------------------------------------------------------
 
 const LANGSEARCH_EXPERIMENTAL_FLAG = 'langsearch-web-search';
-const BRAVE_EXPERIMENTAL_FLAG = 'brave-search';
 const ROOT_SEARCH_PROVIDER = 'search-provider';
 const ROOT_ACTIVE_PROVIDER = 'active-provider';
 const ROOT_RERANK_PROVIDER = 'rerank-provider';
@@ -119,15 +118,13 @@ async function showSearchProviderMenu(host: SlashCommandHost): Promise<void> {
       {
         value: 'brave',
         label: 'Brave',
-        description: isExperimentalFlagEnabled(BRAVE_EXPERIMENTAL_FLAG)
-          ? 'Use the Brave Search API.'
-          : 'Enable Brave Search under Settings → Experiments first.',
+        description: 'Use the Brave Search API.',
       },
     ],
   });
   if (!isSearchProviderChoice(selected)) return;
-  if (!isExperimentalFlagEnabled(searchProviderFlag(selected))) {
-    showSearchExperimentalNotice(host, selected);
+  if (selected === 'langsearch' && !isExperimentalFlagEnabled(LANGSEARCH_EXPERIMENTAL_FLAG)) {
+    showSearchExperimentalNotice(host);
     return;
   }
   if (!requireAtomicSelection(host)) return;
@@ -152,8 +149,8 @@ async function showActiveProviderMenu(host: SlashCommandHost): Promise<void> {
     })),
   });
   if (!isSearchProviderChoice(provider) || provider === services.activeSearchProvider) return;
-  if (!isExperimentalFlagEnabled(searchProviderFlag(provider))) {
-    showSearchExperimentalNotice(host, provider);
+  if (provider === 'langsearch' && !isExperimentalFlagEnabled(LANGSEARCH_EXPERIMENTAL_FLAG)) {
+    showSearchExperimentalNotice(host);
     return;
   }
   if (!isProviderComplete(services, provider)) {
@@ -349,7 +346,7 @@ async function removeSearchProvider(
 
 async function showRerankProviderMenu(host: SlashCommandHost): Promise<void> {
   if (!isExperimentalFlagEnabled(LANGSEARCH_EXPERIMENTAL_FLAG)) {
-    showSearchExperimentalNotice(host, 'langsearch');
+    showSearchExperimentalNotice(host);
     return;
   }
   const config = await host.harness.getConfig();
@@ -632,10 +629,7 @@ function currentProviderSummary(services: ServicesConfig): {
 } {
   const langSearchEnabled = isExperimentalFlagEnabled(LANGSEARCH_EXPERIMENTAL_FLAG);
   const selected = services.activeSearchProvider;
-  const searchUnavailable =
-    selected === undefined ||
-    !isExperimentalFlagEnabled(searchProviderFlag(selected)) ||
-    !isProviderComplete(services, selected);
+  const searchUnavailable = selected === undefined || !isProviderComplete(services, selected);
   const search = searchSummaryLine(services, selected);
 
   const rerank = services.rerank;
@@ -676,7 +670,7 @@ function searchSummaryLine(
 ): string {
   if (selected === undefined) return 'Current web search: not configured';
   const label = searchProviderLabel(selected);
-  if (!isExperimentalFlagEnabled(searchProviderFlag(selected))) {
+  if (selected === 'langsearch' && !isExperimentalFlagEnabled(LANGSEARCH_EXPERIMENTAL_FLAG)) {
     return `Current web search: ${label} selected, experimental feature disabled`;
   }
   if (!isProviderComplete(services, selected)) {
@@ -706,7 +700,7 @@ function providerAvailabilityDescription(
   services: ServicesConfig,
   provider: SearchProviderChoice,
 ): string {
-  if (!isExperimentalFlagEnabled(searchProviderFlag(provider))) {
+  if (provider === 'langsearch' && !isExperimentalFlagEnabled(LANGSEARCH_EXPERIMENTAL_FLAG)) {
     return 'Experimental feature disabled.';
   }
   if (!isProviderComplete(services, provider)) return 'Not completely configured.';
@@ -715,12 +709,6 @@ function providerAvailabilityDescription(
 
 function serviceKey(provider: SearchProviderChoice): 'moonshotSearch' | 'langsearch' | 'brave' {
   return provider === 'moonshot' ? 'moonshotSearch' : provider;
-}
-
-function searchProviderFlag(provider: SearchProvider): string | undefined {
-  if (provider === 'langsearch') return LANGSEARCH_EXPERIMENTAL_FLAG;
-  if (provider === 'brave') return BRAVE_EXPERIMENTAL_FLAG;
-  return undefined;
 }
 
 function searchProviderLabel(provider: SearchProvider): string {
@@ -733,16 +721,7 @@ function rerankProviderLabel(provider: RerankProviderChoice): string {
   return provider === 'langsearch' ? 'LangSearch' : provider;
 }
 
-function showSearchExperimentalNotice(
-  host: SlashCommandHost,
-  provider: SearchProviderChoice,
-): void {
-  if (provider === 'brave') {
-    host.showNotice(
-      'Enable “Brave Search” under Settings → Experiments before configuring Brave.',
-    );
-    return;
-  }
+function showSearchExperimentalNotice(host: SlashCommandHost): void {
   host.showNotice(
     'Enable “LangSearch web search” under Settings → Experiments before configuring LangSearch or rerank.',
   );
