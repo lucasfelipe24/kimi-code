@@ -72,8 +72,12 @@ export const ErrorCode = {
   TOOL_CALL_NOT_FOUND: 40416,
   /** 目录（models.dev catalog）中不存在该条目 */
   CATALOG_ENTRY_NOT_FOUND: 40417,
+  /** capability_id 不存在 */
+  CAPABILITY_NOT_FOUND: 40418,
+  /** plugin_id 不存在 */
+  PLUGIN_NOT_FOUND: 40419,
   /** memory id 不存在 */
-  MEMORY_NOT_FOUND: 40418,
+  MEMORY_NOT_FOUND: 40420,
 
   /** session 有正在进行的 prompt，拒绝新请求 */
   SESSION_BUSY: 40901,
@@ -122,6 +126,10 @@ export const ErrorCode = {
   PAGE_TOKEN_MISMATCH: 40922,
   /** 会话标题生成不可用（flag 未开 / 无 managed OAuth 登录 / 还没有 prompt / 后端失败） */
   SESSION_TITLE_UNAVAILABLE: 40923,
+  /** capability 正在安装中，拒绝并发安装 */
+  CAPABILITY_INSTALL_IN_PROGRESS: 40924,
+  /** 当前平台/架构不支持该 capability */
+  CAPABILITY_UNSUPPORTED: 40925,
   /** memory 写入需要受信任的 workspace（project scope） */
   MEMORY_TRUST_REQUIRED: 40926,
   /** memory 内容被拒绝（疑似凭证 / 敏感信息） */

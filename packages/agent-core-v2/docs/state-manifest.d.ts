@@ -62,7 +62,7 @@
 //     agentsMdReminder.known                          src/agent/agentsMdReminder/agentsMdReminderService.ts
 //     agentsMdReminder.seeded                         src/agent/agentsMdReminder/agentsMdReminderService.ts
 //     contextProjector.lastRepairSignature            src/agent/contextProjector/contextProjectorService.ts
-//     dateChange.seed                                 src/agent/dateChange/dateChangeService.ts
+//     dateChange.seed                                 src/features/dateChange/dateChangeService.ts
 //     externalHooks.stopHookContinuationUsed          src/agent/externalHooks/externalHooksService.ts
 //     fullCompaction.activeTurnId                     src/agent/fullCompaction/fullCompactionService.ts
 //     fullCompaction.compactionCountInTurn            src/agent/fullCompaction/fullCompactionService.ts
@@ -1000,12 +1000,6 @@ export interface AgentStateSnapshot {
   'agentsMdReminder.seeded': boolean;
   // src/agent/contextProjector/contextProjectorService.ts
   'contextProjector.lastRepairSignature': string | null;
-  // src/agent/dateChange/dateChangeService.ts
-  'dateChange.seed': /* DateDisclosure — packages/agent-core-v2/src/agent/dateChange/dateChangeService.ts */ {
-    readonly localDate: string;
-    readonly timeZone: string;
-    readonly renderGeneration: number;
-  } | undefined;
   // src/agent/externalHooks/externalHooksService.ts
   'externalHooks.stopHookContinuationUsed': boolean;
   // src/agent/fullCompaction/fullCompactionService.ts
@@ -1144,6 +1138,7 @@ export interface AgentStateSnapshot {
     readonly kind: 'agent';
     readonly agentId?: string;
     readonly subagentType?: string;
+    readonly parentToolCallId?: string;
     readonly model?: string;
     readonly thinkingEffort?: string;
     readonly taskId: string;
@@ -1232,6 +1227,12 @@ export interface AgentStateSnapshot {
   'usage.currentTurnId': number | undefined;
   // src/agent/workflow/workflowModeInjector.ts
   'workflow.wasActive': boolean;
+  // src/features/dateChange/dateChangeService.ts
+  'dateChange.seed': /* DateDisclosure — packages/agent-core-v2/src/features/dateChange/dateChangeService.ts */ {
+    readonly localDate: string;
+    readonly timeZone: string;
+    readonly renderGeneration: number;
+  } | undefined;
   // src/features/plan/injection/planModeInjection.ts
   'plan.wasActive': boolean;
 }

@@ -67,7 +67,7 @@ const config = withMermaid(defineConfig({
                 { text: 'Model Context Protocol', link: '/zh/customization/mcp' },
                 { text: 'Agent Skills', link: '/zh/customization/skills' },
                 { text: 'Plugins', link: '/zh/customization/plugins' },
-                { text: 'Agent 与子 Agent', link: '/zh/customization/agents' },
+                { text: 'Agent 与 subagent', link: '/zh/customization/agents' },
                 { text: 'Dynamic Workflows', link: '/zh/customization/workflows' },
                 { text: 'Hooks', link: '/zh/customization/hooks' },
                 { text: '自定义主题', link: '/zh/customization/themes' },
