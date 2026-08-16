@@ -264,9 +264,6 @@ export function wrapVisualModelError(
   );
 }
 
-export const VISUAL_MODEL_UNRESOLVABLE_MESSAGE =
-  '[visual_model].model could not be resolved through the model catalog';
-
 /**
  * Fail-loud startup validation of the `[visual_model]` section: when the
  * flag is on and `model` is set, it must name a configured `[models]` entry.
