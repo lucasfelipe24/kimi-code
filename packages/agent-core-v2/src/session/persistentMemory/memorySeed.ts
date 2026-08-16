@@ -3,12 +3,13 @@
  *
  * Defines `ISessionMemoryAccess`, the pure-data injection contract over the
  * workspace's effective memory catalog: list / create / update / forget plus a
- * change event, with no IO of its own — trust gating, precedence and
- * persistence all live on the Workspace-scope `IWorkspaceMemoryCatalog` this
- * seed projects. Seeded into the Session scope when the session is
- * materialized, so Agent-scope consumers (the `Memory` tool, later recall)
- * resolve memory access without reaching across into the Workspace scope.
- * Session-scoped.
+ * change event and an optional live trust read (the auto-extraction scope
+ * policy uses it to pick `project` vs `workspace`), with no IO of its own —
+ * trust gating, precedence and persistence all live on the Workspace-scope
+ * `IWorkspaceMemoryCatalog` this seed projects. Seeded into the Session scope
+ * when the session is materialized, so Agent-scope consumers (the `Memory`
+ * tool, later recall) resolve memory access without reaching across into the
+ * Workspace scope. Session-scoped.
  */
 
 import { createDecorator, type ServiceIdentifier } from '#/_base/di/instantiation';
@@ -34,6 +35,14 @@ export interface ISessionMemoryAccess {
   // same-id collision across scopes could be mutated/deleted in the wrong scope.
   update(scope: MemoryScope, id: string, patch: MemoryPatch): Promise<EffectiveMemory>;
   forget(scope: MemoryScope, id: string): Promise<void>;
+
+  /**
+   * Live read of the workspace trust state (auto-extraction scope policy uses
+   * it to decide `project` vs `workspace`; absent ⇒ treated as untrusted).
+   * Optional so hosts/tests that only need list/create/update/forget stay
+   * compatible.
+   */
+  readonly isTrusted?: () => boolean;
 
   readonly onDidChange: Event<void>;
 }

@@ -13,15 +13,25 @@
  * shrink (undo/clear/compaction) — no freeze, no full-history resend; skip only
  * on a SUCCESSFUL `Memory remember` (not a bare call / list / forget / failed
  * remember); the `extractionMaxTurns` config bound read via the service;
- * transcript-only input; the EMPTY-toolset + small maxOutputSize + timeout of
- * the default generation call; credential redaction and quarantine of drafts
- * that still look secret before truncation, including multi-pair `Cookie`
- * headers; automatic per-draft persistence, fail-closed catalog dedupe,
- * bounded deterministic retries of transient failures with eviction after the
- * attempt cap, terminal `MemoryError` rejections dropped without blocking
- * later turns, a failed generation boundary retried even when a later turn
- * succeeds with an explicit remember, and content-free telemetry (per-attempt
- * counts — a catalog-lookup failure reports zero failed drafts).
+ * transcript-only input; the EMPTY-toolset + large maxOutputSize + timeout of
+ * the default generation call; the empty-response fallback (a response that
+ * burned its budget on reasoning is re-requested once with a doubled budget,
+ * and a persistently empty response is a retryable failure, not a consumed
+ * span); the auto-extraction scope policy (never `user`; `project` falls back
+ * to `workspace` when the workspace is untrusted, `user` lands in `project`
+ * when trusted); subagent extraction (subagents mine their confined transcript
+ * into workspace/project only); the end-of-run flush (`run.ended` mines the
+ * tail a cancelled turn left behind) and the session close-flush coordinator
+ * (`SessionMemoryExtractFlushService` flushes every live agent on
+ * `onWillCloseSession`, bounded so close is never blocked); credential
+ * redaction and quarantine of drafts that still look secret before truncation,
+ * including multi-pair `Cookie` headers; automatic per-draft persistence,
+ * fail-closed catalog dedupe, bounded deterministic retries of transient
+ * failures with eviction after the attempt cap, terminal `MemoryError`
+ * rejections dropped without blocking later turns, a failed generation
+ * boundary retried even when a later turn succeeds with an explicit remember,
+ * and content-free telemetry (per-attempt counts — a catalog-lookup failure
+ * reports zero failed drafts).
  *
  * Run: `pnpm --filter @moonshot-ai/agent-core-v2 exec vitest run
  * test/agent/memoryExtract/memoryExtract.test.ts`.
@@ -31,7 +41,8 @@ import { ulid } from 'ulid';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { DisposableStore } from '#/_base/di/lifecycle';
-import { Emitter } from '#/_base/event';
+import { AsyncEmitter, Emitter, type IWaitUntil } from '#/_base/event';
+import type { IAgentScopeHandle, ISessionScopeHandle } from '#/_base/di/scope';
 import { createServices, type TestInstantiationService } from '#/_base/di/test';
 import { ILogService } from '#/_base/log/log';
 
@@ -51,17 +62,25 @@ import {
 } from '#/app/persistentMemory/configSection';
 import { MemoryError } from '#/app/persistentMemory/memoryStore';
 import { MemoryErrors } from '#/app/persistentMemory/errors';
+import { ISessionManager } from '#/app/sessionManager/sessionManager';
 import { ITelemetryService } from '#/app/telemetry/telemetry';
 import type { TelemetryProperties } from '#/app/telemetry/telemetry';
 import { createAssistantMessage } from '#/kosong/contract/message';
 import { emptyUsage } from '#/kosong/contract/usage';
-import { MAIN_AGENT_ID } from '#/session/agentLifecycle/agentLifecycle';
+import {
+  IAgentLifecycleService,
+  MAIN_AGENT_ID,
+} from '#/session/agentLifecycle/agentLifecycle';
+import { ISessionMemoryExtractFlushService } from '#/session/persistentMemory/memoryExtractFlush';
+import { SessionMemoryExtractFlushService } from '#/session/persistentMemory/memoryExtractFlushService';
 import { ISessionMemoryAccess } from '#/session/persistentMemory/memorySeed';
+import { ISessionContext } from '#/session/sessionContext/sessionContext';
 import type {
   EffectiveMemory,
   MemoryCreateInput,
   MemoryPatch,
 } from '#/workspace/persistentMemory/memoryCatalog';
+import type { SessionWillCloseEvent } from '#/workspace/sessionLifecycle/sessionLifecycle';
 import type { MemoryScope } from '#/app/persistentMemory/memoryStore';
 
 import {
@@ -117,6 +136,8 @@ class FakeMemoryAccess implements ISessionMemoryAccess {
     | ((input: MemoryCreateInput) => Promise<EffectiveMemory> | undefined)
     | undefined;
   listOverride: (() => Promise<readonly EffectiveMemory[]>) | undefined;
+  /** Live trust read, assigned per-suite so tests can flip trust. */
+  isTrusted: (() => boolean) | undefined;
 
   list(): Promise<readonly EffectiveMemory[]> {
     return this.listOverride?.() ?? Promise.resolve(this.memories);
@@ -149,21 +170,38 @@ class FakeMemoryAccess implements ISessionMemoryAccess {
   }
 }
 
+/** A scripted single response for the fake requester. */
+interface ScriptedReply {
+  readonly text?: string;
+  readonly think?: string;
+  readonly rawFinishReason?: string;
+}
+
 /** Fake LLM requester: records overrides, returns a scripted assistant reply. */
 class FakeLLMRequester implements IAgentLLMRequesterService {
   declare readonly _serviceBrand: undefined;
   readonly requests: AgentLLMRequestOverrides[] = [];
   replyText = '[]';
+  /** Consumed per request; when exhausted, `replyText` is used. */
+  scriptedReplies: ScriptedReply[] = [];
 
   prepareTurnConfig(): undefined {
     return undefined;
   }
   request(overrides?: AgentLLMRequestOverrides): Promise<AgentLLMRequestFinish> {
     this.requests.push(overrides ?? {});
-    return Promise.resolve({
-      message: createAssistantMessage([{ type: 'text', text: this.replyText }]),
+    const next = this.scriptedReplies.shift();
+    const parts: Array<{ type: 'text'; text: string } | { type: 'think'; think: string }> = [];
+    if (next?.think !== undefined) parts.push({ type: 'think', think: next.think });
+    if (next?.text !== undefined || (next === undefined && this.replyText !== '')) {
+      parts.push({ type: 'text', text: next?.text ?? this.replyText });
+    }
+    const finish: AgentLLMRequestFinish = {
+      message: createAssistantMessage(parts),
       usage: emptyUsage(),
-    });
+    };
+    if (next?.rawFinishReason !== undefined) finish.rawFinishReason = next.rawFinishReason;
+    return Promise.resolve(finish);
   }
   start(): never {
     throw new Error('not used');
@@ -229,6 +267,8 @@ describe('AgentMemoryExtractService', () => {
   let tracked: TrackedEvent[];
   let logLines: string[];
   let agentId: string;
+  /** Trust state the fake memory access reports to the extract service. */
+  let trusted: boolean;
 
   function build(): void {
     logLines = [];
@@ -272,6 +312,10 @@ describe('AgentMemoryExtractService', () => {
     eventBus.publish({ type: 'turn.ended', turnId: 1, reason });
   }
 
+  function runEnded(): void {
+    eventBus.publish({ type: 'run.ended' });
+  }
+
   function extractEvents(): TrackedEvent[] {
     return tracked.filter((event) => event.name === 'memory_extract');
   }
@@ -286,6 +330,8 @@ describe('AgentMemoryExtractService', () => {
     requester = new FakeLLMRequester();
     configValue = { ...DEFAULT_MEMORY_CONFIG };
     tracked = [];
+    trusted = false;
+    access.isTrusted = () => trusted;
     agentId = MAIN_AGENT_ID;
     build();
   });
@@ -544,21 +590,156 @@ describe('AgentMemoryExtractService', () => {
     });
   });
 
-  it('never installs the hook for a subagent', async () => {
+  it('extracts for a subagent too, writing only workspace/project and never user', async () => {
     agentId = 'agent-child';
     build();
     context.append(userMessage('how do I deploy the service'));
-    let calls = 0;
-    service().setExtractor(() => {
-      calls += 1;
-      return Promise.resolve([]);
-    });
+    service().setExtractor(() =>
+      Promise.resolve([
+        { scope: 'user', type: 'user', name: 'pref', description: 'd', body: 'subagent user draft' },
+        { scope: 'workspace', type: 'reference', name: 'ws', description: 'd', body: 'subagent ws draft' },
+      ]),
+    );
 
     endTurn();
     await service().whenIdle();
 
-    expect(calls).toBe(0);
-    expect(extractEvents()).toHaveLength(0);
+    // The subagent's confined transcript is mined; the model-proposed `user`
+    // draft is normalized away (the catalog's actor gate would reject a
+    // subagent → `user` write anyway).
+    expect(access.createCalls.map((call) => call.scope)).toEqual(['workspace', 'workspace']);
+  });
+
+  it('mines the remaining transcript on run.ended, including a cancelled turn tail', async () => {
+    context.append(userMessage('how do I deploy the service'));
+    context.append(assistantMessage('partial reply before the cancel'));
+    let calls = 0;
+    const excerpts: string[] = [];
+    service().setExtractor(({ excerpt }) => {
+      calls += 1;
+      excerpts.push(excerpt);
+      return Promise.resolve([]);
+    });
+
+    // A cancelled turn ends the run without a completed `turn.ended`; the
+    // `run.ended` flush must still mine the tail the turn left behind.
+    runEnded();
+    await service().whenIdle();
+
+    expect(calls).toBe(1);
+    expect(excerpts[0]).toContain('how do I deploy the service');
+
+    // A further `run.ended` without new content does not re-mine (the cursor
+    // already consumed the span).
+    runEnded();
+    await service().whenIdle();
+    expect(calls).toBe(1);
+  });
+
+  it('flush() retries queued drafts and awaits the trailing chain', async () => {
+    context.append(userMessage('how do I deploy the service'));
+    let storageFails = true;
+    access.createOverride = () =>
+      storageFails ? Promise.reject(new Error('storage unavailable')) : undefined;
+    service().setExtractor(() => Promise.resolve([DRAFT_ONE]));
+
+    endTurn();
+    await service().whenIdle();
+    expect(service().pendingDraftCountForTests()).toBe(1);
+
+    // A direct flush (session close / agent teardown) retries the queue even
+    // without a new completed turn.
+    storageFails = false;
+    await service().flush();
+
+    expect(service().pendingDraftCountForTests()).toBe(0);
+    expect(access.createCalls).toEqual([DRAFT_ONE, DRAFT_ONE]);
+  });
+
+  it('normalizes the model-proposed scope: never user; project falls back to workspace when untrusted', async () => {
+    trusted = false;
+    context.append(userMessage('how do I deploy the service'));
+    service().setExtractor(() =>
+      Promise.resolve([
+        { scope: 'user', type: 'user', name: 'pref', description: 'd', body: 'user draft' },
+        { scope: 'project', type: 'project', name: 'proj', description: 'd', body: 'project draft' },
+        { scope: 'workspace', type: 'reference', name: 'ws', description: 'd', body: 'ws draft' },
+      ]),
+    );
+
+    endTurn();
+    await service().whenIdle();
+
+    // Untrusted: `user` and `project` both land in `workspace` (project
+    // persistence requires trust); `workspace` stays as proposed.
+    expect(access.createCalls.map((call) => call.scope)).toEqual([
+      'workspace',
+      'workspace',
+      'workspace',
+    ]);
+  });
+
+  it('normalizes user to project in a trusted workspace; project stays project', async () => {
+    trusted = true;
+    context.append(userMessage('how do I deploy the service'));
+    service().setExtractor(() =>
+      Promise.resolve([
+        { scope: 'user', type: 'user', name: 'pref', description: 'd', body: 'user draft' },
+        { scope: 'project', type: 'project', name: 'proj', description: 'd', body: 'project draft' },
+        { scope: 'workspace', type: 'reference', name: 'ws', description: 'd', body: 'ws draft' },
+      ]),
+    );
+
+    endTurn();
+    await service().whenIdle();
+
+    expect(access.createCalls.map((call) => call.scope)).toEqual([
+      'project',
+      'project',
+      'workspace',
+    ]);
+  });
+
+  it('re-requests once with a doubled budget when the response is empty but carried reasoning', async () => {
+    requester.scriptedReplies = [
+      { think: 'reasoning burned the whole budget', rawFinishReason: 'length' },
+      { text: VALID_DRAFT_JSON },
+    ];
+    context.append(userMessage('how do I deploy the service'));
+
+    endTurn();
+    await service().whenIdle();
+
+    expect(requester.requests).toHaveLength(2);
+    expect(requester.requests[0]?.maxOutputSize).toBe(MEMORY_EXTRACT_MAX_OUTPUT_TOKENS);
+    expect(requester.requests[1]?.maxOutputSize).toBe(MEMORY_EXTRACT_MAX_OUTPUT_TOKENS * 2);
+    expect(access.createCalls).toHaveLength(1);
+    expect(extractEvents().at(-1)?.properties?.['outcome']).toBe('success');
+  });
+
+  it('treats a persistently empty response as a retryable failure (span not consumed)', async () => {
+    requester.scriptedReplies = [
+      { think: 'burned on reasoning', rawFinishReason: 'length' },
+      { think: 'still no content' },
+    ];
+    context.append(userMessage('how do I deploy the service'));
+
+    endTurn();
+    await service().whenIdle();
+
+    expect(requester.requests).toHaveLength(2);
+    expect(extractEvents().at(-1)?.properties?.['outcome']).toBe('error');
+    expect(access.createCalls).toHaveLength(0);
+
+    // The cursor did NOT advance: a later trigger re-examines the same span.
+    let reran = false;
+    service().setExtractor(() => {
+      reran = true;
+      return Promise.resolve([]);
+    });
+    endTurn();
+    await service().whenIdle();
+    expect(reran).toBe(true);
   });
 
   it('runs the default generation with an EMPTY toolset, small maxOutputSize, and transcript-only input', async () => {
@@ -788,6 +969,11 @@ describe('AgentMemoryExtractService', () => {
   });
 
   it('drops terminal MemoryError rejections without blocking later turns', async () => {
+    // The workspace is trusted, so the model-proposed `project` draft stays
+    // `project` (normalization only falls back to `workspace` when untrusted);
+    // the fake then simulates a catalog-side trust rejection to exercise the
+    // terminal-error drop path.
+    trusted = true;
     const rejected: MemoryExtractDraft = {
       scope: 'project',
       type: 'project',
@@ -1225,5 +1411,124 @@ describe('memoryExtract pure helpers', () => {
     expect(parseDraftsFromModelOutput('{"memories":[{"a":1},{"b":2}]}')).toHaveLength(2);
     expect(parseDraftsFromModelOutput('```json\n[{"a":1}]\n```')).toHaveLength(1);
     expect(parseDraftsFromModelOutput('not json at all')).toEqual([]);
+  });
+});
+
+describe('SessionMemoryExtractFlushService (session close flush)', () => {
+  let disposables: DisposableStore;
+  let ix: TestInstantiationService;
+  let extractService: AgentMemoryExtractService;
+  let access: FakeMemoryAccess;
+  let configValue: MemoryConfig;
+  let tracked: TrackedEvent[];
+  let logLines: string[];
+  let agentHandles: IAgentScopeHandle[];
+  let willClose: AsyncEmitter<SessionWillCloseEvent & IWaitUntil>;
+  let flush: () => Promise<void>;
+  let coordinator: SessionMemoryExtractFlushService;
+
+  function context(): IAgentContextMemoryService {
+    return ix.get(IAgentContextMemoryService);
+  }
+
+  beforeEach(() => {
+    disposables = new DisposableStore();
+    access = new FakeMemoryAccess();
+    configValue = { ...DEFAULT_MEMORY_CONFIG };
+    tracked = [];
+    logLines = [];
+    agentHandles = [];
+    willClose = new AsyncEmitter<SessionWillCloseEvent & IWaitUntil>();
+    const requester = new FakeLLMRequester();
+    ix = createServices(disposables, {
+      base: [registerContextMemoryServices],
+      strict: true,
+      additionalServices: (reg) => {
+        reg.defineInstance(ISessionMemoryAccess, access);
+        reg.defineInstance(IAgentLLMRequesterService, requester);
+        reg.defineInstance(
+          IAgentScopeContext,
+          makeAgentScopeContext({ agentId: MAIN_AGENT_ID, agentScope: 'agents/main' }),
+        );
+        reg.definePartialInstance(IConfigService, {
+          get: (<T,>() => configValue as T) as IConfigService['get'],
+        });
+        reg.definePartialInstance(ITelemetryService, {
+          track2: ((name: string, properties?: TelemetryProperties) => {
+            tracked.push({ name, properties });
+          }) as unknown as ITelemetryService['track2'],
+        });
+        reg.definePartialInstance(ILogService, {
+          debug: (message: unknown) => {
+            logLines.push(String(message));
+          },
+        });
+        reg.define(IAgentMemoryExtractService, AgentMemoryExtractService);
+        reg.definePartialInstance(ISessionManager, { onWillCloseSession: willClose.event });
+        reg.definePartialInstance(ISessionContext, { sessionId: 'session_1' });
+        reg.definePartialInstance(IAgentLifecycleService, { list: () => agentHandles });
+        reg.define(ISessionMemoryExtractFlushService, SessionMemoryExtractFlushService);
+      },
+    });
+    extractService = ix.get(IAgentMemoryExtractService) as AgentMemoryExtractService;
+    coordinator = ix.get(ISessionMemoryExtractFlushService) as SessionMemoryExtractFlushService;
+    flush = () => coordinator.flushAll();
+  });
+  afterEach(() => {
+    disposables.dispose();
+  });
+
+  function withMainAgent(): void {
+    agentHandles.push({
+      id: MAIN_AGENT_ID,
+      accessor: { get: () => extractService },
+    } as unknown as IAgentScopeHandle);
+  }
+
+  it('flushes every live agent when the session will-close event fires', async () => {
+    withMainAgent();
+    context().append(userMessage('how do I deploy the service'));
+    extractService.setExtractor(() => Promise.resolve([DRAFT_ONE]));
+
+    const event: SessionWillCloseEvent = {
+      sessionId: 'session_1',
+      handle: {} as ISessionScopeHandle,
+      reason: 'exit',
+    };
+    await willClose.fireAsync(event, new AbortController().signal);
+
+    // The close awaited the bounded flush: the remaining span was mined and
+    // persisted before any agent teardown.
+    expect(access.createCalls).toEqual([DRAFT_ONE]);
+  });
+
+  it('ignores the will-close event for a different session', async () => {
+    withMainAgent();
+    context().append(userMessage('how do I deploy the service'));
+    extractService.setExtractor(() => Promise.resolve([DRAFT_ONE]));
+
+    const event: SessionWillCloseEvent = {
+      sessionId: 'other-session',
+      handle: {} as ISessionScopeHandle,
+      reason: 'exit',
+    };
+    await willClose.fireAsync(event, new AbortController().signal);
+
+    expect(access.createCalls).toHaveLength(0);
+  });
+
+  it('never blocks close beyond the bound when an agent flush hangs', async () => {
+    withMainAgent();
+    // The agent-side generation would take 60s to time out on its own; the
+    // coordinator's own bound must win and release the close much sooner.
+    extractService.setTimeoutForTests(60_000);
+    coordinator.setTimeoutForTests(5);
+    context().append(userMessage('how do I deploy the service'));
+    extractService.setExtractor(() => new Promise<readonly MemoryExtractDraft[]>(() => {}));
+
+    const startedAt = Date.now();
+    await flush();
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+    expect(access.createCalls).toHaveLength(0);
   });
 });

@@ -19,7 +19,8 @@
  * continuation itself, so the loop only learns caught-or-not, while an
  * unclaimed or uncaught error fails the turn. Emits `turn.*` / delta
  * events through `event`, persists loop events through `contextMemory`, and
- * reads the step budget from `config`. The plain-data loop state
+ * reads the step budget from `config`. Publishes `turn.*` / `run.ended`
+ * events through `event`. The plain-data loop state
  * (`nextReservedTurnId`, `lastRequestTraceId`, `disposing`) is registered
  * into `agentState` (`IAgentStateService`) and read/written through it;
  * `pendingTurns` and `activeTurnJob` stay plain fields because a `TurnJob`
@@ -559,7 +560,25 @@ export class AgentLoopService extends Disposable implements IAgentLoopService {
       this.activeRequestTrace = undefined;
       this.lastRequestTraceId = undefined;
       this.pumpTurns();
+      // A completed turn's span is already mined by the extraction service's
+      // `turn.ended` (completed) handler; `run.ended` only needs to signal the
+      // tail a cancelled/failed turn left behind, so gate it on a non-completed
+      // end and keep completed-turn event streams unchanged.
+      if (result?.type !== 'completed') this.maybePublishRunEnded();
     }
+  }
+
+  /**
+   * The deterministic "run ended" moment: the last turn finished and `pumpTurns`
+   * left no pending turn, request, or held admission behind. Publishes
+   * `run.ended` on the agent `eventBus` so consumers (automatic memory
+   * extraction) can mine whatever the transcript still holds — the tail of a
+   * cancelled/failed turn that no completed `turn.ended` covered. Skipped while
+   * disposing: teardown has its own flush path.
+   */
+  private maybePublishRunEnded(): void {
+    if (this.disposing || this.hasPendingRequests()) return;
+    this.eventBus.publish({ type: 'run.ended' });
   }
 
   private resultFromTurnError(turn: Turn, error: unknown): TurnResult {
