@@ -49,6 +49,7 @@ import type { StreamingUIController } from '#/tui/controllers/streaming-ui';
 import { setExperimentalFeatures } from '#/tui/commands/experimental-flags';
 import { HelpPanelComponent } from '#/tui/components/dialogs/help-panel';
 import { handleFeedbackCommand } from '#/tui/commands/info';
+import { copyTextToClipboard } from '#/utils/clipboard/clipboard-text';
 import { openUrl } from '#/utils/open-url';
 import { createFeedbackArchivePath } from '../../src/feedback/archive';
 import { packageCodebase, scanCodebase } from '../../src/feedback/codebase';
@@ -98,6 +99,12 @@ vi.mock('../../src/feedback/archive', async (importOriginal) => {
 // /feedback opens GitHub Issues in a browser when submission fails — stub it
 // out so the test suite never spawns a browser window.
 vi.mock('#/utils/open-url', () => ({ openUrl: vi.fn() }));
+
+// Clipboard access spawns platform tools (pbcopy/wl-copy …) and emits OSC 52 —
+// stub it out so the suite never touches the real clipboard or stdout.
+vi.mock('#/utils/clipboard/clipboard-text', () => ({
+  copyTextToClipboard: vi.fn(async () => 'native'),
+}));
 
 const ESC = String.fromCodePoint(0x1b);
 const BEL = String.fromCodePoint(0x07);
@@ -2607,6 +2614,90 @@ command = "vim"
     expect(driver.state.queuedMessages).toEqual([{ text: 'queued message', agentId: 'main' }]);
     expect(driver.state.queueContainer.children.length).toBeGreaterThan(0);
     expect(harness.track).toHaveBeenCalledWith('input_queue', undefined);
+  });
+
+  it('queues a slash-skill activation while a turn is streaming (like any other input) and activates on drain', async () => {
+    const session = makeSession({
+      listSkills: vi.fn(async () => [
+        {
+          name: 'tower',
+          description: 'multi-agent tower mode',
+          path: 'builtin://tower',
+          source: 'builtin',
+          type: 'inline',
+        },
+      ]),
+    });
+    const { driver, harness } = await makeDriver(session);
+    await (
+      driver as unknown as { refreshSkillCommands(s: unknown): Promise<void> }
+    ).refreshSkillCommands(session);
+    driver.state.appState.streamingPhase = 'waiting';
+    harness.track.mockClear();
+
+    driver.handleUserInput('/tower refactor auth and ui');
+
+    expect(session.activateSkill).not.toHaveBeenCalled();
+    expect(driver.state.queuedMessages).toEqual([
+      {
+        text: '/tower refactor auth and ui',
+        agentId: 'main',
+        mode: 'skill',
+        skillName: 'tower',
+        skillArgs: 'refactor auth and ui',
+      },
+    ]);
+    expect(harness.track).toHaveBeenCalledWith('input_queue', undefined);
+
+    // Turn ends: the drain re-enters sendSkillActivation, which now fires.
+    driver.state.appState.streamingPhase = 'idle';
+    const queued = driver.state.queuedMessages[0]!;
+    driver.state.queuedMessages = [];
+    driver.sendQueuedMessage(session, queued);
+
+    expect(session.activateSkill).toHaveBeenCalledWith('tower', 'refactor auth and ui');
+  });
+
+  it('queues a slash-skill activation while compacting and activates it on drain', async () => {
+    const session = makeSession({
+      listSkills: vi.fn(async () => [
+        {
+          name: 'tower',
+          description: 'multi-agent tower mode',
+          path: 'builtin://tower',
+          source: 'builtin',
+          type: 'inline',
+        },
+      ]),
+    });
+    const { driver, harness } = await makeDriver(session);
+    await (
+      driver as unknown as { refreshSkillCommands(s: unknown): Promise<void> }
+    ).refreshSkillCommands(session);
+    driver.state.appState.isCompacting = true;
+    harness.track.mockClear();
+
+    driver.handleUserInput('/tower refactor auth and ui');
+
+    expect(session.activateSkill).not.toHaveBeenCalled();
+    expect(driver.state.queuedMessages).toEqual([
+      {
+        text: '/tower refactor auth and ui',
+        agentId: 'main',
+        mode: 'skill',
+        skillName: 'tower',
+        skillArgs: 'refactor auth and ui',
+      },
+    ]);
+    expect(driver.state.queueContainer.children.length).toBeGreaterThan(0);
+    expect(harness.track).toHaveBeenCalledWith('input_queue', undefined);
+
+    driver.state.appState.isCompacting = false;
+    const queued = driver.state.queuedMessages[0]!;
+    driver.state.queuedMessages = [];
+    driver.sendQueuedMessage(session, queued);
+
+    expect(session.activateSkill).toHaveBeenCalledWith('tower', 'refactor auth and ui');
   });
 
   it('steers fresh input while a goal is active even when the streaming phase is idle', async () => {
@@ -6439,6 +6530,14 @@ command = "vim"
           'Session forked (ses-fork). Still in the original session; switch to the fork via /sessions.',
         );
       });
+      expect(copyTextToClipboard).toHaveBeenCalledWith(
+        "cd '/tmp/proj-a' && kimi --resume 'ses-fork'",
+      );
+      const transcript = driver.state.transcriptContainer.render(120).join('\n');
+      expect(transcript).toContain(
+        "To enter the fork in a new process, run: cd '/tmp/proj-a' && kimi --resume 'ses-fork'",
+      );
+      expect(transcript).toContain('Command copied to clipboard');
       expect(driver.getCurrentSessionId()).toBe('ses-source');
       expect(source.close).not.toHaveBeenCalled();
       expect(forked.close).toHaveBeenCalledOnce();
@@ -6448,6 +6547,70 @@ command = "vim"
       expect(harness.resumeSession).not.toHaveBeenCalled();
     } finally {
       process.title = originalTitle;
+    }
+  });
+
+  it('still prints the fork resume command when the clipboard copy fails', async () => {
+    vi.mocked(copyTextToClipboard).mockRejectedValueOnce(new Error('no clipboard'));
+    const source = makeSession({ id: 'ses-source' });
+    const forked = makeSession({ id: 'ses-fork' });
+    const forkSession = vi.fn(async () => forked);
+    const { driver } = await makeDriver(source, { forkSession });
+
+    driver.handleUserInput('/fork');
+
+    await vi.waitFor(() => {
+      const transcript = driver.state.transcriptContainer.render(120).join('\n');
+      expect(transcript).toContain(
+        "To enter the fork in a new process, run: cd '/tmp/proj-a' && kimi --resume 'ses-fork'",
+      );
+      expect(transcript).toContain('Failed to copy command to clipboard');
+    });
+    expect(driver.getCurrentSessionId()).toBe('ses-source');
+  });
+
+  it('labels OSC 52 clipboard delivery as unverified after a fork', async () => {
+    vi.mocked(copyTextToClipboard).mockResolvedValueOnce('osc52');
+    const source = makeSession({ id: 'ses-source' });
+    const forked = makeSession({ id: 'ses-fork' });
+    const forkSession = vi.fn(async () => forked);
+    const { driver } = await makeDriver(source, { forkSession });
+
+    driver.handleUserInput('/fork');
+
+    await vi.waitFor(() => {
+      expect(driver.state.transcriptContainer.render(120).join('\n')).toContain(
+        'Command copied via terminal escape sequence (unverified)',
+      );
+    });
+    expect(driver.getCurrentSessionId()).toBe('ses-source');
+  });
+
+  it('prints a pushd-based fork resume command on Windows', async () => {
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    try {
+      const source = makeSession({ id: 'ses-source' });
+      const forked = makeSession({ id: 'ses-fork' });
+      const forkSession = vi.fn(async () => forked);
+      const { driver } = await makeDriver(source, { forkSession }, {
+        ...makeStartupInput(),
+        workDir: 'D:\\proj',
+      });
+
+      driver.handleUserInput('/fork');
+
+      // cmd.exe's `cd` does not switch drives; pushd works in cmd + PowerShell.
+      await vi.waitFor(() => {
+        expect(copyTextToClipboard).toHaveBeenCalledWith(
+          'pushd "D:\\proj" && kimi --resume "ses-fork"',
+        );
+      });
+      expect(driver.getCurrentSessionId()).toBe('ses-source');
+    } finally {
+      if (platformDescriptor !== undefined) {
+        Object.defineProperty(process, 'platform', platformDescriptor);
+      }
     }
   });
 
