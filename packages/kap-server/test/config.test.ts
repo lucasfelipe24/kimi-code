@@ -133,6 +133,17 @@ describe('server-v2 /api/v1/config', () => {
     ).not.toContain('provider/fastModel');
   });
 
+  it('POST { visual_model } persists the visual companion model and GET echoes it', async () => {
+    await boot();
+    const cfg = await patchConfig({
+      visual_model: { model: 'provider/vision' },
+    });
+    expect(cfg.visual_model).toMatchObject({ model: 'provider/vision' });
+
+    const after = await getConfig();
+    expect(after.visual_model).toMatchObject({ model: 'provider/vision' });
+  });
+
   it('POST { providers } converts fields of a provider id colliding with a map-valued key', async () => {
     await boot();
     await patchConfig({

@@ -20,6 +20,11 @@ import type { PendingExit, QueuedMessage, SteerInputItem } from '../types';
 import type { TUIState } from '../tui-state';
 import type { BtwPanelController } from './btw-panel';
 
+/** A Ctrl-S steer run: queued text items or a slash-skill activation. */
+type SteerRun =
+  | { readonly kind: 'text'; readonly items: SteerInputItem[] }
+  | { readonly kind: 'skill'; readonly skillName: string; readonly skillArgs: string };
+
 export interface EditorKeyboardHost {
   state: TUIState;
   session: Session | undefined;
@@ -36,11 +41,17 @@ export interface EditorKeyboardHost {
   readonly btwPanelController: BtwPanelController;
   steerMessage(session: Session, input: readonly SteerInputItem[]): void;
   steerSkillActivation(session: Session, skillName: string, skillArgs: string): void;
-  validateMediaCapabilities(extraction: {
+  /** Synchronous media-capability fast path — see {@link KimiTUI.mediaCapabilitiesFastPath}. */
+  mediaCapabilitiesFastPath(extraction: {
     hasMedia: boolean;
     imageAttachmentIds: readonly number[];
     videoAttachmentIds: readonly number[];
   }): boolean;
+  validateMediaCapabilities(extraction: {
+    hasMedia: boolean;
+    imageAttachmentIds: readonly number[];
+    videoAttachmentIds: readonly number[];
+  }): Promise<boolean>;
   recallLastQueued(): QueuedMessage | undefined;
   showError(msg: string): void;
   track(event: string, props?: Record<string, unknown>): void;
@@ -298,9 +309,6 @@ export class EditorKeyboardController {
       const queued = host.state.queuedMessages;
       const steerable = queued.filter((m) => m.mode !== 'bash');
 
-      type SteerRun =
-        | { readonly kind: 'text'; readonly items: SteerInputItem[] }
-        | { readonly kind: 'skill'; readonly skillName: string; readonly skillArgs: string };
       const runs: SteerRun[] = [];
       let textRun: SteerInputItem[] = [];
       const flushTextRun = (): void => {
@@ -344,32 +352,11 @@ export class EditorKeyboardController {
       flushTextRun();
 
       if (runs.length > 0) {
-        // The editor draft is fresh input: gate it on the model's media
-        // capabilities before splicing the queue, so a rejection leaves the
-        // queue and the draft untouched.
-        if (
-          editorExtraction !== undefined &&
-          !host.validateMediaCapabilities(editorExtraction)
-        ) {
-          return;
-        }
-        host.state.queuedMessages = queued.filter((m) => m.mode === 'bash');
-        if (!editorIsBash) editor.setText('');
-        const session = host.session;
-        if (host.state.appState.model.trim().length === 0 || session === undefined) {
-          host.showError(LLM_NOT_SET_MESSAGE);
-        } else {
-          for (const run of runs) {
-            if (run.kind === 'text') {
-              host.steerMessage(session, run.items);
-            } else {
-              host.steerSkillActivation(session, run.skillName, run.skillArgs);
-            }
-          }
-        }
+        void this.steerQueuedWithMediaGate(host, queued, runs, editorExtraction, editorIsBash);
+      } else {
+        host.updateQueueDisplay();
+        host.state.ui.requestRender();
       }
-      host.updateQueueDisplay();
-      host.state.ui.requestRender();
     };
 
     editor.onCtrlB = (): boolean => {
@@ -416,6 +403,47 @@ export class EditorKeyboardController {
     editor.onDownArrowEmpty = () => host.btwPanelController.scroll('down');
 
     editor.onPasteImage = async () => this.handleClipboardImagePaste();
+  }
+
+  /**
+   * Ctrl-S steer tail: fresh editor-draft input is gated on the model's media
+   * capabilities before splicing the queue, so a rejection leaves the queue
+   * and the draft untouched. Runs async because the gate consults the harness
+   * config (a `[visual_model]` companion lets a text-only model ship media).
+   */
+  private async steerQueuedWithMediaGate(
+    host: EditorKeyboardHost,
+    queued: readonly QueuedMessage[],
+    runs: readonly SteerRun[],
+    editorExtraction: ReturnType<typeof extractMediaAttachments> | undefined,
+    editorIsBash: boolean,
+  ): Promise<void> {
+    // The sync fast path keeps the common Ctrl-S case await-free (the async
+    // gate consults the harness config for the `[visual_model]` fallback only
+    // when the current model actually cannot consume the media).
+    if (
+      editorExtraction !== undefined &&
+      !host.mediaCapabilitiesFastPath(editorExtraction) &&
+      !(await host.validateMediaCapabilities(editorExtraction))
+    ) {
+      return;
+    }
+    host.state.queuedMessages = queued.filter((m) => m.mode === 'bash');
+    if (!editorIsBash) host.state.editor.setText('');
+    const session = host.session;
+    if (host.state.appState.model.trim().length === 0 || session === undefined) {
+      host.showError(LLM_NOT_SET_MESSAGE);
+    } else {
+      for (const run of runs) {
+        if (run.kind === 'text') {
+          host.steerMessage(session, run.items);
+        } else {
+          host.steerSkillActivation(session, run.skillName, run.skillArgs);
+        }
+      }
+    }
+    host.updateQueueDisplay();
+    host.state.ui.requestRender();
   }
 
   clearPendingExit(): void {
