@@ -26,14 +26,16 @@ import { IAgentStateService } from '#/agent/state/agentState';
 import { AgentStateService } from '#/agent/state/agentStateService';
 import { IAgentSystemReminderService } from '#/agent/systemReminder/systemReminder';
 import { AgentSystemReminderService } from '#/agent/systemReminder/systemReminderService';
+import { IEventBus } from '#/app/event/eventBus';
+import { IFeatureManager } from '#/app/feature/featureManager';
 import { IAgentTowerService } from '#/features/tower/tower';
 import {
   IAgentTowerModeInjection,
   TowerModeInjection,
 } from '#/features/tower/towerModeInjection';
-import { IEventBus } from '#/app/event/eventBus';
 import { IWireService } from '#/wire/wire';
 import { registerLogServices } from '../../_base/log/stubs';
+import { createTestAgent, type AgentTestContext } from '../../harness';
 import { registerContextMemoryServices, type StubContextMemory } from '../contextMemory/stubs';
 import {
   runWillBeginStepHooks,
@@ -556,5 +558,25 @@ describe('AgentContextInjectorService', () => {
 
     expect(context.get()).toHaveLength(1);
     expect(lastText(context)).toContain('surviving reminder');
+  });
+});
+
+describe('TowerFeature — tower-mode injection wiring', () => {
+  let ctx: AgentTestContext;
+
+  afterEach(async () => {
+    try {
+      await ctx.expectResumeMatches();
+    } finally {
+      await ctx.dispose();
+    }
+  });
+
+  it('materializes the injection provider through the feature seam', async () => {
+    ctx = createTestAgent();
+
+    const manager = ctx.get(IFeatureManager);
+    expect(manager.units().find((unit) => unit.name === 'tower')).toBeDefined();
+    expect(ctx.get(IAgentTowerModeInjection)).toBeInstanceOf(TowerModeInjection);
   });
 });

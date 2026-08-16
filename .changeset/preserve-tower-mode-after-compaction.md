@@ -1,5 +1,5 @@
 ---
-"@moonshot-ai/agent-core-v2": patch
+"@moonshot-ai/kimi-code": patch
 ---
 
-Preserve the active tower protocol reminder when conversation history is compacted.
+Keep tower-mode instructions active after context compaction.
