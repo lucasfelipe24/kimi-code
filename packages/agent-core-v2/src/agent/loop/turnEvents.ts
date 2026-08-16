@@ -74,7 +74,8 @@ export interface TurnEndedEvent {
  * consumer (automatic memory extraction) can mine whatever the last turn left
  * in the transcript — including the tail of a cancelled/failed turn that no
  * completed `turn.ended` covered. The engine never persists it to the wire
- * model; kap-server may journal/broadcast it as a session_event.
+ * model; kap-server classifies it as a volatile signal (live-only, never
+ * journaled or replayed as a session_event).
  */
 export interface RunEndedEvent {
   readonly type: 'run.ended';

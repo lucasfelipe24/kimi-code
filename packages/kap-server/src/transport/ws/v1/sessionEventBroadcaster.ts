@@ -1371,6 +1371,7 @@ const VOLATILE_SIGNAL_TYPES = [
   'shell.started',
   'shell.completed',
   'agent.status.updated',
+  'run.ended',
 ] as const;
 
 const volatileSignalTypeSet: ReadonlySet<string> = new Set(VOLATILE_SIGNAL_TYPES);
