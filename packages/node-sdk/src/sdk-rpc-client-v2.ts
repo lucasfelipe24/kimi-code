@@ -719,8 +719,9 @@ export class SDKRpcClientV2 extends SDKRpcClientBase {
 
   /**
    * v1's removal cascades: the provider entry, every model pointing at it,
-   * the default pointers when they dangle, and the `[secondary_model]`
-   * subagent pool entries (the section itself when its default dangles).
+   * the default pointers when they dangle, the `[secondary_model]`
+   * subagent pool entries (the section itself when its default dangles), and
+   * the `[visual_model]` section (when its model pointer dangles).
    * The engine's own `kosong.removeProvider` only clears the
    * default-provider pointer, so the full v1 cascade is computed from the
    * user-layer values (see `planProviderRemoval`) and persisted as ONE
@@ -730,19 +731,22 @@ export class SDKRpcClientV2 extends SDKRpcClientBase {
    */
   override async removeProvider(providerId: string): Promise<KimiConfig> {
     await this.configReady;
-    const [providers, models, defaultModel, defaultProvider, secondaryModel] = await Promise.all([
-      this.klient.global.config.inspect<Record<string, unknown>>('providers'),
-      this.klient.global.config.inspect<Record<string, Record<string, unknown>>>('models'),
-      this.klient.global.config.inspect<string>('defaultModel'),
-      this.klient.global.config.inspect<string>('defaultProvider'),
-      this.klient.global.config.inspect<Record<string, unknown>>('secondaryModel'),
-    ]);
+    const [providers, models, defaultModel, defaultProvider, secondaryModel, visualModel] =
+      await Promise.all([
+        this.klient.global.config.inspect<Record<string, unknown>>('providers'),
+        this.klient.global.config.inspect<Record<string, Record<string, unknown>>>('models'),
+        this.klient.global.config.inspect<string>('defaultModel'),
+        this.klient.global.config.inspect<string>('defaultProvider'),
+        this.klient.global.config.inspect<Record<string, unknown>>('secondaryModel'),
+        this.klient.global.config.inspect<Record<string, unknown>>('visualModel'),
+      ]);
     const plan = planProviderRemoval({
       providers: providers.userValue,
       models: models.userValue,
       defaultModel: defaultModel.userValue,
       defaultProvider: defaultProvider.userValue,
       secondaryModel: secondaryModel.userValue,
+      visualModel: visualModel.userValue,
       providerId,
     });
     const sections: Record<string, unknown> = {
@@ -759,6 +763,11 @@ export class SDKRpcClientV2 extends SDKRpcClientBase {
       // `null` clears the whole section; a replacement object folds the
       // filtered pool into the same atomic write.
       sections['secondaryModel'] = plan.secondaryModel ?? undefined;
+    }
+    if (plan.visualModel !== undefined) {
+      // `null` clears the whole section (its model pointer dangles); the
+      // section has no pool to filter, so a non-null plan is unchanged.
+      sections['visualModel'] = plan.visualModel ?? undefined;
     }
     await this.klient.global.config.replaceSections({ sections });
     return this.getConfig();

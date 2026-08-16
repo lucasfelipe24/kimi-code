@@ -259,6 +259,29 @@ kimi-for-coding-highspeed-deep = "同一模型的高 Thinking 档位。适合较
 
 配置错误一律直接报错，不做静默回退：`default_model` 缺失、不是池中 key，或池中 key 无法解析到已配置的 `[models]` 条目时，会话的创建、恢复（resume）与 fork 都会在启动时直接失败；`force` 未搭配 `default_model` 或与 `[secondary_model.models]` 表同用时亦然。别名 `primary` 是保留字——它始终绑定调用方自己的模型——不能作为池中 key。工具调用传入的 `model` 既不是池中别名也不是 `"primary"` 时，本次派生报错并列出可选值。
 
+## `visual_model`
+
+视觉模型是为**视觉类任务**单独配置的伴生模型——通常是一个具备视觉能力的模型，用来在主编码模型是纯文本时仍然能执行图像 / 截图 / 视频检查。它是默认绑定而非强制：视觉检查默认绑定所配置的视觉模型，执行视觉类工作的工具可以暴露 `model` 参数，仅接受 `"visual"`（已配置的视觉模型）与 `"primary"`（调用方自己的模型）两个符号值——与 subagent 模型选择的形态一致。未设置时行为不变：视觉任务绑定调用方模型。
+
+该节默认开启（native——无需设置任何环境变量即可生效）。要关闭它，设置 `KIMI_CODE_EXPERIMENTAL_VISUAL_MODEL=false`，或在 `[experimental]` 下添加 `visual-model = false`；关闭时 `[visual_model]` 不生效，视觉任务回退到调用方模型。
+
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `model` | `string` | — | [`[models]`](#models) 中已配置条目的别名，如 `kimi-code/kimi-vision`（不限 kimi 模型，可用任意供应商）。应选择具备视觉能力的条目（其 `capabilities` 列出 `image_in` 和/或 `video_in`） |
+| `default_effort` | `string` | — | 视觉任务绑定视觉模型时使用的 thinking effort。未设置时按"全局 `[thinking]` 配置 → 模型默认 effort"的链路解析，不再继承主 Agent 的 effort。与主模型的 thinking effort 语义一致：严格校验 effort 的模型（如 kimi 模型）在不支持该取值时回退到模型默认 effort，其他供应商的模型按原样发送给后端 |
+| 其他字段 | — | — | 接受 [`[models."<alias>".overrides]`](#模型覆盖项) 的全部字段（`max_context_size`、`max_output_size`、`support_efforts` 等），作为仅对视觉任务生效的模型补丁 |
+
+```toml
+[visual_model]
+model = "kimi-code/kimi-vision"
+default_effort = "low"
+max_output_size = 8192
+```
+
+`model` / `default_effort` 可被环境变量 `KIMI_VISUAL_MODEL` / `KIMI_VISUAL_EFFORT` 覆盖，优先级均高于配置文件。环境变量生效期间不会泄漏进 `config.toml`——写入时会恢复未受环境变量影响的原始值。
+
+配置错误一律直接报错，不做静默回退：`model` 已设置但无法解析到已配置的 `[models]` 条目时，会话的创建、恢复（resume）与 fork 都会在启动时直接失败。
+
 ## `thinking`
 
 `thinking` 设置 Thinking 模式的全局默认行为。

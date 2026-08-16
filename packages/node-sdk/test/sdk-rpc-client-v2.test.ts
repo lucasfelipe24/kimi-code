@@ -766,6 +766,45 @@ key = "${titleOAuthRef.key}"
     }
   });
 
+  it('cascades removeProvider into the visual_model section', async () => {
+    const { harness } = await makeHarness();
+    try {
+      await harness.setConfig({
+        providers: {
+          a: { type: 'openai', baseUrl: 'https://a.example.test/v1', apiKey: 'sk-a' },
+          b: { type: 'openai', baseUrl: 'https://b.example.test/v1', apiKey: 'sk-b' },
+        },
+        models: {
+          'a/m1': { provider: 'a', model: 'm1', maxContextSize: 100 },
+          'b/m1': { provider: 'b', model: 'm1', maxContextSize: 100 },
+        },
+        visualModel: { model: 'a/m1', default_effort: 'low' },
+      } as never);
+
+      // A surviving pointer keeps the section in the same atomic write.
+      const kept = await harness.removeProvider('b');
+      expect((kept as KimiConfig & { visualModel?: Record<string, unknown> }).visualModel).toEqual({
+        model: 'a/m1',
+        default_effort: 'low',
+      });
+
+      // When the pointed model is removed the whole section is dropped.
+      await harness.setConfig({
+        visualModel: { model: 'a/m1' },
+      } as never);
+      const cleared = await harness.removeProvider('a');
+      expect(
+        (cleared as KimiConfig & { visualModel?: Record<string, unknown> }).visualModel,
+      ).toBeUndefined();
+      const reread = await harness.getConfig({ reload: true });
+      expect(
+        (reread as KimiConfig & { visualModel?: Record<string, unknown> }).visualModel,
+      ).toBeUndefined();
+    } finally {
+      await harness.close();
+    }
+  });
+
   it('replaces config sections atomically and clears undefined sections', async () => {
     const { harness } = await makeHarness();
     try {
@@ -1264,6 +1303,38 @@ describe('removeProviderFromConfig', () => {
     const next = removeProviderFromConfig(config, 'b');
 
     expect(next.secondaryModel).toEqual({ defaultModel: 'a/m1' });
+  });
+
+  it('drops the visual_model section when its model pointer dangles', () => {
+    const config = {
+      providers: { a: { type: 'openai' }, b: { type: 'openai' } },
+      models: {
+        'a/m1': { provider: 'a', model: 'm1', maxContextSize: 100 },
+        'b/m1': { provider: 'b', model: 'm1', maxContextSize: 100 },
+      },
+      visualModel: { model: 'b/m1', default_effort: 'low' },
+    } as unknown as KimiConfig;
+
+    const next = removeProviderFromConfig(config, 'b');
+
+    expect((next as KimiConfig & { visualModel?: Record<string, unknown> }).visualModel).toBeUndefined();
+  });
+
+  it('leaves the visual_model section untouched when its pointer survives', () => {
+    const config = {
+      providers: { a: { type: 'openai' }, b: { type: 'openai' } },
+      models: {
+        'a/m1': { provider: 'a', model: 'm1', maxContextSize: 100 },
+        'b/m1': { provider: 'b', model: 'm1', maxContextSize: 100 },
+      },
+      visualModel: { model: 'a/m1' },
+    } as unknown as KimiConfig;
+
+    const next = removeProviderFromConfig(config, 'b');
+
+    expect((next as KimiConfig & { visualModel?: Record<string, unknown> }).visualModel).toEqual({
+      model: 'a/m1',
+    });
   });
 });
 
