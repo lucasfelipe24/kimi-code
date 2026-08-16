@@ -1,35 +1,24 @@
 /**
  * `persistentMemory` domain — `IAgentMemoryExtractService` implementation.
  *
- * Owns automatic end-of-turn memory extraction (plan §6). Subscribes to
- * `turn.ended` on the per-agent `eventBus` and acts ONLY on `reason:
- * 'completed'` turns (a cancelled/failed/blocked turn is not mined). Persistent
- * memory and automatic extraction are native, and extraction runs only for the
- * MAIN agent (`scopeContext`). Each run reads the CURRENT turn transcript from
- * `contextMemory` (never file reads), skips when the main agent already
- * SUCCESSFULLY wrote memory this turn (a `Memory remember` correlated to a
- * non-error result), builds a redacted, byte-capped, turn-bounded excerpt, and
- * generates drafts through the installed `MemoryExtractor` — the default being a
- * DIRECT `llmRequester` call with an EMPTY toolset, a small `maxOutputSize`, and
- * a real timeout/abort. It SERIALIZES completed transcript boundaries (≤1 run in
- * flight per scope) and keeps a transcript CURSOR that only advances after a
- * successful run and is REBASED on `context.spliced` so a
- * clear/undo/compaction shrink never freezes it or re-sends all history. Drafts
- * are sanitized/redacted/quarantined and deduped, then PROPOSED (not persisted):
- * they land as pending proposals (globally capped, oldest evicted) and fire a
- * CONTENT-FREE `onDidProposeMemory` notice (ids + count only). A run emits
- * `memory_extract` with `written_count: 0` (a proposal is not a write); the
- * explicit `commitProposal` writes through the trust-gated catalog and emits
- * `memory_write`. Bound at Agent scope, activated on scope creation so the hook
- * is armed before the first turn.
+ * Owns automatic end-of-turn memory extraction. Subscribes to `turn.ended` on
+ * the per-agent `eventBus` and acts only on completed turns. For the main agent,
+ * it reads the current transcript from `contextMemory`, skips a span after a
+ * successful explicit `Memory remember`, and sends only a redacted, byte-capped,
+ * turn-bounded excerpt to the installed `MemoryExtractor` or tool-free
+ * `llmRequester` call. It serializes completed transcript boundaries and rebases
+ * its cursor across `context.spliced`. Sanitized, redacted, quarantined, deduped
+ * drafts are persisted individually through `sessionMemoryAccess`; a failure is
+ * isolated to its draft so later drafts still write. A failed draft is retried
+ * deterministically from a bounded in-memory queue on a later completed turn;
+ * terminal `MemoryError` rejections are dropped so they never block future
+ * extraction. Reports only content-free counts and aggregate outcome through
+ * `telemetry`. Bound at Agent scope.
  */
-
-import { ulid } from 'ulid';
 
 import { Disposable, MutableDisposable } from '#/_base/di/lifecycle';
 import { LifecycleScope } from '#/app/scopes';
 import { ScopeActivation, registerScopedService } from '#/_base/di/scope';
-import { Emitter } from '#/_base/event';
 import { ILogService } from '#/_base/log/log';
 
 import { IAgentContextMemoryService } from '#/agent/contextMemory/contextMemory';
@@ -54,21 +43,27 @@ import {
   DEFAULT_MEMORY_EXTRACT_TIMEOUT_MS,
   IAgentMemoryExtractService,
   MEMORY_EXTRACT_MAX_OUTPUT_TOKENS,
-  MEMORY_EXTRACT_MAX_PENDING,
   MEMORY_EXTRACT_SYSTEM_PROMPT,
   buildTranscriptExcerpt,
   hadSuccessfulRemember,
+  memoryDraftDedupeKey,
   parseDraftsFromModelOutput,
-  proposalDedupeKey,
   rebaseCursor,
   resolveExtractCaps,
   sanitizeDrafts,
   type MemoryExtractCaps,
   type MemoryExtractDraft,
   type MemoryExtractor,
-  type MemoryProposal,
-  type MemoryProposalNotice,
 } from './memoryExtract';
+
+/**
+ * Every registered `MemoryError` code declares `retryable: false` (trust, scope
+ * full, content rejected, …), so any `MemoryError` is terminal; only unknown
+ * (transient) failures are worth a deterministic retry.
+ */
+function isTerminalMemoryError(error: unknown): boolean {
+  return error instanceof MemoryError;
+}
 
 export class AgentMemoryExtractService extends Disposable implements IAgentMemoryExtractService {
   declare readonly _serviceBrand: undefined;
@@ -80,10 +75,16 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
   /** Coalescing: a single in-flight run per scope and completed transcript boundaries. */
   private running: Promise<void> | undefined;
   private completedBoundaries: number[] = [];
+  /** A completed turn landed while a run was in flight (a justified retry trigger). */
+  private boundaryPushedDuringRun = false;
+
+  /** Sanitized drafts awaiting another catalog-checked persistence attempt. */
+  private pendingDrafts: MemoryExtractDraft[] = [];
 
   /**
-   * The cursor: transcript length already extracted. Only advances after a
-   * SUCCESSFUL run; rebased on `context.spliced` so a shrink never freezes it.
+   * The cursor: transcript length already mined. Advances once a span's
+   * generation and persistence attempt completes (per-draft failures stay in
+   * `pendingDrafts`); rebased on `context.spliced` so a shrink never freezes it.
    */
   private cursor = 0;
 
@@ -98,11 +99,6 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
 
   /** Test-only override for the generation timeout. */
   private timeoutMs = DEFAULT_MEMORY_EXTRACT_TIMEOUT_MS;
-
-  private proposals: MemoryProposal[] = [];
-  private readonly commits = new Map<string, Promise<string | undefined>>();
-  private readonly proposeEmitter = this._register(new Emitter<MemoryProposalNotice>());
-  readonly onDidProposeMemory = this.proposeEmitter.event;
 
   private readonly runAbort = this._register(new MutableDisposable());
 
@@ -158,10 +154,6 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
     };
   }
 
-  pendingProposals(): readonly MemoryProposal[] {
-    return [...this.proposals];
-  }
-
   /** Test seam: shrink the generation timeout so the timeout path is fast. */
   setTimeoutForTests(ms: number): void {
     this.timeoutMs = ms;
@@ -193,7 +185,14 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
    */
   private onTurnEnded(): void {
     this.completedBoundaries.push(this.context.get().length);
-    if (this.running === undefined) this.running = this.runChain();
+    if (this.running === undefined) {
+      this.running = this.runChain();
+    } else {
+      // A completed turn landed while a run was in flight: remember it so the
+      // chain, once it finishes, gives the queued boundaries another attempt
+      // even if the in-flight run failed.
+      this.boundaryPushedDuringRun = true;
+    }
   }
 
   private async runChain(): Promise<void> {
@@ -202,30 +201,42 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
         const boundary = this.completedBoundaries[0];
         if (boundary === undefined) return;
         const succeeded = await this.runOnce(boundary);
-        if (!succeeded) return;
+        if (!succeeded) {
+          // Keep the failed boundary queued: a later completed turn is the retry
+          // trigger. Never busy-loop on a failure inside this chain.
+          break;
+        }
         this.completedBoundaries.shift();
       }
     } finally {
       this.running = undefined;
+      if (this.completedBoundaries.length > 0 && this.boundaryPushedDuringRun) {
+        this.boundaryPushedDuringRun = false;
+        this.running = this.runChain();
+      }
     }
   }
 
   private async runOnce(boundary: number): Promise<boolean> {
+    const caps = this.resolveCaps();
+    if (this.pendingDrafts.length > 0) {
+      const retry = await this.retryPendingDrafts(caps);
+      if (!retry.succeeded) return false;
+    }
+
     const messages = this.context.get().slice(0, boundary);
     if (messages.length <= this.cursor) {
-      // Nothing new since the last successful extraction.
       return true;
     }
 
-    const caps = this.resolveCaps();
     const newSpan = messages.slice(this.cursor);
-
-    // Skip (and advance the cursor) when the main agent already SUCCESSFULLY
-    // wrote memory in the new span: defer to the explicit write.
     if (hadSuccessfulRemember(newSpan)) {
       this.telemetry.track2('memory_extract', {
         turn_count: 0,
+        draft_count: 0,
         written_count: 0,
+        persisted_count: 0,
+        failed_count: 0,
         outcome: 'skipped',
       });
       this.cursor = messages.length;
@@ -233,29 +244,26 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
     }
 
     const excerpt = buildTranscriptExcerpt(messages, caps.maxTurns, caps.maxExcerptBytes);
-    if (excerpt.turnCount === 0 || excerpt.text.length === 0) {
+    if (excerpt.quarantined || looksLikeSecret(excerpt.text)) {
+      this.log.debug('memory extract: excerpt quarantined by pre-send secret gate');
       this.telemetry.track2('memory_extract', {
         turn_count: excerpt.turnCount,
+        draft_count: 0,
         written_count: 0,
+        persisted_count: 0,
+        failed_count: 0,
         outcome: 'skipped',
       });
       this.cursor = messages.length;
       return true;
     }
-
-    // SECURITY PRE-SEND GATE: the deny-list redaction is best-effort, so the
-    // excerpt may still carry a credential-shaped blob the deny-list missed. If
-    // the fail-safe `looksLikeSecret` fires, DROP the span entirely — never send
-    // it to the LLM. We ADVANCE the cursor over this span (skip outcome): the
-    // content is unchanged, so re-examining it would only re-trigger the same
-    // block on every future turn (a hot loop) and keep the suspicious text
-    // resident; biasing toward "skip once" avoids repeating/exfiltrating it.
-    // Telemetry stays counts-only and never carries the content.
-    if (looksLikeSecret(excerpt.text)) {
-      this.log.debug('memory extract: excerpt quarantined by pre-send secret gate');
+    if (excerpt.turnCount === 0 || excerpt.text.length === 0) {
       this.telemetry.track2('memory_extract', {
         turn_count: excerpt.turnCount,
+        draft_count: 0,
         written_count: 0,
+        persisted_count: 0,
+        failed_count: 0,
         outcome: 'skipped',
       });
       this.cursor = messages.length;
@@ -263,40 +271,41 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
     }
 
     const controller = new AbortController();
-    this.runAbort.value = { dispose: () =>{  controller.abort(); } };
-    const timer = setTimeout(() =>{  controller.abort(); }, this.timeoutMs);
-    // Anchor the consumed length logically so a shrink/clear+append mid-request
-    // rebases it (via context.spliced) instead of the completion writing back a
-    // stale numeric cursor and swallowing the new content.
+    this.runAbort.value = { dispose: () => { controller.abort(); } };
+    const timer = setTimeout(() => { controller.abort(); }, this.timeoutMs);
     this.runAnchor = messages.length;
 
     try {
       const rawDrafts = await this.generate(excerpt.text, excerpt.turnCount, controller.signal);
-      const drafts = sanitizeDrafts(rawDrafts, caps);
-      const proposed = this.propose(drafts);
-      // A proposal is NOT a write: written_count is always 0 for a run.
-      this.telemetry.track2('memory_extract', {
-        turn_count: excerpt.turnCount,
-        written_count: 0,
-        outcome: 'success',
-      });
-      if (proposed.length > 0) {
-        this.proposeEmitter.fire({
-          ids: proposed.map((proposal) => proposal.id),
-          count: proposed.length,
+      const sanitized = sanitizeDrafts(rawDrafts, caps);
+      let drafts: readonly MemoryExtractDraft[];
+      try {
+        drafts = await this.dedupeDrafts(sanitized);
+      } catch {
+        this.pendingDrafts = this.limitDrafts(sanitized, caps.maxDraftsPerRun);
+        this.trackExtractResult(excerpt.turnCount, sanitized.length, {
+          successes: 0,
+          failures: sanitized.length,
         });
+        return false;
       }
-      // Cursor advances ONLY after a successful run, and only over the span we
-      // actually consumed. Use the rebased anchor (not the raw snapshot length)
-      // so content appended DURING the run — even across a shrink+append — stays
-      // unconsumed for the trailing rerun. Clamp to the current length.
+      const persisted = await this.persistDrafts(drafts);
+      this.pendingDrafts = this.limitDrafts(persisted.failedDrafts, caps.maxDraftsPerRun);
+      this.trackExtractResult(excerpt.turnCount, drafts.length, persisted);
+      // The span is consumed once its generation and persistence attempt
+      // complete: drafts that failed are kept in `pendingDrafts` for a
+      // deterministic retry on a later completed turn. Only a failure BEFORE
+      // the span was mined (generation, catalog lookup) keeps the cursor.
       this.cursor = Math.min(this.runAnchor, this.context.get().length);
       return true;
     } catch {
       this.log.debug('memory extract: run failed');
       this.telemetry.track2('memory_extract', {
         turn_count: excerpt.turnCount,
+        draft_count: 0,
         written_count: 0,
+        persisted_count: 0,
+        failed_count: 0,
         outcome: 'error',
       });
       return false;
@@ -353,79 +362,119 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
     return parseDraftsFromModelOutput(extractText(finish.message)) as readonly MemoryExtractDraft[];
   }
 
-  /**
-   * Propose-not-persist: sanitized drafts become PENDING proposals. NOTHING is
-   * written to the store here. Deduped deterministically against existing
-   * pending proposals, and the pending queue is globally capped (oldest evicted)
-   * so a chatty session cannot grow it without bound.
-   */
-  private propose(drafts: readonly MemoryExtractDraft[]): readonly MemoryProposal[] {
-    if (drafts.length === 0) return [];
-    const now = Date.now();
-    const existingKeys = new Set(this.proposals.map((proposal) => proposalDedupeKey(proposal)));
-    const fresh: MemoryProposal[] = [];
-    for (const draft of drafts) {
-      const key = proposalDedupeKey(draft);
-      if (existingKeys.has(key)) continue;
-      existingKeys.add(key);
-      fresh.push({ ...draft, id: ulid(), createdAt: now });
-    }
-    if (fresh.length === 0) return [];
-    this.proposals = [...this.proposals, ...fresh];
-    // Global cap: evict the oldest non-committing proposals past the ceiling.
-    while (this.proposals.length > MEMORY_EXTRACT_MAX_PENDING) {
-      const index = this.proposals.findIndex((proposal) => !this.commits.has(proposal.id));
-      if (index === -1) break;
-      this.proposals.splice(index, 1);
-    }
-    return fresh;
-  }
-
-  commitProposal(id: string): Promise<string | undefined> {
-    // Only the main agent may commit a proposal, preserving the sensitive
-    // `user`-scope escalation guard.
-    if (!this.isMainAgent) return Promise.resolve(undefined);
-
-    const existing = this.commits.get(id);
-    if (existing !== undefined) return existing;
-
-    const proposal = this.proposals.find((candidate) => candidate.id === id);
-    if (proposal === undefined) return Promise.resolve(undefined);
-
-    const commit = this.commit(proposal).finally(() => {
-      this.commits.delete(id);
-    });
-    this.commits.set(id, commit);
-    return commit;
-  }
-
-  private async commit(proposal: MemoryProposal): Promise<string> {
+  private async retryPendingDrafts(
+    caps: MemoryExtractCaps,
+  ): Promise<{ succeeded: boolean }> {
+    if (this.pendingDrafts.length === 0) return { succeeded: true };
+    const drafts = this.pendingDrafts;
+    let deduped: readonly MemoryExtractDraft[];
     try {
-      const created = await this.access.create({
-        scope: proposal.scope,
-        type: proposal.type,
-        name: proposal.name,
-        description: proposal.description,
-        body: proposal.body,
+      deduped = await this.dedupeDrafts(drafts);
+    } catch {
+      this.trackExtractResult(0, drafts.length, {
+        successes: 0,
+        failures: drafts.length,
       });
-      // Remove from pending only on a successful write; a trust/gate failure
-      // keeps the proposal pending so it can be retried after trusting.
-      this.proposals = this.proposals.filter((candidate) => candidate.id !== proposal.id);
-      // A commit is a WRITE — emit memory_write, not another extract event.
-      this.telemetry.track2('memory_write', {
-        scope: proposal.scope,
-        type: proposal.type,
-        outcome: 'success',
-      });
-      return created.id;
+      return { succeeded: false };
+    }
+    const persisted = await this.persistDrafts(deduped);
+    this.pendingDrafts = this.limitDrafts(persisted.failedDrafts, caps.maxDraftsPerRun);
+    this.trackExtractResult(0, deduped.length, persisted);
+    return { succeeded: this.pendingDrafts.length === 0 };
+  }
+
+  private async dedupeDrafts(
+    drafts: readonly MemoryExtractDraft[],
+  ): Promise<readonly MemoryExtractDraft[]> {
+    const seen = new Set<string>();
+    try {
+      for (const memory of await this.access.list()) {
+        seen.add(memoryDraftDedupeKey(memory));
+      }
     } catch (error) {
-      this.telemetry.track2('memory_write', {
-        scope: proposal.scope,
-        type: proposal.type,
-        outcome: error instanceof MemoryError ? 'rejected' : 'error',
-      });
+      this.log.debug('memory extract: existing memory lookup failed');
       throw error;
     }
+    return drafts.filter((draft) => {
+      const key = memoryDraftDedupeKey(draft);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  private async persistDrafts(drafts: readonly MemoryExtractDraft[]): Promise<{
+    successes: number;
+    failures: number;
+    failedDrafts: readonly MemoryExtractDraft[];
+  }> {
+    let successes = 0;
+    let failures = 0;
+    const failedDrafts: MemoryExtractDraft[] = [];
+    for (const draft of drafts) {
+      try {
+        await this.access.create(draft);
+        successes += 1;
+        this.telemetry.track2('memory_write', {
+          scope: draft.scope,
+          type: draft.type,
+          outcome: 'success',
+        });
+      } catch (error) {
+        // Every failed attempt counts toward telemetry (`failures`), but a
+        // terminal `MemoryError` (trust, scope full, content rejected, …) is
+        // NOT queued for retry: retrying it on every completed turn would block
+        // later extraction forever. Unknown (transient) failures keep the draft
+        // for a deterministic retry.
+        failures += 1;
+        if (!isTerminalMemoryError(error)) {
+          failedDrafts.push(draft);
+        }
+        this.telemetry.track2('memory_write', {
+          scope: draft.scope,
+          type: draft.type,
+          outcome: error instanceof MemoryError ? 'rejected' : 'error',
+        });
+        this.log.debug('memory extract: draft persistence failed');
+      }
+    }
+    return { successes, failures, failedDrafts };
+  }
+
+  private limitDrafts(
+    drafts: readonly MemoryExtractDraft[],
+    maxDrafts: number,
+  ): MemoryExtractDraft[] {
+    const seen = new Set<string>();
+    const limited: MemoryExtractDraft[] = [];
+    for (const draft of drafts) {
+      const key = memoryDraftDedupeKey(draft);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      limited.push(draft);
+      if (limited.length >= maxDrafts) break;
+    }
+    return limited;
+  }
+
+  private trackExtractResult(
+    turnCount: number,
+    draftCount: number,
+    persisted: { readonly successes: number; readonly failures: number },
+  ): void {
+    this.telemetry.track2('memory_extract', {
+      turn_count: turnCount,
+      draft_count: draftCount,
+      written_count: persisted.successes,
+      persisted_count: persisted.successes,
+      failed_count: persisted.failures,
+      outcome:
+        persisted.failures === 0
+          ? 'success'
+          : persisted.successes > 0
+            ? 'partial'
+            : 'error',
+    });
   }
 }
 

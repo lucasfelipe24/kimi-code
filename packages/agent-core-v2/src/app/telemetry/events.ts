@@ -450,7 +450,7 @@ export interface ExitEvent {
 
 export type MemoryWriteOutcome = 'success' | 'rejected' | 'error';
 export type MemoryForgetOutcome = 'success' | 'not_found' | 'rejected' | 'error';
-export type MemoryExtractOutcome = 'success' | 'skipped' | 'error';
+export type MemoryExtractOutcome = 'success' | 'partial' | 'skipped' | 'error';
 
 export interface MemoryWriteEvent {
   scope: 'user' | 'workspace' | 'project';
@@ -482,7 +482,11 @@ export interface MemoryRecallEvent {
 
 export interface MemoryExtractEvent {
   turn_count: number;
+  /** @deprecated Use `persisted_count`; retained for telemetry wire compatibility. */
   written_count: number;
+  draft_count: number;
+  persisted_count: number;
+  failed_count: number;
   outcome: MemoryExtractOutcome;
 }
 
@@ -1023,11 +1027,15 @@ export const telemetryEventDefinitions = {
   memory_extract: defineAgentTelemetryEvent<MemoryExtractEvent>({
     owner: 'kimi-code',
     comment:
-      'Automatic memory extraction runs at turn end. Content-free: only counts and outcome. A run only PROPOSES (never writes), so written_count is always 0; the explicit commit emits memory_write instead.',
+      'Automatic memory extraction persists safe drafts at turn end. Content-free: only counts and aggregate outcome; never memory content.',
     properties: {
       turn_count: 'Number of transcript turns fed to the extraction generation call',
-      written_count: 'Always 0 — a run proposes, it does not write (kept for schema stability)',
-      outcome: 'Extraction outcome (success = proposals drafted, skipped, or error)',
+      written_count:
+        'Legacy name for persisted_count; retained for telemetry wire compatibility and always equal to persisted_count',
+      draft_count: 'Number of sanitized, deduplicated drafts attempted for persistence',
+      persisted_count: 'Number of drafts persisted successfully',
+      failed_count: 'Number of draft persistence attempts that failed',
+      outcome: 'Extraction outcome (success, partial persistence, skipped, or error)',
     },
   }),
 } as const;

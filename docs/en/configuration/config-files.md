@@ -416,7 +416,7 @@ The `[memory]` table contains only the limits used by persistent memory in engin
 | `recall_max_entries` | `integer` | `5` | Maximum memory entries selected for one recall |
 | `recall_max_bytes_per_entry` | `integer` | `4096` | Maximum UTF-8 bytes rendered for one recalled entry's body |
 | `recall_max_session_bytes` | `integer` | `61440` | Maximum UTF-8 bytes for the complete recalled-memory envelope in one recall injection |
-| `extraction_max_turns` | `integer` | `5` | Maximum recent user turns included in an automatic extraction proposal |
+| `extraction_max_turns` | `integer` | `5` | Maximum recent user turns included in one automatic extraction run |
 
 ```toml
 [memory]
@@ -426,7 +426,7 @@ recall_max_session_bytes = 61440
 extraction_max_turns = 5
 ```
 
-Automatic extraction is a native engine-v2 capability that runs after each completed main-agent turn. It produces pending proposals only and never writes them to persistent memory automatically; each proposal still requires an explicit commit.
+Automatic extraction is a native engine-v2 capability that runs after each completed main-agent turn. It sanitizes safe drafts and persists them automatically, excluding duplicates that are already visible in the memory catalog and duplicates within the same run. Transient persistence failures keep the affected drafts for retry after a later completed turn; terminal memory errors (such as project writes in an untrusted workspace) are dropped rather than retried. This deduplication does not provide atomic cross-process idempotency. Extraction never sends credential-shaped transcript content to the model, and drafts are redacted and rejected again before persistence.
 
 <!--
 ## `experimental`

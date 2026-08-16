@@ -7,16 +7,18 @@
  * stubbed config/telemetry/log. Covers: native extraction without a feature gate;
  * coalescing under a burst of `turn.ended` (≤1 run per scope) INCLUDING a
  * genuinely-new-transcript rerun; completed-only gating (cancelled/failed/blocked
- * are ignored); the cursor advancing only after success and REBASING on a
- * transcript shrink (undo/clear/compaction) — no freeze, no full-history resend;
- * skip only on a SUCCESSFUL `Memory remember` (not a bare call / list / forget /
- * failed remember); the `extractionMaxTurns` config bound read via the service;
- * transcript-only input; the EMPTY-toolset + small maxOutputSize + timeout of the
- * default generation call; credential redaction and quarantine of drafts that
- * still look secret; content-free proposal notice (ids/count only); dedupe +
- * global pending cap; propose-before-persist; commit emitting memory_write (not
- * extract) and requiring the main agent; and trust-failure keeping the proposal
- * pending.
+ * are ignored); the cursor advancing after a completed extraction attempt and
+ * REBASING on a transcript shrink (undo/clear/compaction) — no freeze, no
+ * full-history resend; skip only on a SUCCESSFUL `Memory remember` (not a bare
+ * call / list / forget / failed remember); the `extractionMaxTurns` config bound
+ * read via the service; transcript-only input; the EMPTY-toolset + small
+ * maxOutputSize + timeout of the default generation call; credential redaction
+ * and quarantine of drafts that still look secret before truncation, including
+ * multi-pair `Cookie` headers; automatic per-draft persistence, fail-closed
+ * catalog dedupe, bounded deterministic retries of transient failures, terminal
+ * `MemoryError` rejections dropped without blocking later turns, a failed
+ * generation boundary retried even when a later turn succeeds with an explicit
+ * remember, and content-free telemetry.
  *
  * Run: `pnpm --filter @moonshot-ai/agent-core-v2 exec vitest run
  * test/agent/memoryExtract/memoryExtract.test.ts`.
@@ -63,12 +65,11 @@ import {
   EXCERPT_TRUNCATION_MARKER,
   IAgentMemoryExtractService,
   MEMORY_EXTRACT_MAX_OUTPUT_TOKENS,
-  MEMORY_EXTRACT_MAX_PENDING,
   MEMORY_EXTRACT_SYSTEM_PROMPT,
   buildTranscriptExcerpt,
   hadSuccessfulRemember,
+  memoryDraftDedupeKey,
   parseDraftsFromModelOutput,
-  proposalDedupeKey,
   rebaseCursor,
   sanitizeDrafts,
   type MemoryExtractCaps,
@@ -108,18 +109,21 @@ class FakeMemoryAccess implements ISessionMemoryAccess {
   readonly onDidChange = this.changeEmitter.event;
 
   readonly createCalls: MemoryCreateInput[] = [];
-  createError: MemoryError | undefined;
-  createOverride: ((input: MemoryCreateInput) => Promise<EffectiveMemory>) | undefined;
+  readonly memories: EffectiveMemory[] = [];
+  createOverride:
+    | ((input: MemoryCreateInput) => Promise<EffectiveMemory> | undefined)
+    | undefined;
+  listOverride: (() => Promise<readonly EffectiveMemory[]>) | undefined;
 
   list(): Promise<readonly EffectiveMemory[]> {
-    return Promise.resolve([]);
+    return this.listOverride?.() ?? Promise.resolve(this.memories);
   }
   create(input: MemoryCreateInput): Promise<EffectiveMemory> {
     this.createCalls.push(input);
-    if (this.createOverride !== undefined) return this.createOverride(input);
-    if (this.createError !== undefined) return Promise.reject(this.createError);
+    const overridden = this.createOverride?.(input);
+    if (overridden !== undefined) return overridden;
     const now = Date.now();
-    return Promise.resolve({
+    const memory: EffectiveMemory = {
       id: ulid(),
       name: input.name,
       description: input.description,
@@ -130,7 +134,9 @@ class FakeMemoryAccess implements ISessionMemoryAccess {
       updatedAt: now,
       version: 1,
       body: input.body,
-    });
+    };
+    this.memories.push(memory);
+    return Promise.resolve(memory);
   }
   update(_scope: MemoryScope, _id: string, _patch: MemoryPatch): Promise<EffectiveMemory> {
     return Promise.reject(new Error('not used'));
@@ -261,6 +267,10 @@ describe('AgentMemoryExtractService', () => {
     return tracked.filter((event) => event.name === 'memory_extract');
   }
 
+  function writeEvents(): TrackedEvent[] {
+    return tracked.filter((event) => event.name === 'memory_write');
+  }
+
   beforeEach(() => {
     disposables = new DisposableStore();
     access = new FakeMemoryAccess();
@@ -303,9 +313,13 @@ describe('AgentMemoryExtractService', () => {
   });
 
   it('quarantines a suspicious excerpt before it reaches the requester (pre-send gate)', async () => {
-    // A high-entropy mixed blob the deny-list does NOT redact but the fail-safe
-    // `looksLikeSecret` detects. It must never be handed to the generator.
-    context.append(userMessage('the deploy credential is Ab3Kd9Xz2Qw7Lm4Rt6Yh1Uj8Nb5Vc0Pd'));
+    // The high-entropy blob sits beyond the excerpt byte cap. The full redacted
+    // content must be checked before truncation hides it from the final excerpt.
+    context.append(
+      userMessage(
+        `deploy notes ${'x'.repeat(9_000)} Ab3Kd9Xz2Qw7Lm4Rt6Yh1Uj8Nb5Vc0Pd`,
+      ),
+    );
     let extractorCalled = false;
     service().setExtractor(() => {
       extractorCalled = true;
@@ -335,6 +349,33 @@ describe('AgentMemoryExtractService', () => {
     endTurn();
     await service().whenIdle();
     expect(reran).toBe(false);
+  });
+
+  it('runs a boundary queued during a failing run without busy-looping', async () => {
+    context.append(userMessage('how do I deploy the service'));
+    const gate = deferred<readonly MemoryExtractDraft[]>();
+    let calls = 0;
+    service().setExtractor(() => {
+      calls += 1;
+      return calls === 1 ? gate.promise : Promise.resolve([]);
+    });
+
+    endTurn();
+    expect(calls).toBe(1);
+
+    context.append(userMessage('new completed turn while extraction is running'));
+    endTurn();
+    gate.reject(new Error('generation failed'));
+    await service().whenIdle();
+
+    // The queued boundary justifies ONE retry of the failed span (call 2); the
+    // new completed turn's own span is then mined on its own boundary (call 3).
+    expect(calls).toBe(3);
+    expect(extractEvents()).toHaveLength(3);
+
+    // No busy-loop: once the retry and the new span complete, nothing re-runs.
+    await Promise.resolve();
+    expect(calls).toBe(3);
   });
 
   it('survives a clear+append during an in-flight run without swallowing new content', async () => {
@@ -397,7 +438,7 @@ describe('AgentMemoryExtractService', () => {
     await service().whenIdle();
 
     expect(calls).toBe(1);
-    expect(service().pendingProposals()).toHaveLength(0);
+    expect(access.createCalls).toHaveLength(0);
     expect(extractEvents().at(-1)?.properties?.['outcome']).toBe('error');
 
     service().setExtractor(() => {
@@ -408,7 +449,7 @@ describe('AgentMemoryExtractService', () => {
     await service().whenIdle();
 
     expect(calls).toBe(2);
-    expect(service().pendingProposals()).toHaveLength(1);
+    expect(access.createCalls).toEqual([DRAFT_ONE]);
   });
 
   it('rebases the cursor when the transcript shrinks (undo/clear), then extracts new content', async () => {
@@ -472,15 +513,26 @@ describe('AgentMemoryExtractService', () => {
     expect(extractEvents().at(-1)?.properties?.['outcome']).toBe('skipped');
   });
 
-  it('runs natively without a feature flag and keeps proposals pending', async () => {
+  it('runs natively without a feature flag and persists sanitized drafts automatically', async () => {
     context.append(userMessage('how do I deploy the service'));
     service().setExtractor(() => Promise.resolve([DRAFT_ONE]));
 
     endTurn();
     await service().whenIdle();
 
-    expect(service().pendingProposals()).toHaveLength(1);
-    expect(access.createCalls).toHaveLength(0);
+    expect(access.createCalls).toEqual([DRAFT_ONE]);
+    expect(writeEvents()).toEqual([
+      {
+        name: 'memory_write',
+        properties: { scope: 'workspace', type: 'reference', outcome: 'success' },
+      },
+    ]);
+    expect(extractEvents().at(-1)?.properties).toMatchObject({
+      draft_count: 1,
+      persisted_count: 1,
+      failed_count: 0,
+      outcome: 'success',
+    });
   });
 
   it('never installs the hook for a subagent', async () => {
@@ -519,7 +571,7 @@ describe('AgentMemoryExtractService', () => {
     expect(only.role).toBe('user');
     const text = only.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
     expect(text).toContain('how do I deploy the service today');
-    expect(service().pendingProposals()).toHaveLength(1);
+    expect(access.createCalls).toHaveLength(1);
   });
 
   it('aborts a slow generation on the timeout (error outcome, cursor not advanced)', async () => {
@@ -538,7 +590,7 @@ describe('AgentMemoryExtractService', () => {
     await service().whenIdle();
 
     expect(extractEvents().at(-1)?.properties?.['outcome']).toBe('error');
-    expect(service().pendingProposals()).toHaveLength(0);
+    expect(access.createCalls).toHaveLength(0);
 
     // The cursor did not advance, so a fresh turn re-examines the same span.
     let reran = false;
@@ -604,161 +656,276 @@ describe('AgentMemoryExtractService', () => {
     endTurn();
     await service().whenIdle();
 
-    // Nothing persisted-pending: the draft was quarantined, not silently kept.
-    expect(service().pendingProposals()).toHaveLength(0);
-    expect(extractEvents().at(-1)?.properties?.['outcome']).toBe('success');
+    // The quarantined draft is never persisted.
+    expect(access.createCalls).toHaveLength(0);
+    expect(extractEvents().at(-1)?.properties).toMatchObject({
+      draft_count: 0,
+      persisted_count: 0,
+      failed_count: 0,
+      outcome: 'success',
+    });
   });
 
-  it('fires a CONTENT-FREE proposal notice (ids + count only)', async () => {
+  it('dedupes identical drafts within a run before persisting', async () => {
     context.append(userMessage('how do I deploy the service'));
-    const notices: { ids: readonly string[]; count: number }[] = [];
-    service().onDidProposeMemory((notice) => notices.push(notice));
+    service().setExtractor(() => Promise.resolve([DRAFT_ONE, DRAFT_ONE]));
+
+    endTurn();
+    await service().whenIdle();
+
+    expect(access.createCalls).toEqual([DRAFT_ONE]);
+    expect(extractEvents().at(-1)?.properties).toMatchObject({
+      draft_count: 1,
+      persisted_count: 1,
+      failed_count: 0,
+      outcome: 'success',
+    });
+  });
+
+  it('dedupes a draft already persisted by an earlier extraction regardless of origin', async () => {
+    access.createOverride = (input) => {
+      const memory: EffectiveMemory = {
+        id: ulid(),
+        ...input,
+        origin: 'user',
+        createdAt: 1,
+        updatedAt: 1,
+        version: 1,
+      };
+      access.memories.push(memory);
+      return Promise.resolve(memory);
+    };
+    context.append(userMessage('how do I deploy the service'));
+    service().setExtractor(() => Promise.resolve([DRAFT_ONE]));
+
+    endTurn();
+    await service().whenIdle();
+
+    context.append(userMessage('how do I deploy the service again'));
+    endTurn();
+    await service().whenIdle();
+
+    expect(access.createCalls).toEqual([DRAFT_ONE]);
+    expect(extractEvents().at(-1)?.properties).toMatchObject({
+      draft_count: 0,
+      written_count: 0,
+      persisted_count: 0,
+      failed_count: 0,
+      outcome: 'success',
+    });
+  });
+
+  it('fails closed when listing memories fails, then retries the same draft later', async () => {
+    let listFails = true;
+    access.listOverride = () =>
+      listFails ? Promise.reject(new Error('catalog unavailable')) : Promise.resolve(access.memories);
+    context.append(userMessage('how do I deploy the service'));
+    let generated = 0;
+    service().setExtractor(() => {
+      generated += 1;
+      return Promise.resolve([DRAFT_ONE]);
+    });
+
+    endTurn();
+    await service().whenIdle();
+
+    expect(generated).toBe(1);
+    expect(access.createCalls).toHaveLength(0);
+    expect(extractEvents().at(-1)?.properties).toMatchObject({
+      draft_count: 1,
+      persisted_count: 0,
+      failed_count: 1,
+      outcome: 'error',
+    });
+
+    listFails = false;
+    endTurn();
+    await service().whenIdle();
+
+    expect(generated).toBe(2);
+    expect(access.createCalls).toEqual([DRAFT_ONE]);
+  });
+
+  it('preserves pending drafts when their retry fails and does not generate new ones', async () => {
+    context.append(userMessage('how do I deploy the service'));
+    let storageFails = true;
+    access.createOverride = () =>
+      storageFails ? Promise.reject(new Error('storage unavailable')) : undefined;
+    let generated = 0;
+    service().setExtractor(() => {
+      generated += 1;
+      return Promise.resolve([DRAFT_ONE]);
+    });
+
+    endTurn();
+    await service().whenIdle();
+    expect(generated).toBe(1);
+    expect(access.createCalls).toEqual([DRAFT_ONE]);
+
+    context.append(userMessage('another completed turn'));
+    endTurn();
+    await service().whenIdle();
+    expect(generated).toBe(1);
+    expect(access.createCalls).toEqual([DRAFT_ONE, DRAFT_ONE]);
+
+    storageFails = false;
+    endTurn();
+    await service().whenIdle();
+    expect(generated).toBe(2);
+    expect(access.createCalls).toEqual([DRAFT_ONE, DRAFT_ONE, DRAFT_ONE]);
+  });
+
+  it('drops terminal MemoryError rejections without blocking later turns', async () => {
+    const rejected: MemoryExtractDraft = {
+      scope: 'project',
+      type: 'project',
+      name: 'project draft',
+      description: 'd',
+      body: 'project body',
+    };
+    context.append(userMessage('how do I deploy the service'));
+    let reject = true;
+    access.createOverride = (input) =>
+      input.name === rejected.name && reject
+        ? Promise.reject(
+            new MemoryError(
+              MemoryErrors.codes.MEMORY_TRUST_REQUIRED,
+              'project memory requires a trusted workspace',
+            ),
+          )
+        : undefined;
+    service().setExtractor(() => Promise.resolve([rejected, DRAFT_ONE]));
+
+    endTurn();
+    await service().whenIdle();
+
+    expect(access.createCalls).toEqual([rejected, DRAFT_ONE]);
+    expect(writeEvents()).toEqual([
+      {
+        name: 'memory_write',
+        properties: { scope: 'project', type: 'project', outcome: 'rejected' },
+      },
+      {
+        name: 'memory_write',
+        properties: { scope: 'workspace', type: 'reference', outcome: 'success' },
+      },
+    ]);
+    expect(extractEvents().at(-1)?.properties).toMatchObject({
+      draft_count: 2,
+      written_count: 1,
+      persisted_count: 1,
+      failed_count: 1,
+      outcome: 'partial',
+    });
+
+    // The trust rejection is TERMINAL: it is not queued for retry, so the next
+    // completed turn writes nothing new and the failure never blocks later
+    // drafts from persisting.
+    reject = false;
+    endTurn();
+    await service().whenIdle();
+
+    expect(access.createCalls).toEqual([rejected, DRAFT_ONE]);
+    expect(extractEvents()).toHaveLength(1);
+  });
+
+  it('retries a failed generation boundary even when a later turn succeeds with Memory remember', async () => {
+    context.append(userMessage('deploy the legacy service'));
+    let fail = true;
+    const excerpts: string[] = [];
+    service().setExtractor(({ excerpt }) => {
+      excerpts.push(excerpt);
+      if (fail) return Promise.reject(new Error('generation failed'));
+      return Promise.resolve([DRAFT_ONE]);
+    });
+
+    endTurn();
+    await service().whenIdle();
+    expect(access.createCalls).toHaveLength(0);
+
+    // A later completed turn contains a SUCCESSFUL explicit remember. It must
+    // not cause the earlier failed boundary to be skipped wholesale.
+    context.append(userMessage('remember the deploy preference'));
+    context.append(rememberCall('call_later'));
+    context.append(toolResult('call_later', /* isError */ false));
+    fail = false;
+    endTurn();
+    await service().whenIdle();
+
+    // The failed span was retried on its own boundary BEFORE the remember gate
+    // was applied to the later turn.
+    expect(excerpts.length).toBeGreaterThanOrEqual(2);
+    expect(excerpts.some((text) => text.includes('deploy the legacy service'))).toBe(true);
+    expect(access.createCalls).toEqual([DRAFT_ONE]);
+  });
+
+  it('quarantines a multi-pair Cookie header in the transcript before it reaches the generator', async () => {
+    // `Cookie: theme=light; session=<hex>` — the deny-list redacts only the
+    // first pair and the high-entropy detector exempts bare hex tokens, so the
+    // second pair must be caught by the header gate and never sent to the model.
+    context.append(
+      userMessage(
+        'the response headers were Cookie: theme=light; session=4f3c9a2b7d1e8f6a5c4b3d2e1f0a9b8c7d6e5f4a',
+      ),
+    );
+    let extractorCalled = false;
+    service().setExtractor(() => {
+      extractorCalled = true;
+      return Promise.resolve([]);
+    });
+
+    endTurn();
+    await service().whenIdle();
+
+    expect(extractorCalled).toBe(false);
+    expect(requester.requests).toHaveLength(0);
+    expect(extractEvents().at(-1)?.properties?.['outcome']).toBe('skipped');
+  });
+
+  it('quarantines a generator draft carrying a multi-pair Cookie header', async () => {
+    context.append(userMessage('how do I deploy the service'));
     service().setExtractor(() =>
       Promise.resolve([
-        { scope: 'workspace', type: 'reference', name: 'secret-name', description: 'secret-desc', body: 'secret-body' },
+        {
+          scope: 'workspace',
+          type: 'reference',
+          name: 'session notes',
+          description: 'a header sample',
+          body: 'Cookie: theme=light; session=4f3c9a2b7d1e8f6a5c4b3d2e1f0a9b8c7d6e5f4a',
+        },
       ]),
     );
 
     endTurn();
     await service().whenIdle();
 
-    expect(notices).toHaveLength(1);
-    const notice = notices[0]!;
-    expect(notice.count).toBe(1);
-    expect(notice.ids).toHaveLength(1);
-    // The notice must not carry any content.
-    const serialized = JSON.stringify(notice);
-    expect(serialized).not.toContain('secret-name');
-    expect(serialized).not.toContain('secret-desc');
-    expect(serialized).not.toContain('secret-body');
-    // Content is available only through the explicit getter.
-    expect(service().pendingProposals()[0]?.body).toBe('secret-body');
-  });
-
-  it('dedupes identical drafts across runs and caps the pending queue', async () => {
-    // Same draft proposed twice ⇒ only one pending entry.
-    context.append(userMessage('how do I deploy the service'));
-    service().setExtractor(() => Promise.resolve([DRAFT_ONE]));
-    endTurn();
-    await service().whenIdle();
-    context.append(userMessage('and remind me how to deploy again please'));
-    endTurn();
-    await service().whenIdle();
-    expect(service().pendingProposals()).toHaveLength(1);
-
-    // Flood the queue past the global cap with unique drafts.
-    let n = 0;
-    service().setExtractor(() =>
-      Promise.resolve(
-        Array.from({ length: 6 }, () => ({
-          scope: 'workspace' as const,
-          type: 'reference' as const,
-          name: `note ${n++}`,
-          description: 'd',
-          body: `body ${n}`,
-        })),
-      ),
-    );
-    for (let i = 0; i < 10; i++) {
-      context.append(userMessage(`unique deploy question number ${i} here`));
-      endTurn();
-      await service().whenIdle();
-    }
-    expect(service().pendingProposals().length).toBeLessThanOrEqual(MEMORY_EXTRACT_MAX_PENDING);
-  });
-
-  it('proposes without persisting; commit writes and emits memory_write (not extract)', async () => {
-    context.append(userMessage('how do I deploy the service'));
-    service().setExtractor(() => Promise.resolve([DRAFT_ONE]));
-
-    endTurn();
-    await service().whenIdle();
-
-    const proposals = service().pendingProposals();
-    expect(proposals).toHaveLength(1);
     expect(access.createCalls).toHaveLength(0);
-    // The run's extract event carries written_count 0 (proposal is not a write).
-    expect(extractEvents().at(-1)?.properties?.['written_count']).toBe(0);
-    expect(extractEvents().at(-1)?.properties?.['outcome']).toBe('success');
-
-    const id = await service().commitProposal(proposals[0]!.id);
-    expect(id).toBeDefined();
-    expect(access.createCalls).toHaveLength(1);
-    expect(service().pendingProposals()).toHaveLength(0);
-    // Commit emits memory_write, NOT another memory_extract.
-    const write = tracked.find((event) => event.name === 'memory_write');
-    expect(write?.properties?.['outcome']).toBe('success');
-    expect(extractEvents().every((event) => event.properties?.['written_count'] === 0)).toBe(true);
   });
 
-  it('commitProposal writes through the catalog for the main agent', async () => {
+  it('reports error when every draft persistence fails', async () => {
     context.append(userMessage('how do I deploy the service'));
+    access.createOverride = () => Promise.reject(new Error('storage unavailable'));
     service().setExtractor(() => Promise.resolve([DRAFT_ONE]));
+
     endTurn();
     await service().whenIdle();
-    const proposalId = service().pendingProposals()[0]!.id;
 
-    const id = await service().commitProposal(proposalId);
-    expect(id).toBeDefined();
-    expect(access.createCalls).toHaveLength(1);
-  });
-
-  it('coalesces concurrent commits of the same proposal into one write', async () => {
-    context.append(userMessage('how do I deploy the service'));
-    service().setExtractor(() => Promise.resolve([DRAFT_ONE]));
-    endTurn();
-    await service().whenIdle();
-    const proposalId = service().pendingProposals()[0]!.id;
-    const gate = deferred<EffectiveMemory>();
-    access.createOverride = () => gate.promise;
-
-    const first = service().commitProposal(proposalId);
-    const second = service().commitProposal(proposalId);
-    expect(access.createCalls).toHaveLength(1);
-
-    const now = Date.now();
-    gate.resolve({
-      id: ulid(),
-      ...DRAFT_ONE,
-      origin: DRAFT_ONE.scope,
-      createdAt: now,
-      updatedAt: now,
-      version: 1,
+    expect(access.createCalls).toEqual([DRAFT_ONE]);
+    expect(writeEvents()).toEqual([
+      {
+        name: 'memory_write',
+        properties: { scope: 'workspace', type: 'reference', outcome: 'error' },
+      },
+    ]);
+    expect(extractEvents().at(-1)?.properties).toMatchObject({
+      draft_count: 1,
+      persisted_count: 0,
+      failed_count: 1,
+      outcome: 'error',
     });
-
-    const [firstId, secondId] = await Promise.all([first, second]);
-    expect(firstId).toBe(secondId);
-    expect(access.createCalls).toHaveLength(1);
-    expect(service().pendingProposals()).toHaveLength(0);
   });
 
-  it('keeps a proposal pending when the commit hits a trust failure', async () => {
-    context.append(userMessage('how do I deploy the service'));
-    service().setExtractor(() =>
-      Promise.resolve([{ scope: 'project', type: 'project', name: 'p', description: 'd', body: 'b' }]),
-    );
-    endTurn();
-    await service().whenIdle();
-    const proposalId = service().pendingProposals()[0]!.id;
-
-    access.createError = new MemoryError(
-      MemoryErrors.codes.MEMORY_TRUST_REQUIRED,
-      'project memory requires a trusted workspace',
-    );
-    await expect(service().commitProposal(proposalId)).rejects.toThrow();
-    // The proposal remains pending so it can be retried after trusting.
-    expect(service().pendingProposals().some((p) => p.id === proposalId)).toBe(true);
-    const write = tracked.find((event) => event.name === 'memory_write');
-    expect(write?.properties?.['outcome']).toBe('rejected');
-  });
-
-  it('commitProposal of an unknown id is a no-op', async () => {
-    const id = await service().commitProposal(ulid());
-    expect(id).toBeUndefined();
-    expect(access.createCalls).toHaveLength(0);
-  });
-
-  it('emits only content-free memory_extract telemetry', async () => {
+  it('emits only content-free memory telemetry', async () => {
     context.append(userMessage('deploy the secret-topic service'));
     service().setExtractor(() =>
       Promise.resolve([
@@ -769,12 +936,30 @@ describe('AgentMemoryExtractService', () => {
     endTurn();
     await service().whenIdle();
 
-    const allowed = new Set(['turn_count', 'written_count', 'outcome']);
-    const events = extractEvents();
+    const allowedByEvent = new Map<string, ReadonlySet<string>>([
+      [
+        'memory_extract',
+        new Set([
+          'turn_count',
+          'draft_count',
+          'written_count',
+          'persisted_count',
+          'failed_count',
+          'outcome',
+        ]),
+      ],
+      ['memory_write', new Set(['scope', 'type', 'outcome'])],
+    ]);
+    const events = [...extractEvents(), ...writeEvents()];
     expect(events.length).toBeGreaterThan(0);
+    for (const event of extractEvents()) {
+      expect(event.properties?.['written_count']).toBe(event.properties?.['persisted_count']);
+    }
     for (const event of events) {
+      const allowed = allowedByEvent.get(event.name);
+      expect(allowed, `unexpected telemetry event ${event.name}`).toBeDefined();
       for (const [key, value] of Object.entries(event.properties ?? {})) {
-        expect(allowed.has(key), `unexpected key ${key}`).toBe(true);
+        expect(allowed?.has(key), `unexpected telemetry key ${key}`).toBe(true);
         expect(String(value)).not.toContain('secret-body');
         expect(String(value)).not.toContain('secret-name');
         expect(String(value)).not.toContain('secret-desc');
@@ -788,7 +973,7 @@ describe('memoryExtract pure helpers', () => {
     maxTurns: 5,
     maxExcerptBytes: 8 * 1024,
     maxBodyBytes: 4096,
-    maxProposalsPerRun: 8,
+    maxDraftsPerRun: 8,
   };
 
   function user(text: string): ContextMessage {
@@ -840,6 +1025,13 @@ describe('memoryExtract pure helpers', () => {
     expect(excerpt.text).toContain('[redacted]');
   });
 
+  it('buildTranscriptExcerpt quarantines a secret beyond the truncation boundary', () => {
+    const blob = 'Ab3Kd9Xz2Qw7Lm4Rt6Yh1Uj8Nb5Vc0Pd';
+    const excerpt = buildTranscriptExcerpt([user(`${'x'.repeat(512)} ${blob}`)], 5, 128);
+    expect(excerpt.quarantined).toBe(true);
+    expect(excerpt.text).toBe('');
+  });
+
   it('hadSuccessfulRemember: true only for a remember correlated to a non-error result', () => {
     const ok: ContextMessage[] = [
       user('hi'),
@@ -879,11 +1071,17 @@ describe('memoryExtract pure helpers', () => {
   });
 
   it('sanitizeDrafts quarantines a draft that still looks like a secret after redaction', () => {
-    // A high-entropy mixed-case+digit blob the deny-list does not target: it
-    // survives redaction but must be quarantined (dropped) by looksLikeSecret.
+    // The high-entropy blob lies beyond the persisted body cap. The full redacted
+    // field must be checked before truncation can hide it.
     const blob = 'Ab3Kd9Xz2Qw7Lm4Rt6Yh1Uj8Nb5Vc0Pd';
     const drafts = [
-      { scope: 'workspace', type: 'reference', name: 'n', description: 'd', body: `credential ${blob}` },
+      {
+        scope: 'workspace',
+        type: 'reference',
+        name: 'n',
+        description: 'd',
+        body: `${'y'.repeat(caps.maxBodyBytes + 512)} credential ${blob}`,
+      },
     ];
     const out = sanitizeDrafts(drafts, caps);
     expect(out).toHaveLength(0);
@@ -898,13 +1096,13 @@ describe('memoryExtract pure helpers', () => {
     expect(Buffer.byteLength(out[0]!.body, 'utf8')).toBeLessThanOrEqual(256);
   });
 
-  it('proposalDedupeKey is stable for identical drafts and distinct otherwise', () => {
+  it('memoryDraftDedupeKey is stable for identical drafts and distinct otherwise', () => {
     const a: MemoryExtractDraft = { scope: 'user', type: 'user', name: 'n', description: 'd', body: 'b' };
     const b: MemoryExtractDraft = { scope: 'user', type: 'user', name: 'n', description: 'DIFFERENT', body: 'b' };
-    expect(proposalDedupeKey(a)).toBe(proposalDedupeKey({ ...a }));
+    expect(memoryDraftDedupeKey(a)).toBe(memoryDraftDedupeKey({ ...a }));
     // description is not part of the identity ⇒ still equal.
-    expect(proposalDedupeKey(a)).toBe(proposalDedupeKey(b));
-    expect(proposalDedupeKey(a)).not.toBe(proposalDedupeKey({ ...a, body: 'other' }));
+    expect(memoryDraftDedupeKey(a)).toBe(memoryDraftDedupeKey(b));
+    expect(memoryDraftDedupeKey(a)).not.toBe(memoryDraftDedupeKey({ ...a, body: 'other' }));
   });
 
   it('rebaseCursor: append after cursor leaves it; shrink before cursor shifts it; straddle collapses', () => {

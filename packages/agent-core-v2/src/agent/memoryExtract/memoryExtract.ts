@@ -9,15 +9,13 @@
  * result — not a bare call/list/forget/failure), sanitizing/validating the
  * drafts a generator returns (schema + byte caps + a second redaction pass +
  * a `looksLikeSecret` quarantine gate, so nothing raw or credential-shaped
- * survives), deduping proposals deterministically, and parsing a model's raw
- * text output into candidate drafts. Also defines the clearly-marked
- * `MemoryExtractor` extension point (the generation seam), the proposal/draft
- * shapes, the content-free proposal notice, and the `IAgentMemoryExtractService`
- * token. Selection/rendering helpers are pure — no DI, no IO.
+ * survives), deduping drafts deterministically, and parsing a model's raw text
+ * output into candidate drafts. Also defines the clearly-marked `MemoryExtractor`
+ * generation seam and the `IAgentMemoryExtractService` token. Selection/rendering
+ * helpers are pure — no DI, no IO.
  */
 
 import { createDecorator, type ServiceIdentifier } from '#/_base/di/instantiation';
-import type { Event } from '#/_base/event';
 
 import type { ContextMessage } from '#/agent/contextMemory/types';
 import { MEMORY_TOOL_NAME } from '#/agent/tools/memory/memory';
@@ -36,11 +34,8 @@ import { z } from 'zod';
 /** Default number of most-recent transcript turns fed to an extraction run. */
 export const DEFAULT_MEMORY_EXTRACTION_MAX_TURNS = 5;
 
-/** Hard ceiling on the number of proposals kept from a single extraction run. */
-export const MEMORY_EXTRACT_MAX_PROPOSALS_PER_RUN = 8;
-
-/** Global ceiling on pending proposals; oldest are evicted past this. */
-export const MEMORY_EXTRACT_MAX_PENDING = 32;
+/** Hard ceiling on the number of drafts persisted from a single extraction run. */
+export const MEMORY_EXTRACT_MAX_DRAFTS_PER_RUN = 8;
 
 /** Aggregate UTF-8 byte cap for the whole transcript excerpt fed to the model. */
 export const DEFAULT_MEMORY_EXCERPT_MAX_BYTES = 8 * 1024;
@@ -60,10 +55,10 @@ export interface MemoryExtractCaps {
   readonly maxTurns: number;
   /** Aggregate UTF-8 bytes for the whole excerpt (truncated + marked beyond). */
   readonly maxExcerptBytes: number;
-  /** Max UTF-8 bytes for a single proposal body (truncated beyond). */
+  /** Max UTF-8 bytes for a single draft body (truncated beyond). */
   readonly maxBodyBytes: number;
-  /** Max number of proposals kept from one run. */
-  readonly maxProposalsPerRun: number;
+  /** Max number of drafts persisted from one run. */
+  readonly maxDraftsPerRun: number;
 }
 
 /** The `[memory]` config values relevant to extraction (all optional). */
@@ -80,7 +75,7 @@ export function resolveExtractCaps(
     maxTurns: config?.extractionMaxTurns ?? defaults.extractionMaxTurns,
     maxExcerptBytes: DEFAULT_MEMORY_EXCERPT_MAX_BYTES,
     maxBodyBytes: DEFAULT_MEMORY_MAX_BODY_BYTES,
-    maxProposalsPerRun: MEMORY_EXTRACT_MAX_PROPOSALS_PER_RUN,
+    maxDraftsPerRun: MEMORY_EXTRACT_MAX_DRAFTS_PER_RUN,
   };
 }
 
@@ -93,22 +88,6 @@ export interface MemoryExtractDraft {
   readonly body: string;
 }
 
-/** A proposal is a sanitized draft with an id and a timestamp, held pending. */
-export interface MemoryProposal extends MemoryExtractDraft {
-  readonly id: string;
-  readonly createdAt: number;
-}
-
-/**
- * Content-free notice fired when a run drafts proposals. Carries only ids and a
- * count — NEVER name/description/body — so a "memory suggested" subscriber
- * cannot leak content; the content is fetched explicitly via `pendingProposals`.
- */
-export interface MemoryProposalNotice {
-  readonly ids: readonly string[];
-  readonly count: number;
-}
-
 /** Redacted, turn-bounded excerpt of the current transcript. */
 export interface TranscriptExcerpt {
   readonly text: string;
@@ -116,6 +95,8 @@ export interface TranscriptExcerpt {
   readonly turnCount: number;
   /** True when the aggregate byte cap truncated the excerpt. */
   readonly truncated: boolean;
+  /** True when the full redacted excerpt was quarantined before truncation. */
+  readonly quarantined: boolean;
 }
 
 /** Input handed to a `MemoryExtractor`. Content is transcript-derived only. */
@@ -132,40 +113,24 @@ export interface MemoryExtractInput {
  * implementation is a direct LLM call with an EMPTY toolset (no Read/Grep/Glob/
  * Bash/network), which is the stronger form of "no read tools". Whatever a
  * generator returns is re-validated, re-redacted, and quarantine-checked by the
- * service before it becomes a proposal, so a hostile generator cannot smuggle
- * raw secrets or out-of-taxonomy records through.
+ * service before it is persisted, so a hostile generator cannot smuggle raw
+ * secrets or out-of-taxonomy records through.
  */
 export type MemoryExtractor = (input: MemoryExtractInput) => Promise<readonly MemoryExtractDraft[]>;
 
 /** Outcome reported to `memory_extract` telemetry. */
-export type MemoryExtractRunOutcome = 'success' | 'skipped' | 'error';
+export type MemoryExtractRunOutcome = 'success' | 'partial' | 'skipped' | 'error';
 
 /**
  * Agent-scope automatic extraction service. The turn-end hook, gates,
- * coalescing, and cursor live in the implementation; this token exposes the
- * generation seam plus the propose-not-persist surface: pending proposals are
- * produced by a run and only written to the trust-gated catalog through an
- * explicit `commitProposal` step — a run NEVER persists on its own.
+ * coalescing, cursor, draft sanitization, and isolated persistence live in the
+ * implementation; this token exposes only the generation seam.
  */
 export interface IAgentMemoryExtractService {
   readonly _serviceBrand: undefined;
 
   /** Install (or replace) the generator; returns a remover. */
   setExtractor(extractor: MemoryExtractor | undefined): () => void;
-
-  /** Pending proposals awaiting an explicit commit (the explicit content read). */
-  pendingProposals(): readonly MemoryProposal[];
-
-  /** Content-free notice (ids + count) fired when a run drafts proposals. */
-  readonly onDidProposeMemory: Event<MemoryProposalNotice>;
-
-  /**
-   * Explicitly persist a pending proposal through the trust-gated catalog
-   * (atomic). This is the only write path; it is never invoked automatically.
-   * Resolves to the persisted id, or `undefined` when the id is not pending or
-   * the caller is not the main agent.
-   */
-  commitProposal(id: string): Promise<string | undefined>;
 }
 
 export const IAgentMemoryExtractService: ServiceIdentifier<IAgentMemoryExtractService> =
@@ -200,6 +165,8 @@ function roleLabel(message: ContextMessage): string {
       return 'assistant';
     case 'tool':
       return 'tool';
+    case 'system':
+      return 'system';
     default:
       return message.role;
   }
@@ -210,6 +177,18 @@ function truncateToBytes(text: string, maxBytes: number): { text: string; trunca
   if (Buffer.byteLength(text, 'utf8') <= maxBytes) return { text, truncated: false };
   const sliced = Buffer.from(text, 'utf8').subarray(0, maxBytes).toString('utf8');
   return { text: sliced.replace(/\uFFFD+$/u, ''), truncated: true };
+}
+
+/**
+ * Conservative quarantine gate for `Cookie` / `Set-Cookie` header lines with
+ * more than one `name=value` pair. The shared deny-list redacts only the first
+ * pair (its `\S+` rule stops at the first space) and the high-entropy detector
+ * exempts bare hex tokens, so later pairs like `Cookie: theme=light;
+ * session=<hex>` can otherwise survive to the model or the store. Dropping a
+ * header-like line is safe — it only skips extraction for that span/draft.
+ */
+function looksLikeCookieHeader(text: string): boolean {
+  return /\b(?:set-)?cookie\s*:\s*[^\r\n]*?;\s*[^\r\n]*=/i.test(text);
 }
 
 /**
@@ -228,7 +207,9 @@ export function buildTranscriptExcerpt(
   maxExcerptBytes: number = DEFAULT_MEMORY_EXCERPT_MAX_BYTES,
 ): TranscriptExcerpt {
   const starts = userTurnStarts(messages);
-  if (starts.length === 0) return { text: '', turnCount: 0, truncated: false };
+  if (starts.length === 0) {
+    return { text: '', turnCount: 0, truncated: false, quarantined: false };
+  }
 
   const keptStarts = starts.slice(-Math.max(1, maxTurns));
   const from = keptStarts[0] ?? 0;
@@ -245,11 +226,28 @@ export function buildTranscriptExcerpt(
   }
 
   const rendered = lines.join('\n').trim();
-  if (rendered.length === 0) return { text: '', turnCount: keptStarts.length, truncated: false };
+  if (rendered.length === 0) {
+    return { text: '', turnCount: keptStarts.length, truncated: false, quarantined: false };
+  }
 
   const redacted = redactMemoryBody(rendered);
+  // Quarantine on the FULL redacted text (checked before truncation so a token
+  // straddling the byte cap cannot shrink below the detector's threshold), plus
+  // a header gate that the deny-list cannot fully cover.
+  if (
+    looksLikeCookieHeader(rendered) ||
+    looksLikeCookieHeader(redacted) ||
+    looksLikeSecret(redacted)
+  ) {
+    return { text: '', turnCount: keptStarts.length, truncated: false, quarantined: true };
+  }
   if (Buffer.byteLength(redacted, 'utf8') <= maxExcerptBytes) {
-    return { text: redacted, turnCount: keptStarts.length, truncated: false };
+    return {
+      text: redacted,
+      turnCount: keptStarts.length,
+      truncated: false,
+      quarantined: false,
+    };
   }
 
   // Truncated: the FINAL text (content + marker) must strictly fit
@@ -264,7 +262,7 @@ export function buildTranscriptExcerpt(
     budget > 0
       ? `${truncateToBytes(redacted, budget).text}${suffix}`
       : truncateToBytes(EXCERPT_TRUNCATION_MARKER, maxExcerptBytes).text;
-  return { text, turnCount: keptStarts.length, truncated: true };
+  return { text, turnCount: keptStarts.length, truncated: true, quarantined: false };
 }
 
 /** Parse a `Memory` tool-call's arguments; returns the action or undefined. */
@@ -325,7 +323,8 @@ const DraftSchema = z.object({
  * field (so a hostile generator that echoes a raw secret cannot persist it),
  * truncate the body to the byte cap, QUARANTINE (drop) any draft whose fields
  * still `looksLikeSecret` after redaction (fail-safe against novel credential
- * shapes the deny-list missed), and keep at most `maxProposalsPerRun`. Pure.
+ * shapes the deny-list missed) or carry a multi-pair `Cookie` header, and keep
+ * at most `maxDraftsPerRun`. Pure.
  */
 export function sanitizeDrafts(
   drafts: readonly unknown[],
@@ -336,24 +335,42 @@ export function sanitizeDrafts(
     const parsed = DraftSchema.safeParse(candidate);
     if (!parsed.success) continue;
     const value = parsed.data;
-    const name = redactMemoryBody(value.name);
-    const description = redactMemoryBody(value.description);
-    const body = truncateToBytes(redactMemoryBody(value.body), caps.maxBodyBytes).text.trim();
-    if (body.length === 0) continue;
-    // Quarantine: never persist a draft that still carries credential-shaped
-    // material after redaction. Drop it rather than write it silently.
-    if (looksLikeSecret(name) || looksLikeSecret(description) || looksLikeSecret(body)) {
+    const redactedName = redactMemoryBody(value.name);
+    const redactedDescription = redactMemoryBody(value.description);
+    const redactedBody = redactMemoryBody(value.body);
+    // Check the FULL redacted fields before truncating the body (a credential
+    // straddling the byte cap must not shrink below the detector's threshold),
+    // plus the cookie-header gate on both the original and redacted forms.
+    if (
+      looksLikeCookieHeader(value.name) ||
+      looksLikeCookieHeader(value.description) ||
+      looksLikeCookieHeader(value.body) ||
+      looksLikeCookieHeader(redactedName) ||
+      looksLikeCookieHeader(redactedDescription) ||
+      looksLikeCookieHeader(redactedBody) ||
+      looksLikeSecret(redactedName) ||
+      looksLikeSecret(redactedDescription) ||
+      looksLikeSecret(redactedBody)
+    ) {
       continue;
     }
+    const name = redactedName;
+    const description = redactedDescription;
+    const body = truncateToBytes(redactedBody, caps.maxBodyBytes).text.trim();
+    if (body.length === 0) continue;
+    // Defense in depth after normalization and truncation.
+    if (looksLikeSecret(name) || looksLikeSecret(description) || looksLikeSecret(body)) continue;
     out.push({ scope: value.scope, type: value.type, name, description, body });
-    if (out.length >= caps.maxProposalsPerRun) break;
+    if (out.length >= caps.maxDraftsPerRun) break;
   }
   return out;
 }
 
-/** Deterministic dedupe key for a proposal/draft (scope+type+name+body). */
-export function proposalDedupeKey(draft: MemoryExtractDraft): string {
-  return `${draft.scope}\u0000${draft.type}\u0000${draft.name}\u0000${draft.body}`;
+/** Deterministic dedupe key for a draft or persisted memory (scope+type+name+body). */
+export function memoryDraftDedupeKey(
+  memory: Pick<MemoryExtractDraft, 'scope' | 'type' | 'name' | 'body'>,
+): string {
+  return `${memory.scope}\u0000${memory.type}\u0000${memory.name}\u0000${memory.body}`;
 }
 
 /**

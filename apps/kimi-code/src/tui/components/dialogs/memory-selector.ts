@@ -22,7 +22,7 @@ export interface MemorySelectorOptions {
 }
 
 /**
- * Persistent-memory manager (the `persistent-memory` experiment, v2 only).
+ * Native persistent-memory manager for the v2 SDK.
  *
  * A searchable list with full management: create (`N`) and edit (`E`) open the
  * memory as a markdown document in `$EDITOR`, `Enter` views the full body, and

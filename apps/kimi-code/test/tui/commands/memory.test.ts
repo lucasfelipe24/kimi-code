@@ -104,20 +104,6 @@ describe('handleMemoryCommand', () => {
     expect(host.harness.listMemories).toHaveBeenCalledWith('/work');
   });
 
-  it('surfaces the disabled notice when the feature is off', async () => {
-    const host = makeHost([]);
-    host.harness.listMemories.mockRejectedValueOnce(
-      Object.assign(new Error('disabled'), { code: 40928 }),
-    );
-
-    handleMemoryCommand(host, '');
-    await vi.waitFor(() => {
-      expect(host.showNotice).toHaveBeenCalled();
-    });
-
-    const [, detail] = host.showNotice.mock.calls[0] as [string, string];
-    expect(detail).toContain('Persistent memory is disabled.');
-  });
 });
 
 describe('memory manager create/edit flows', () => {

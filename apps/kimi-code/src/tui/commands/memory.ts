@@ -12,21 +12,13 @@ import {
 } from './memory-doc';
 import type { SlashCommandHost } from './dispatch';
 
-const MEMORY_DISABLED_NOTICE = [
-  'Persistent memory is disabled.',
-  '',
-  'Enable the "persistent-memory" experiment (config [experimental] section or',
-  'the KIMI_CODE_EXPERIMENTAL_PERSISTENT_MEMORY env var) to manage memories.',
-].join('\n');
-
 const NO_EDITOR_NOTICE = 'No editor configured. Set $VISUAL / $EDITOR, or run /editor <command>.';
 
 /**
- * `/memory` — persistent-memory manager (v2 only, gated by the
- * `persistent-memory` experiment). Opens a searchable list of the workspace's
- * durable memories: create (`N`) and edit (`E`) open the memory as a markdown
- * document (frontmatter + body) in `$EDITOR`, `Enter` views the full body, and
- * `D` forgets. The agent manages the same store through its Memory tool.
+ * `/memory` — native persistent-memory manager. Opens a searchable list of the
+ * workspace's durable memories: create (`N`) and edit (`E`) open the memory as a
+ * markdown document (frontmatter + body) in `$EDITOR`, `Enter` views the full
+ * body, and `D` forgets. The agent manages the same store through its Memory tool.
  */
 export function handleMemoryCommand(host: SlashCommandHost, args: string): void {
   void args;
@@ -39,10 +31,6 @@ async function openMemoryManager(host: SlashCommandHost): Promise<void> {
   try {
     memories = await host.harness.listMemories(workDir);
   } catch (error) {
-    if (isMemoryDisabled(error)) {
-      host.showNotice('Persistent memory', MEMORY_DISABLED_NOTICE);
-      return;
-    }
     host.showError(`Failed to load memories: ${formatMemoryError(error)}`);
     return;
   }
@@ -200,12 +188,6 @@ async function runExternalEditor(
     void refreshMemoryManager(host);
   }
   return result;
-}
-
-/** The daemon reports a disabled feature with the `memory.disabled` code. */
-function isMemoryDisabled(error: unknown): boolean {
-  const code = memoryErrorCode(error);
-  return code === 40928 || code === 'memory.disabled';
 }
 
 function memoryErrorCode(error: unknown): unknown {

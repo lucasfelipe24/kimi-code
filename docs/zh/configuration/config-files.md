@@ -415,7 +415,7 @@ disabled = ["EnterPlanMode", "ExitPlanMode", "mcp__github__*"]
 | `recall_max_entries` | `integer` | `5` | 单次 recall 最多选择的 memory 条数 |
 | `recall_max_bytes_per_entry` | `integer` | `4096` | 单条 recall memory 正文最多渲染的 UTF-8 字节数 |
 | `recall_max_session_bytes` | `integer` | `61440` | 单次 recall 注入的完整 memory 信封的 UTF-8 字节上限 |
-| `extraction_max_turns` | `integer` | `5` | 自动提取 proposal 最多包含的最近 User 轮次 |
+| `extraction_max_turns` | `integer` | `5` | 单次自动提取最多包含的最近 User 轮次 |
 
 ```toml
 [memory]
@@ -425,7 +425,7 @@ recall_max_session_bytes = 61440
 extraction_max_turns = 5
 ```
 
-自动提取是 engine v2 的原生能力，会在主 Agent 的每个已完成轮次后运行。它只会生成待处理 proposal，不会自动写入持久化 memory；每条 proposal 仍需显式提交。
+自动提取是 engine v2 的原生能力，会在 main agent 的每个已完成轮次后运行。它会对安全的 draft 做安全处理并自动持久化，同时排除 memory 目录中已可见的重复项和同一次运行内的重复项。瞬态持久化失败时，受影响的 draft 会保留到后续已完成轮次后重试；终态 memory 错误（例如 workspace 不可信时的 project 写入）会被直接丢弃，不再重试。这种去重不提供跨进程的原子幂等保证。提取不会向模型发送凭据形态的 transcript 内容，draft 在持久化前还会再次脱敏并拒绝不安全内容。
 
 <!--
 ## `experimental`
