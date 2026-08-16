@@ -14,7 +14,6 @@ export const MemoryErrors = {
     MEMORY_VERSION_CONFLICT: 'memory.version_conflict',
     MEMORY_TRUST_REQUIRED: 'memory.trust_required',
     MEMORY_NOT_FOUND: 'memory.not_found',
-    MEMORY_DISABLED: 'memory.disabled',
     MEMORY_MUTATION_DENIED: 'memory.mutation_denied',
     MEMORY_CONTENT_REJECTED: 'memory.content_rejected',
   },
@@ -65,12 +64,6 @@ export const MemoryErrors = {
       title: 'Memory not found',
       retryable: false,
       public: true,
-    },
-    'memory.disabled': {
-      title: 'Persistent memory disabled',
-      retryable: false,
-      public: true,
-      action: 'Enable the persistent-memory experiment before mutating memory.',
     },
     'memory.mutation_denied': {
       title: 'Memory mutation denied',

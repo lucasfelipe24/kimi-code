@@ -1027,14 +1027,15 @@ export const telemetryEventDefinitions = {
   memory_extract: defineAgentTelemetryEvent<MemoryExtractEvent>({
     owner: 'kimi-code',
     comment:
-      'Automatic memory extraction persists safe drafts at turn end. Content-free: only counts and aggregate outcome; never memory content.',
+      'Automatic memory extraction persists safe drafts at turn end. Content-free: only counts and aggregate outcome; never memory content. Counts are per-attempt/per-run, not per-draft: a draft retried on a later completed turn is counted again in that run\'s event.',
     properties: {
-      turn_count: 'Number of transcript turns fed to the extraction generation call',
+      turn_count: 'Number of transcript turns fed to the extraction generation call (0 for a retry-only run)',
       written_count:
-        'Legacy name for persisted_count; retained for telemetry wire compatibility and always equal to persisted_count',
-      draft_count: 'Number of sanitized, deduplicated drafts attempted for persistence',
-      persisted_count: 'Number of drafts persisted successfully',
-      failed_count: 'Number of draft persistence attempts that failed',
+        'Deprecated alias for persisted_count; retained for telemetry wire compatibility and always equal to persisted_count',
+      draft_count: 'Number of sanitized drafts attempted for persistence in this run (per-attempt; retries recount the draft)',
+      persisted_count: 'Number of drafts persisted successfully in this run (per-attempt)',
+      failed_count:
+        'Number of persistence attempts that failed in this run (per-attempt); excludes drafts never attempted, e.g. when the catalog dedupe lookup itself fails',
       outcome: 'Extraction outcome (success, partial persistence, skipped, or error)',
     },
   }),

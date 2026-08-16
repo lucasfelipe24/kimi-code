@@ -37,6 +37,13 @@ export const DEFAULT_MEMORY_EXTRACTION_MAX_TURNS = 5;
 /** Hard ceiling on the number of drafts persisted from a single extraction run. */
 export const MEMORY_EXTRACT_MAX_DRAFTS_PER_RUN = 8;
 
+/**
+ * Max total persistence attempts (initial + deterministic retries) for a draft
+ * before it is dropped from the retry queue, so a persistent transient failure
+ * can never starve later extraction forever.
+ */
+export const MEMORY_EXTRACT_MAX_RETRY_ATTEMPTS = 3;
+
 /** Aggregate UTF-8 byte cap for the whole transcript excerpt fed to the model. */
 export const DEFAULT_MEMORY_EXCERPT_MAX_BYTES = 8 * 1024;
 
@@ -158,18 +165,10 @@ function userTurnStarts(messages: readonly ContextMessage[]): number[] {
 
 /** A short human-readable role tag for the excerpt rendering. */
 function roleLabel(message: ContextMessage): string {
-  switch (message.role) {
-    case 'user':
-      return message.origin?.kind === 'user' ? 'user' : 'context';
-    case 'assistant':
-      return 'assistant';
-    case 'tool':
-      return 'tool';
-    case 'system':
-      return 'system';
-    default:
-      return message.role;
+  if (message.role === 'user') {
+    return message.origin?.kind === 'user' ? 'user' : 'context';
   }
+  return message.role;
 }
 
 /** Truncate a string to at most `maxBytes` UTF-8 bytes (drops a partial char). */

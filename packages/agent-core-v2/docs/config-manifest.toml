@@ -222,6 +222,7 @@ recall_max_entries = 5
 recall_max_bytes_per_entry = 4096
 recall_max_session_bytes = 61440
 extraction_max_turns = 5
+extraction_enabled = true
 
 # ##########################################################################
 # mergeAllAvailableSkills (config.toml: merge_all_available_skills)

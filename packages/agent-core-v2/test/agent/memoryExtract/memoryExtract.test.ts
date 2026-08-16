@@ -5,20 +5,23 @@
  * `EventBusService` and the in-memory context stub, with a fake session-memory
  * access, a fake LLM requester (that captures the request overrides), and
  * stubbed config/telemetry/log. Covers: native extraction without a feature gate;
- * coalescing under a burst of `turn.ended` (≤1 run per scope) INCLUDING a
- * genuinely-new-transcript rerun; completed-only gating (cancelled/failed/blocked
- * are ignored); the cursor advancing after a completed extraction attempt and
- * REBASING on a transcript shrink (undo/clear/compaction) — no freeze, no
- * full-history resend; skip only on a SUCCESSFUL `Memory remember` (not a bare
- * call / list / forget / failed remember); the `extractionMaxTurns` config bound
- * read via the service; transcript-only input; the EMPTY-toolset + small
- * maxOutputSize + timeout of the default generation call; credential redaction
- * and quarantine of drafts that still look secret before truncation, including
- * multi-pair `Cookie` headers; automatic per-draft persistence, fail-closed
- * catalog dedupe, bounded deterministic retries of transient failures, terminal
- * `MemoryError` rejections dropped without blocking later turns, a failed
- * generation boundary retried even when a later turn succeeds with an explicit
- * remember, and content-free telemetry.
+ * the `extractionEnabled` switch (disabled ⇒ no run, no writes, no telemetry and
+ * re-enabling resumes from the same position); coalescing under a burst of
+ * `turn.ended` (≤1 run per scope) INCLUDING a genuinely-new-transcript rerun;
+ * completed-only gating (cancelled/failed/blocked are ignored); the cursor
+ * advancing after a completed extraction attempt and REBASING on a transcript
+ * shrink (undo/clear/compaction) — no freeze, no full-history resend; skip only
+ * on a SUCCESSFUL `Memory remember` (not a bare call / list / forget / failed
+ * remember); the `extractionMaxTurns` config bound read via the service;
+ * transcript-only input; the EMPTY-toolset + small maxOutputSize + timeout of
+ * the default generation call; credential redaction and quarantine of drafts
+ * that still look secret before truncation, including multi-pair `Cookie`
+ * headers; automatic per-draft persistence, fail-closed catalog dedupe,
+ * bounded deterministic retries of transient failures with eviction after the
+ * attempt cap, terminal `MemoryError` rejections dropped without blocking
+ * later turns, a failed generation boundary retried even when a later turn
+ * succeeds with an explicit remember, and content-free telemetry (per-attempt
+ * counts — a catalog-lookup failure reports zero failed drafts).
  *
  * Run: `pnpm --filter @moonshot-ai/agent-core-v2 exec vitest run
  * test/agent/memoryExtract/memoryExtract.test.ts`.
@@ -224,9 +227,11 @@ describe('AgentMemoryExtractService', () => {
   let requester: FakeLLMRequester;
   let configValue: MemoryConfig;
   let tracked: TrackedEvent[];
+  let logLines: string[];
   let agentId: string;
 
   function build(): void {
+    logLines = [];
     ix = createServices(disposables, {
       base: [registerContextMemoryServices],
       strict: true,
@@ -245,7 +250,11 @@ describe('AgentMemoryExtractService', () => {
             tracked.push({ name, properties });
           }) as unknown as ITelemetryService['track2'],
         });
-        reg.definePartialInstance(ILogService, { debug: () => {} });
+        reg.definePartialInstance(ILogService, {
+          debug: (message: unknown) => {
+            logLines.push(String(message));
+          },
+        });
         reg.define(IAgentMemoryExtractService, AgentMemoryExtractService);
       },
     });
@@ -731,10 +740,13 @@ describe('AgentMemoryExtractService', () => {
 
     expect(generated).toBe(1);
     expect(access.createCalls).toHaveLength(0);
+    // The catalog lookup failed BEFORE any persistence attempt: the drafts are
+    // queued for a deterministic retry and counted as 0 failed (per-attempt).
+    expect(service().pendingDraftCountForTests()).toBe(1);
     expect(extractEvents().at(-1)?.properties).toMatchObject({
       draft_count: 1,
       persisted_count: 0,
-      failed_count: 1,
+      failed_count: 0,
       outcome: 'error',
     });
 
@@ -965,6 +977,98 @@ describe('AgentMemoryExtractService', () => {
         expect(String(value)).not.toContain('secret-desc');
       }
     }
+  });
+
+  it('skips extraction entirely while extractionEnabled is false, then resumes from the same position', async () => {
+    configValue = { ...DEFAULT_MEMORY_CONFIG, extractionEnabled: false };
+    context.append(userMessage('how do I deploy the service'));
+    let calls = 0;
+    service().setExtractor(() => {
+      calls += 1;
+      return Promise.resolve([DRAFT_ONE]);
+    });
+
+    endTurn();
+    await service().whenIdle();
+
+    // The hook does nothing when disabled: no run, no write, no telemetry, and
+    // the cursor/boundaries are untouched (nothing to consume).
+    expect(calls).toBe(0);
+    expect(access.createCalls).toHaveLength(0);
+    expect(extractEvents()).toHaveLength(0);
+    expect(writeEvents()).toHaveLength(0);
+
+    // Re-enabling resumes mining the SAME span — extraction never consumed it
+    // while disabled, so the draft is still proposed and persisted.
+    configValue = { ...DEFAULT_MEMORY_CONFIG, extractionEnabled: true };
+    endTurn();
+    await service().whenIdle();
+
+    expect(calls).toBe(1);
+    expect(access.createCalls).toEqual([DRAFT_ONE]);
+  });
+
+  it('evicts a draft after the retry-attempt cap so a persistent transient failure cannot starve later turns', async () => {
+    context.append(userMessage('topic A'));
+    access.createOverride = () => Promise.reject(new Error('storage unavailable'));
+    let generated = 0;
+    service().setExtractor(() => {
+      generated += 1;
+      return Promise.resolve([DRAFT_ONE]);
+    });
+
+    endTurn();
+    await service().whenIdle();
+    expect(generated).toBe(1);
+    expect(service().pendingDraftCountForTests()).toBe(1);
+
+    // Retry 1 fails (attempts=2): the queue stays bounded, no new generation.
+    context.append(userMessage('topic B'));
+    endTurn();
+    await service().whenIdle();
+    expect(generated).toBe(1);
+    expect(service().pendingDraftCountForTests()).toBe(1);
+
+    // Retry 2 fails and EVICTS the draft (attempts reach the cap): the queue
+    // empties and the queued boundary is mined again, so later extraction is
+    // never starved forever by the persistent failure.
+    context.append(userMessage('topic C'));
+    endTurn();
+    await service().whenIdle();
+    expect(generated).toBe(2);
+    expect(service().pendingDraftCountForTests()).toBe(1);
+    expect(
+      logLines.some((line) => line.includes('dropped after 3 failed persistence attempts')),
+    ).toBe(true);
+  });
+
+  it('reports zero failed on a retry-time catalog lookup failure and keeps the drafts queued', async () => {
+    access.listOverride = () => Promise.reject(new Error('catalog unavailable'));
+    context.append(userMessage('how do I deploy the service'));
+    service().setExtractor(() => Promise.resolve([DRAFT_ONE]));
+
+    endTurn();
+    await service().whenIdle();
+    expect(service().pendingDraftCountForTests()).toBe(1);
+    expect(extractEvents().at(-1)?.properties).toMatchObject({
+      draft_count: 1,
+      persisted_count: 0,
+      failed_count: 0,
+      outcome: 'error',
+    });
+
+    // The retry also hits the catalog failure: still zero persistence attempts
+    // made, so zero failed, and the draft stays queued.
+    endTurn();
+    await service().whenIdle();
+    expect(service().pendingDraftCountForTests()).toBe(1);
+    expect(access.createCalls).toHaveLength(0);
+    expect(extractEvents().at(-1)?.properties).toMatchObject({
+      draft_count: 1,
+      persisted_count: 0,
+      failed_count: 0,
+      outcome: 'error',
+    });
   });
 });
 

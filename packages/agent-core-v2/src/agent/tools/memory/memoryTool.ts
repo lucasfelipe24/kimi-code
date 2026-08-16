@@ -29,7 +29,7 @@ import {
   type ToolExecution,
 } from '#/tool/toolContract';
 import { MemoryErrors } from '#/app/persistentMemory/errors';
-import { MemoryError, type MemoryScope } from '#/app/persistentMemory/memoryStore';
+import { MemoryError } from '#/app/persistentMemory/memoryStore';
 import { ITelemetryService } from '#/app/telemetry/telemetry';
 import { ISessionMemoryAccess } from '#/session/persistentMemory/memorySeed';
 
@@ -52,7 +52,6 @@ const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   [MemoryErrors.codes.MEMORY_VERSION_CONFLICT]: 'memory error: memory version conflict',
   [MemoryErrors.codes.MEMORY_TRUST_REQUIRED]: 'memory error: trusted workspace required',
   [MemoryErrors.codes.MEMORY_NOT_FOUND]: 'memory error: memory not found',
-  [MemoryErrors.codes.MEMORY_DISABLED]: 'memory error: persistent memory disabled',
   [MemoryErrors.codes.MEMORY_MUTATION_DENIED]: 'memory error: memory mutation denied',
   [MemoryErrors.codes.MEMORY_CONTENT_REJECTED]: 'memory error: memory content rejected',
 };
