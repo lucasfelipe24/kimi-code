@@ -6,19 +6,25 @@
  * it reads the current transcript from `contextMemory`, skips a span after a
  * successful explicit `Memory remember`, and sends only a redacted, byte-capped,
  * turn-bounded excerpt to the installed `MemoryExtractor` or tool-free
- * `llmRequester` call. It serializes completed transcript boundaries and rebases
- * its cursor across `context.spliced`. Sanitized, redacted, quarantined, deduped
+ * `llmRequester` call. Extraction is skipped entirely while the `[memory]`
+ * `extractionEnabled` switch is off: the hook does nothing, so cursor and
+ * boundary state stay untouched and re-enabling resumes mining from the same
+ * position. It serializes completed transcript boundaries and rebases its
+ * cursor across `context.spliced`. Sanitized, redacted, quarantined, deduped
  * drafts are persisted individually through `sessionMemoryAccess`; a failure is
  * isolated to its draft so later drafts still write. A failed draft is retried
- * deterministically from a bounded in-memory queue on a later completed turn;
- * terminal `MemoryError` rejections are dropped so they never block future
- * extraction. Reports only content-free counts and aggregate outcome through
- * `telemetry`. Bound at Agent scope.
+ * deterministically from a bounded in-memory queue on a later completed turn,
+ * evicted after `MEMORY_EXTRACT_MAX_RETRY_ATTEMPTS` failed attempts so a
+ * persistent transient failure cannot starve later extraction; terminal
+ * `MemoryError` rejections are dropped so they never block future extraction.
+ * Reports only content-free counts and aggregate outcome through `telemetry`.
+ * Bound at Agent scope.
  */
 
 import { Disposable, MutableDisposable } from '#/_base/di/lifecycle';
 import { LifecycleScope } from '#/app/scopes';
 import { ScopeActivation, registerScopedService } from '#/_base/di/scope';
+import { errorInfo } from '#/_base/errors/codes';
 import { ILogService } from '#/_base/log/log';
 
 import { IAgentContextMemoryService } from '#/agent/contextMemory/contextMemory';
@@ -43,6 +49,7 @@ import {
   DEFAULT_MEMORY_EXTRACT_TIMEOUT_MS,
   IAgentMemoryExtractService,
   MEMORY_EXTRACT_MAX_OUTPUT_TOKENS,
+  MEMORY_EXTRACT_MAX_RETRY_ATTEMPTS,
   MEMORY_EXTRACT_SYSTEM_PROMPT,
   buildTranscriptExcerpt,
   hadSuccessfulRemember,
@@ -54,15 +61,26 @@ import {
   type MemoryExtractCaps,
   type MemoryExtractDraft,
   type MemoryExtractor,
+  type MemoryExtractRunOutcome,
 } from './memoryExtract';
 
+/** A queued draft and how many persistence attempts it has already failed. */
+interface PendingDraftEntry {
+  readonly draft: MemoryExtractDraft;
+  /** Failed attempts so far (initial + deterministic retries). */
+  readonly attempts: number;
+}
+
 /**
+ * Terminal-ness is decided from the registered retryable info keyed off the
+ * error's code — the code registry is the source of truth for retry semantics —
+ * gated on the `MemoryError` class so unrelated registered codes (storage/fs)
+ * that surface from the catalog stay transient and get a deterministic retry.
  * Every registered `MemoryError` code declares `retryable: false` (trust, scope
- * full, content rejected, …), so any `MemoryError` is terminal; only unknown
- * (transient) failures are worth a deterministic retry.
+ * full, content rejected, …), so all of them are terminal.
  */
 function isTerminalMemoryError(error: unknown): boolean {
-  return error instanceof MemoryError;
+  return error instanceof MemoryError && !errorInfo(error.code).retryable;
 }
 
 export class AgentMemoryExtractService extends Disposable implements IAgentMemoryExtractService {
@@ -79,7 +97,7 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
   private boundaryPushedDuringRun = false;
 
   /** Sanitized drafts awaiting another catalog-checked persistence attempt. */
-  private pendingDrafts: MemoryExtractDraft[] = [];
+  private pendingDrafts: PendingDraftEntry[] = [];
 
   /**
    * The cursor: transcript length already mined. Advances once a span's
@@ -114,6 +132,17 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
   ) {
     super();
     this.isMainAgent = scopeContext.agentId === MAIN_AGENT_ID;
+    // The retry queue is in-memory: when the agent scope tears down (process
+    // exit / scope close) queued drafts are lost, so surface that loss.
+    this._register({
+      dispose: () => {
+        if (this.pendingDrafts.length > 0) {
+          this.log.debug(
+            `memory extract: ${this.pendingDrafts.length} queued draft(s) lost on scope disposal`,
+          );
+        }
+      },
+    });
     // Only the main agent extracts; a subagent never installs the hook, so its
     // (confined) transcript is never mined and it cannot escalate into `user`.
     if (this.isMainAgent) {
@@ -166,14 +195,28 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
     }
   }
 
-  private resolveCaps(): MemoryExtractCaps {
+  /** Test seam: current size of the pending retry queue. */
+  pendingDraftCountForTests(): number {
+    return this.pendingDrafts.length;
+  }
+
+  private readMemoryConfig(): MemoryConfig | undefined {
     let section: MemoryConfig | undefined;
     try {
       section = this.config.get<MemoryConfig>(MEMORY_SECTION);
     } catch {
       section = undefined;
     }
-    return resolveExtractCaps(section, {
+    return section;
+  }
+
+  /** Is automatic extraction enabled by the `[memory]` config (default: on)? */
+  private isExtractionEnabled(): boolean {
+    return this.readMemoryConfig()?.extractionEnabled ?? DEFAULT_MEMORY_CONFIG.extractionEnabled;
+  }
+
+  private resolveCaps(): MemoryExtractCaps {
+    return resolveExtractCaps(this.readMemoryConfig(), {
       extractionMaxTurns:
         DEFAULT_MEMORY_CONFIG.extractionMaxTurns ?? DEFAULT_MEMORY_EXTRACTION_MAX_TURNS,
     });
@@ -184,6 +227,10 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
    * boundary and serializes extraction so an active following turn is never mined.
    */
   private onTurnEnded(): void {
+    // Extraction disabled by config: do nothing — no boundary is queued and no
+    // run starts, so cursor/boundary state stays exactly as-is and re-enabling
+    // resumes mining from the same position.
+    if (!this.isExtractionEnabled()) return;
     this.completedBoundaries.push(this.context.get().length);
     if (this.running === undefined) {
       this.running = this.runChain();
@@ -282,15 +329,21 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
       try {
         drafts = await this.dedupeDrafts(sanitized);
       } catch {
-        this.pendingDrafts = this.limitDrafts(sanitized, caps.maxDraftsPerRun);
+        // The catalog lookup failed, so NO draft was attempted for persistence:
+        // queue the sanitized drafts for a deterministic retry and report zero
+        // failures (per-attempt semantics) with an error outcome.
+        this.pendingDrafts = this.limitPendingDrafts(
+          sanitized.map((draft) => ({ draft, attempts: 0 })),
+          caps.maxDraftsPerRun,
+        );
         this.trackExtractResult(excerpt.turnCount, sanitized.length, {
           successes: 0,
-          failures: sanitized.length,
-        });
+          failures: 0,
+        }, 'error');
         return false;
       }
-      const persisted = await this.persistDrafts(drafts);
-      this.pendingDrafts = this.limitDrafts(persisted.failedDrafts, caps.maxDraftsPerRun);
+      const persisted = await this.persistDrafts(drafts, new Map());
+      this.pendingDrafts = this.limitPendingDrafts(persisted.failedEntries, caps.maxDraftsPerRun);
       this.trackExtractResult(excerpt.turnCount, drafts.length, persisted);
       // The span is consumed once its generation and persistence attempt
       // complete: drafts that failed are kept in `pendingDrafts` for a
@@ -366,19 +419,25 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
     caps: MemoryExtractCaps,
   ): Promise<{ succeeded: boolean }> {
     if (this.pendingDrafts.length === 0) return { succeeded: true };
-    const drafts = this.pendingDrafts;
+    const entries = this.pendingDrafts;
+    const attemptsByKey = new Map(
+      entries.map((entry) => [memoryDraftDedupeKey(entry.draft), entry.attempts] as const),
+    );
     let deduped: readonly MemoryExtractDraft[];
     try {
-      deduped = await this.dedupeDrafts(drafts);
+      deduped = await this.dedupeDrafts(entries.map((entry) => entry.draft));
     } catch {
-      this.trackExtractResult(0, drafts.length, {
+      // The catalog lookup failed: the queued drafts were NOT attempted for
+      // persistence, so report zero failures (per-attempt semantics) and keep
+      // them queued for another attempt.
+      this.trackExtractResult(0, entries.length, {
         successes: 0,
-        failures: drafts.length,
-      });
+        failures: 0,
+      }, 'error');
       return { succeeded: false };
     }
-    const persisted = await this.persistDrafts(deduped);
-    this.pendingDrafts = this.limitDrafts(persisted.failedDrafts, caps.maxDraftsPerRun);
+    const persisted = await this.persistDrafts(deduped, attemptsByKey);
+    this.pendingDrafts = this.limitPendingDrafts(persisted.failedEntries, caps.maxDraftsPerRun);
     this.trackExtractResult(0, deduped.length, persisted);
     return { succeeded: this.pendingDrafts.length === 0 };
   }
@@ -403,14 +462,17 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
     });
   }
 
-  private async persistDrafts(drafts: readonly MemoryExtractDraft[]): Promise<{
+  private async persistDrafts(
+    drafts: readonly MemoryExtractDraft[],
+    attemptsByKey: ReadonlyMap<string, number>,
+  ): Promise<{
     successes: number;
     failures: number;
-    failedDrafts: readonly MemoryExtractDraft[];
+    failedEntries: readonly PendingDraftEntry[];
   }> {
     let successes = 0;
     let failures = 0;
-    const failedDrafts: MemoryExtractDraft[] = [];
+    const failedEntries: PendingDraftEntry[] = [];
     for (const draft of drafts) {
       try {
         await this.access.create(draft);
@@ -425,10 +487,18 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
         // terminal `MemoryError` (trust, scope full, content rejected, …) is
         // NOT queued for retry: retrying it on every completed turn would block
         // later extraction forever. Unknown (transient) failures keep the draft
-        // for a deterministic retry.
+        // for a deterministic retry, evicted once it exceeds the attempt cap so
+        // a persistent transient failure cannot starve later extraction.
         failures += 1;
         if (!isTerminalMemoryError(error)) {
-          failedDrafts.push(draft);
+          const attempts = (attemptsByKey.get(memoryDraftDedupeKey(draft)) ?? 0) + 1;
+          if (attempts < MEMORY_EXTRACT_MAX_RETRY_ATTEMPTS) {
+            failedEntries.push({ draft, attempts });
+          } else {
+            this.log.debug(
+              `memory extract: draft dropped after ${attempts} failed persistence attempts`,
+            );
+          }
         }
         this.telemetry.track2('memory_write', {
           scope: draft.scope,
@@ -438,20 +508,20 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
         this.log.debug('memory extract: draft persistence failed');
       }
     }
-    return { successes, failures, failedDrafts };
+    return { successes, failures, failedEntries };
   }
 
-  private limitDrafts(
-    drafts: readonly MemoryExtractDraft[],
+  private limitPendingDrafts(
+    entries: readonly PendingDraftEntry[],
     maxDrafts: number,
-  ): MemoryExtractDraft[] {
+  ): PendingDraftEntry[] {
     const seen = new Set<string>();
-    const limited: MemoryExtractDraft[] = [];
-    for (const draft of drafts) {
-      const key = memoryDraftDedupeKey(draft);
+    const limited: PendingDraftEntry[] = [];
+    for (const entry of entries) {
+      const key = memoryDraftDedupeKey(entry.draft);
       if (seen.has(key)) continue;
       seen.add(key);
-      limited.push(draft);
+      limited.push(entry);
       if (limited.length >= maxDrafts) break;
     }
     return limited;
@@ -461,6 +531,7 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
     turnCount: number,
     draftCount: number,
     persisted: { readonly successes: number; readonly failures: number },
+    outcomeOverride?: MemoryExtractRunOutcome,
   ): void {
     this.telemetry.track2('memory_extract', {
       turn_count: turnCount,
@@ -469,11 +540,12 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
       persisted_count: persisted.successes,
       failed_count: persisted.failures,
       outcome:
-        persisted.failures === 0
+        outcomeOverride ??
+        (persisted.failures === 0
           ? 'success'
           : persisted.successes > 0
             ? 'partial'
-            : 'error',
+            : 'error'),
     });
   }
 }

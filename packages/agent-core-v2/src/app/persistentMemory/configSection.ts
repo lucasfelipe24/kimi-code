@@ -17,6 +17,7 @@ export const MemoryConfigSchema = z.object({
   recallMaxBytesPerEntry: z.number().int().min(256).optional(),
   recallMaxSessionBytes: z.number().int().min(1024).optional(),
   extractionMaxTurns: z.number().int().min(1).max(10).optional(),
+  extractionEnabled: z.boolean().optional(),
 });
 
 export type MemoryConfig = z.infer<typeof MemoryConfigSchema>;
@@ -26,6 +27,7 @@ export const DEFAULT_MEMORY_CONFIG: Required<MemoryConfig> = {
   recallMaxBytesPerEntry: 4096,
   recallMaxSessionBytes: 60 * 1024,
   extractionMaxTurns: 5,
+  extractionEnabled: true,
 };
 
 registerConfigSection(MEMORY_SECTION, MemoryConfigSchema, {

@@ -1,5 +1,5 @@
 ---
-"@moonshot-ai/kimi-code": minor
+"@moonshot-ai/kimi-code": patch
 ---
 
-Add persistent memory as a native engine-v2 capability: the `Memory` tool, scoped selective recall, explicit writes, and automatic extraction are on by default, with no experiment to enable. Automatic extraction creates pending proposals only; persistence still requires an explicit commit.
+Automatic memory extraction now persists safe, deduplicated drafts directly at the end of each main-agent turn (no explicit commit needed), and transient failures are retried on later turns up to a bounded number of attempts. Set `extraction_enabled = false` under `[memory]` to turn automatic extraction off.

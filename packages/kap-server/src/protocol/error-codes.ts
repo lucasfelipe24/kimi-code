@@ -134,8 +134,6 @@ export const ErrorCode = {
   MEMORY_TRUST_REQUIRED: 40926,
   /** memory 内容被拒绝（疑似凭证 / 敏感信息） */
   MEMORY_CONTENT_REJECTED: 40927,
-  /** persistent-memory 实验开关未启用 */
-  MEMORY_DISABLED: 40928,
   /** memory scope 已达容量上限 */
   MEMORY_SCOPE_FULL: 40929,
 
@@ -183,6 +181,8 @@ export const ErrorCode = {
  *   - 40101 auth.invalid_token        (daemon's own token; future)
  *   - 40102 auth.missing_token        (daemon's own token; future)
  *   - 40103 auth.forbidden_origin     (daemon's own token; future)
+ *   - 40928 memory.disabled           (retired: the persistent-memory experiment
+ *                                      gate was removed, never emitted)
  *   - 42901 rate.limited
  *   - 50002 protocol.version_mismatch
  *
