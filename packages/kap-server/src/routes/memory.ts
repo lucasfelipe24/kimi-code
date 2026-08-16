@@ -1,9 +1,8 @@
 /**
  * `/workspaces/{workspace_id}/memories` route handlers — persistent memory.
  *
- * Exposes durable cross-session memory (the `persistent-memory` experiment) as
- * a workspace-scoped CRUD surface, so the web/TUI can view and manage memories
- * without an active session:
+ * Exposes durable cross-session memory as a workspace-scoped CRUD surface, so
+ * the web/TUI can view and manage memories without an active session:
  *
  *   GET    /workspaces/{workspace_id}/memories                → list
  *   POST   /workspaces/{workspace_id}/memories                → create
@@ -154,7 +153,6 @@ export function registerMemoryRoutes(app: MemoryRouteHost, core: Scope): void {
         [ErrorCode.WORKSPACE_NOT_FOUND]: {},
         [ErrorCode.MEMORY_TRUST_REQUIRED]: {},
         [ErrorCode.MEMORY_CONTENT_REJECTED]: {},
-        [ErrorCode.MEMORY_DISABLED]: {},
         [ErrorCode.MEMORY_SCOPE_FULL]: {},
         [ErrorCode.MEMORY_BODY_TOO_LARGE]: {},
       },
@@ -202,7 +200,6 @@ export function registerMemoryRoutes(app: MemoryRouteHost, core: Scope): void {
         [ErrorCode.MEMORY_NOT_FOUND]: {},
         [ErrorCode.MEMORY_TRUST_REQUIRED]: {},
         [ErrorCode.MEMORY_CONTENT_REJECTED]: {},
-        [ErrorCode.MEMORY_DISABLED]: {},
         [ErrorCode.MEMORY_BODY_TOO_LARGE]: {},
       },
       description: 'Update a durable memory (scope carried in the body)',
@@ -248,7 +245,6 @@ export function registerMemoryRoutes(app: MemoryRouteHost, core: Scope): void {
         [ErrorCode.VALIDATION_FAILED]: {},
         [ErrorCode.WORKSPACE_NOT_FOUND]: {},
         [ErrorCode.MEMORY_TRUST_REQUIRED]: {},
-        [ErrorCode.MEMORY_DISABLED]: {},
       },
       description: 'Forget a durable memory',
       tags: ['memory'],
@@ -311,10 +307,6 @@ function sendMappedError(reply: MemoryReply, requestId: string, err: unknown): v
         reply.send(
           errEnvelope(ErrorCode.MEMORY_CONTENT_REJECTED, err.message, requestId, err.stack),
         );
-        return;
-      case MemoryErrors.codes.MEMORY_DISABLED:
-      case MemoryErrors.codes.MEMORY_MUTATION_DENIED:
-        reply.send(errEnvelope(ErrorCode.MEMORY_DISABLED, err.message, requestId, err.stack));
         return;
       case MemoryErrors.codes.MEMORY_SCOPE_FULL:
         reply.send(errEnvelope(ErrorCode.MEMORY_SCOPE_FULL, err.message, requestId, err.stack));
