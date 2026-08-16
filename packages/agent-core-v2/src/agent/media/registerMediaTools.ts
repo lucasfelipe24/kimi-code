@@ -22,6 +22,7 @@ import type { IHostEnvironment } from '#/os/interface/hostEnvironment';
 import type { IAgentToolRegistryService } from '#/agent/toolRegistry/toolRegistry';
 import { ReadMediaFileTool } from '#/agent/tools/read-media-file/readMediaFileTool';
 import type { VideoUploader } from '#/agent/tools/read-media-file/read-media-file';
+import type { VisualMediaInspector } from './visualInspection';
 
 export interface RegisterMediaToolsDeps {
   readonly fs: IHostFileSystem;
@@ -31,6 +32,12 @@ export interface RegisterMediaToolsDeps {
   readonly videoUploader?: VideoUploader;
   readonly telemetry?: ITelemetryService;
   readonly inlineVideoSupported?: boolean;
+  /**
+   * When set, the registered tool delegates media inspection to the visual
+   * model and returns text instead of raw image/video content (the caller is
+   * text-only). The caller model never receives raw `ImageContent`.
+   */
+  readonly visualInspector?: VisualMediaInspector;
 }
 
 export function registerMediaTools(
@@ -49,6 +56,7 @@ export function registerMediaTools(
       deps.videoUploader,
       deps.telemetry,
       deps.inlineVideoSupported,
+      deps.visualInspector,
     ),
   );
 }

@@ -43,6 +43,11 @@ import type { ModelRequester } from '#/kosong/model/modelRequester';
 import type { ISessionWorkspaceContext } from '#/session/workspaceContext/workspaceContext';
 import type { WorkspaceConfig } from '#/tool/path-access';
 import { sniffImageDimensions } from '#/agent/media/file-type';
+import type { IConfigService, ConfigSectionChangedEvent } from '#/app/config/config';
+import type { ILogService } from '#/_base/log/log';
+import { toDisposable } from '#/_base/di/lifecycle';
+import type { VisualMediaInspector } from '#/agent/media/visualInspection';
+import { stubFlag } from '../../../app/flag/stubs';
 
 const WORKSPACE: WorkspaceConfig = { workspaceDir: '/workspace', additionalDirs: [] };
 
@@ -175,6 +180,7 @@ function makeTool(
   videoUploader?: VideoUploader,
   telemetry?: ITelemetryService,
   inlineVideoSupported?: boolean,
+  visualInspector?: VisualMediaInspector,
 ): ReadMediaFileTool {
   return new ReadMediaFileTool(
     createTestFs(files),
@@ -184,6 +190,7 @@ function makeTool(
     videoUploader,
     telemetry,
     inlineVideoSupported,
+    visualInspector,
   );
 }
 
@@ -634,6 +641,87 @@ describe('ReadMediaFileTool', () => {
     expect(result.output).toContain('does not support image input');
   });
 
+  it('describes visual delegation when bound with a visual inspector', () => {
+    const inspector: VisualMediaInspector = async () => 'analysis';
+    const tool = makeTool(
+      {},
+      capabilities({ image_in: true, video_in: true }),
+      undefined,
+      undefined,
+      undefined,
+      inspector,
+    );
+    expect(tool.description).toContain('inspected by the configured visual model');
+    expect(tool.description).toContain('returned as text');
+  });
+
+  it('delegates an image read to the visual inspector and returns its text', async () => {
+    const inspector = vi.fn<VisualMediaInspector>().mockResolvedValue('A red circle on white.');
+    const tool = makeTool(
+      { '/workspace/sample.png': { data: pngBuffer() } },
+      capabilities({ image_in: true, video_in: true }),
+      undefined,
+      undefined,
+      undefined,
+      inspector,
+    );
+
+    const result = await execute(tool, { path: '/workspace/sample.png' });
+
+    expect(result.isError).toBe(false);
+    expect(result.output).toEqual([{ type: 'text', text: 'A red circle on white.' }]);
+    expect(result.note).toContain('Mime type: image/png');
+    expect(inspector).toHaveBeenCalledOnce();
+    const inspection = inspector.mock.calls[0]![0];
+    expect(inspection.parts[0]).toMatchObject({
+      type: 'image_url',
+      imageUrl: { url: expect.stringContaining('data:image/png;base64,') },
+    });
+    expect(inspection.description).toContain('<image path="/workspace/sample.png">');
+  });
+
+  it('passes the bound video part to the inspector for a video read', async () => {
+    const inspector = vi.fn<VisualMediaInspector>().mockResolvedValue('A short clip.');
+    const tool = makeTool(
+      { '/workspace/clip.mp4': { data: mp4Buffer() } },
+      capabilities({ image_in: true, video_in: true }),
+      undefined,
+      undefined,
+      undefined,
+      inspector,
+    );
+
+    const result = await execute(tool, { path: '/workspace/clip.mp4' });
+
+    expect(result.isError).toBe(false);
+    expect(result.output).toEqual([{ type: 'text', text: 'A short clip.' }]);
+    const inspection = inspector.mock.calls[0]![0];
+    expect(inspection.parts[0]).toMatchObject({
+      type: 'video_url',
+      videoUrl: { url: expect.stringContaining('data:video/mp4;base64,') },
+    });
+  });
+
+  it('surfaces a visual inspection failure as a visible error without media parts', async () => {
+    const inspector: VisualMediaInspector = async () => {
+      throw new Error('visual model down');
+    };
+    const tool = makeTool(
+      { '/workspace/sample.png': { data: pngBuffer() } },
+      capabilities({ image_in: true, video_in: true }),
+      undefined,
+      undefined,
+      undefined,
+      inspector,
+    );
+
+    const result = await execute(tool, { path: '/workspace/sample.png' });
+
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain('Failed to read /workspace/sample.png');
+    expect(result.output).toContain('visual model down');
+  });
+
   it('wraps a video as a data URL when no uploader is provided', async () => {
     const result = await execute(makeTool({ '/workspace/clip.mp4': { data: mp4Buffer() } }), {
       path: '/workspace/clip.mp4',
@@ -824,7 +912,13 @@ describe('AgentMediaToolsRegistrar', () => {
     capabilities: ModelCapability;
   }
 
-  function createRegistrarHarness() {
+  interface RegistrarHarnessOptions {
+    readonly visualModel?: string;
+    readonly visualCapabilities?: ModelCapability;
+    readonly flagEnabled?: boolean;
+  }
+
+  function createRegistrarHarness(options: RegistrarHarnessOptions = {}) {
     const registry = new AgentToolRegistryService();
     const eventBus = new EventBusService();
     const state: ProfileState = {
@@ -834,11 +928,51 @@ describe('AgentMediaToolsRegistrar', () => {
     const profile = {
       getModelCapabilities: () => state.capabilities,
       getModel: () => state.alias,
+      getEffectiveThinkingLevel: () => 'off',
     } as unknown as IAgentProfileService;
+    const visualCapabilities =
+      options.visualCapabilities ?? capabilities({ image_in: true, video_in: true });
+    const logWarnings: unknown[][] = [];
+    const log = {
+      warn: (...args: unknown[]) => logWarnings.push(args),
+      info: () => undefined,
+      debug: () => undefined,
+      error: () => undefined,
+      trace: () => undefined,
+    } as unknown as ILogService;
+    const configState: { visualModel: string | undefined } = {
+      visualModel: options.visualModel,
+    };
+    let configSubscriber: ((e: ConfigSectionChangedEvent) => void) | undefined;
+    const config = {
+      get: (domain: string) =>
+        domain === 'visualModel' && configState.visualModel !== undefined
+          ? { model: configState.visualModel }
+          : undefined,
+      onDidSectionChange: (listener: (e: ConfigSectionChangedEvent) => void) => {
+        configSubscriber = listener;
+        return toDisposable(() => {});
+      },
+    } as unknown as IConfigService;
+    const flags = stubFlag(options.flagEnabled ?? true);
     const modelCatalog = {
-      getRequester: (id: string) => ({
-        model: { id, name: id, providerName: 'test', protocol: 'openai' },
-      }),
+      getRequester: (id: string) => {
+        if (id === 'dangling-model') throw new Error(`unknown model: ${id}`);
+        return {
+          model: {
+            id,
+            name: id,
+            aliases: [],
+            protocol: 'openai',
+            headers: {},
+            capabilities: id === configState.visualModel ? visualCapabilities : state.capabilities,
+            maxContextSize: 1000,
+            alwaysThinking: false,
+            providerName: 'test',
+            authProvider: { getAuth: async () => undefined },
+          },
+        };
+      },
     } as unknown as IModelCatalog;
     const workspaceCtx = {
       workDir: '/workspace',
@@ -854,6 +988,9 @@ describe('AgentMediaToolsRegistrar', () => {
       workspaceCtx,
       recordingTelemetry([]),
       new AgentStateService(),
+      config,
+      flags,
+      log,
     );
     const bindModel = (alias: string, caps: ModelCapability): void => {
       state.alias = alias;
@@ -864,7 +1001,16 @@ describe('AgentMediaToolsRegistrar', () => {
         maxContextTokens: caps.max_context_tokens,
       });
     };
-    return { registry, registrar, bindModel };
+    const setVisualModel = (alias: string | undefined): void => {
+      configState.visualModel = alias;
+      configSubscriber?.({
+        domain: 'visualModel',
+        source: 'set',
+        value: alias === undefined ? undefined : { model: alias },
+        previousValue: undefined,
+      });
+    };
+    return { registry, registrar, bindModel, setVisualModel, logWarnings };
   }
 
   it('registers nothing until a media-capable model binds, then registers ReadMediaFile', () => {
@@ -915,6 +1061,82 @@ describe('AgentMediaToolsRegistrar', () => {
     expect(registry.resolve('ReadMediaFile')).toBeUndefined();
     bindModel('vision-model-2', capabilities({ image_in: true, video_in: true }));
     expect(registry.resolve('ReadMediaFile')).toBeUndefined();
+  });
+
+  it('registers ReadMediaFile against the visual model for a text-only caller when a visual model is configured', () => {
+    const { registry, bindModel } = createRegistrarHarness({
+      visualModel: 'visual-model',
+      visualCapabilities: capabilities({ image_in: true, video_in: true }),
+    });
+    bindModel('text-model', capabilities({ image_in: false, video_in: false }));
+
+    const tool = registry.resolve('ReadMediaFile');
+    expect(tool).toBeInstanceOf(ReadMediaFileTool);
+    expect((tool as ReadMediaFileTool).description).toContain('visual model');
+    expect((tool as ReadMediaFileTool).description).toContain('returned as text');
+  });
+
+  it('does not register media tools for a text-only caller without a visual model', () => {
+    const { registry, bindModel } = createRegistrarHarness();
+    bindModel('text-model', capabilities({ image_in: false, video_in: false }));
+    expect(registry.resolve('ReadMediaFile')).toBeUndefined();
+  });
+
+  it('does not register media tools for a text-only caller when the visual-model flag is off', () => {
+    const { registry, bindModel } = createRegistrarHarness({
+      visualModel: 'visual-model',
+      flagEnabled: false,
+    });
+    bindModel('text-model', capabilities({ image_in: false, video_in: false }));
+    expect(registry.resolve('ReadMediaFile')).toBeUndefined();
+  });
+
+  it('lets a vision-capable caller win over the configured visual model', () => {
+    const { registry, bindModel } = createRegistrarHarness({
+      visualModel: 'visual-model',
+      visualCapabilities: capabilities({ image_in: true, video_in: true }),
+    });
+    bindModel('vision-model', capabilities({ image_in: true, video_in: false }));
+
+    const tool = registry.resolve('ReadMediaFile') as ReadMediaFileTool;
+    expect(tool).toBeInstanceOf(ReadMediaFileTool);
+    expect(tool.description).toContain('Video files are not supported');
+    expect(tool.description).not.toContain('visual model');
+  });
+
+  it('does not use a visual model that itself lacks media capability', () => {
+    const { registry, bindModel } = createRegistrarHarness({
+      visualModel: 'text-visual-model',
+      visualCapabilities: capabilities({ image_in: false, video_in: false }),
+    });
+    bindModel('text-model', capabilities({ image_in: false, video_in: false }));
+    expect(registry.resolve('ReadMediaFile')).toBeUndefined();
+  });
+
+  it('falls back to caller behavior when the configured visual model cannot be resolved', () => {
+    const { registry, bindModel, logWarnings } = createRegistrarHarness({
+      visualModel: 'dangling-model',
+    });
+    bindModel('text-model', capabilities({ image_in: false, video_in: false }));
+
+    expect(registry.resolve('ReadMediaFile')).toBeUndefined();
+    expect(logWarnings.length).toBeGreaterThan(0);
+    expect(String(logWarnings[0]?.[0])).toContain('visual model');
+  });
+
+  it('re-registers against the new visual model when [visual_model] changes', () => {
+    const { registry, bindModel, setVisualModel } = createRegistrarHarness({
+      visualModel: 'visual-a',
+      visualCapabilities: capabilities({ image_in: true, video_in: true }),
+    });
+    bindModel('text-model', capabilities({ image_in: false, video_in: false }));
+    const first = registry.resolve('ReadMediaFile') as ReadMediaFileTool;
+    expect(first).toBeInstanceOf(ReadMediaFileTool);
+
+    setVisualModel('visual-b');
+    const second = registry.resolve('ReadMediaFile') as ReadMediaFileTool;
+    expect(second).toBeInstanceOf(ReadMediaFileTool);
+    expect(second).not.toBe(first);
   });
 });
 

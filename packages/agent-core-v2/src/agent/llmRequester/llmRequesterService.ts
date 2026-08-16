@@ -11,7 +11,12 @@
  * compatibility. Before each request the projected messages pass through `media`'s
  * video resolver, which rewrites every `kimi-file://` prompt-video reference
  * to a provider-acceptable part (uploaded `ms://`, inline base64, or a
- * `<video path>` tag) so the internal reference never reaches the wire. When a
+ * `<video path>` tag) so the internal reference never reaches the wire, then
+ * through a proactive capability filter that replaces unsupported media parts
+ * with text placeholders when the caller's model lacks `image_in` / `video_in`
+ * (visual-model-aware wording when `[visual_model]` is configured), so a
+ * text-only model never receives raw image/video/audio content on any surface.
+ * When a
  * model is configured, `prepareTurnConfig` snapshots the
  * model, effective thinking effort, and system prompt at the turn boundary
  * so loop telemetry and every request in that turn share one configuration.
@@ -50,6 +55,7 @@ import { IAgentVideoResolverService } from '#/agent/media/videoResolver';
 import { IAgentUsageService } from '#/agent/usage/usage';
 import { IConfigService } from '#/app/config/config';
 import { IEventBus } from '#/app/event/eventBus';
+import { IFlagService } from '#/app/flag/flag';
 import {
   APIRequestTooLargeError,
   APIStatusError,
@@ -58,7 +64,13 @@ import {
   isRecoverableRequestStructureError,
   isRetryableGenerateError,
 } from '#/kosong/contract/errors';
-import { isToolCall, type Message, type StreamedMessagePart } from '#/kosong/contract/message';
+import {
+  isToolCall,
+  type ContentPart,
+  type Message,
+  type StreamedMessagePart,
+} from '#/kosong/contract/message';
+import { isUnknownCapability, type ModelCapability } from '#/kosong/contract/capability';
 import { type ThinkingEffort } from '#/kosong/contract/provider';
 import { type Tool } from '#/kosong/contract/tool';
 import { emptyUsage, inputTotal, type TokenUsage } from '#/kosong/contract/usage';
@@ -76,6 +88,7 @@ import { IModelService } from '#/kosong/model/model';
 import { completionBudgetParams, resolveCompletionBudget } from '#/kosong/model/completionBudget';
 import { resolveThinkingKeep, type ThinkingConfig } from '#/kosong/model/thinking';
 import { THINKING_SECTION } from '#/app/kosongConfig/configSection';
+import { resolveVisualModel } from '#/session/visual/configSection';
 import type { Protocol } from '#/kosong/protocol/protocol';
 import type { ApiErrorEvent } from '#/app/telemetry/events';
 import { ITelemetryService } from '#/app/telemetry/telemetry';
@@ -113,6 +126,97 @@ const EMPTY_TOOL_PARAMETERS: Record<string, unknown> = {
 };
 
 const noopOnPart: AgentLLMRequestPartHandler = () => {};
+
+/**
+ * Placeholder text used by {@link replaceUnsupportedMediaParts} when a
+ * text-only caller's request carries media its model cannot consume. Mirrors
+ * the v1 wording; when a `[visual_model]` is configured the placeholder is
+ * extended so the model knows file-based inspection still works.
+ */
+export const CAPABILITY_MEDIA_PLACEHOLDERS = {
+  image_url: {
+    plain: '[image omitted: current model has no image input]',
+    visual:
+      '[image omitted: current model has no image input; use ReadMediaFile to inspect it with the configured visual model]',
+  },
+  video_url: {
+    plain: '[video omitted: current model has no video input]',
+    visual:
+      '[video omitted: current model has no video input; use ReadMediaFile to inspect it with the configured visual model]',
+  },
+  audio_url: '[audio omitted: current model has no audio input]',
+} as const;
+
+/**
+ * Proactive capability-driven media degradation: before a request reaches the
+ * wire, replace every media part the caller's model cannot consume with a text
+ * placeholder, so a text-only model never receives raw `image_url` /
+ * `video_url` / `audio_url` content (the upstream #2954/#2669 gap). Covers
+ * every surface — TUI, SDK, resumed history — because it runs on the projected
+ * wire messages of every request. Parts that a tool-level route already
+ * resolved to text carry no media parts, so they pass through untouched.
+ * Unknown capabilities are treated as "not gateable" and left as-is.
+ */
+export function replaceUnsupportedMediaParts(
+  messages: readonly Message[],
+  capabilities: ModelCapability | undefined,
+  visualConfigured: boolean,
+): readonly Message[] {
+  if (capabilities === undefined || isUnknownCapability(capabilities)) return [...messages];
+  const dropImage = !capabilities.image_in;
+  const dropVideo = !capabilities.video_in;
+  const dropAudio = !capabilities.audio_in;
+  if (!dropImage && !dropVideo && !dropAudio) return [...messages];
+
+  let changed = false;
+  const out: Message[] = [];
+  for (const message of messages) {
+    let nextContent: ContentPart[] | undefined;
+    for (let i = 0; i < message.content.length; i++) {
+      const part = message.content[i]!;
+      const placeholder = capabilityMediaPlaceholder(part, {
+        dropImage,
+        dropVideo,
+        dropAudio,
+        visualConfigured,
+      });
+      if (placeholder === undefined) {
+        nextContent?.push(part);
+        continue;
+      }
+      nextContent ??= message.content.slice(0, i);
+      nextContent.push({ type: 'text', text: placeholder });
+      changed = true;
+    }
+    out.push(nextContent === undefined ? message : { ...message, content: nextContent });
+  }
+  return changed ? out : [...messages];
+}
+
+function capabilityMediaPlaceholder(
+  part: ContentPart,
+  drop: {
+    readonly dropImage: boolean;
+    readonly dropVideo: boolean;
+    readonly dropAudio: boolean;
+    readonly visualConfigured: boolean;
+  },
+): string | undefined {
+  if (part.type === 'image_url' && drop.dropImage) {
+    return drop.visualConfigured
+      ? CAPABILITY_MEDIA_PLACEHOLDERS.image_url.visual
+      : CAPABILITY_MEDIA_PLACEHOLDERS.image_url.plain;
+  }
+  if (part.type === 'video_url' && drop.dropVideo) {
+    return drop.visualConfigured
+      ? CAPABILITY_MEDIA_PLACEHOLDERS.video_url.visual
+      : CAPABILITY_MEDIA_PLACEHOLDERS.video_url.plain;
+  }
+  if (part.type === 'audio_url' && drop.dropAudio) {
+    return CAPABILITY_MEDIA_PLACEHOLDERS.audio_url;
+  }
+  return undefined;
+}
 
 interface ResolvedLLMRequest {
   readonly requester: ModelRequester;
@@ -184,6 +288,7 @@ export class AgentLLMRequesterService implements IAgentLLMRequesterService {
     @IAgentProfileService private readonly profile: IAgentProfileService,
     @IAgentUsageService private readonly usage: IAgentUsageService,
     @IConfigService private readonly config: IConfigService,
+    @IFlagService private readonly flags: IFlagService,
     @IModelService private readonly modelService: IModelService,
     @IModelCatalog private readonly modelCatalog: IModelCatalog,
     @ILogService private readonly log: ILogService,
@@ -364,13 +469,14 @@ export class AgentLLMRequesterService implements IAgentLLMRequesterService {
     const run = async (projection: RequestProjection): Promise<AgentLLMRequestFinish> => {
       onRequestTrace(undefined);
       const projected = requestInput(projection);
+      const resolvedMessages = await this.videoResolver.resolve(
+        projected.messages,
+        request.requester,
+        signal,
+      );
       const input = {
         ...projected,
-        messages: await this.videoResolver.resolve(
-          projected.messages,
-          request.requester,
-          signal,
-        ),
+        messages: this.filterUnsupportedMedia(request, resolvedMessages),
       };
       const fields =
         projection === 'normal'
@@ -539,6 +645,17 @@ export class AgentLLMRequesterService implements IAgentLLMRequesterService {
         throw error;
       }
     }
+  }
+
+  private filterUnsupportedMedia(
+    request: ResolvedLLMRequest,
+    messages: readonly Message[],
+  ): readonly Message[] {
+    return replaceUnsupportedMediaParts(
+      messages,
+      request.model.capabilities,
+      resolveVisualModel(this.config, this.flags)?.model !== undefined,
+    );
   }
 
   private normalizeStreamPart(
