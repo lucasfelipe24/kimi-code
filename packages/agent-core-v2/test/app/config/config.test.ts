@@ -100,6 +100,16 @@ import {
   wrapSubagentModelError,
 } from '#/session/subagent/configSection';
 import { SECONDARY_MODEL_FLAG_ID } from '#/session/subagent/flag';
+import '#/session/visual/configSection';
+import {
+  resolveVisualBinding,
+  resolveVisualModel,
+  VISUAL_MODEL_EFFORT_ENV,
+  VISUAL_MODEL_ENV,
+  VISUAL_MODEL_SECTION,
+  type VisualModelConfig,
+} from '#/session/visual/configSection';
+import { VISUAL_MODEL_FLAG_ID } from '#/session/visual/flag';
 import {
   BRAVE_API_KEY_ENV,
   BRAVE_BASE_URL_ENV,
@@ -2092,6 +2102,137 @@ describe('subagent config section', () => {
       { details: { model: 'provider/other' } },
     );
     expect(wrapSubagentModelError(unrelated, 'provider/pool', 'provider/main')).toBe(unrelated);
+  });
+});
+
+describe('visual model config section', () => {
+  async function createConfig(env: Record<string, string>, toml?: string) {
+    const disposables = new DisposableStore();
+    const ix = disposables.add(new TestInstantiationService());
+    const storage = new InMemoryStorageService();
+    if (toml !== undefined) {
+      await storage.write('', 'config.toml', new TextEncoder().encode(toml));
+    }
+    ix.stub(ILogService, stubLog());
+    ix.stub(IBootstrapService, stubBootstrap('/tmp/kimi-cfg', env));
+    ix.stub(IFileSystemStorageService, storage);
+    ix.set(IAtomicTomlDocumentStore, new SyncDescriptor(TomlAtomicDocumentStore));
+    ix.set(IConfigRegistry, new SyncDescriptor(ConfigRegistry));
+    ix.set(IConfigService, new SyncDescriptor(ConfigService));
+    const config = ix.get(IConfigService);
+    await config.ready;
+    return { config, disposables };
+  }
+
+  it('reads model and default_effort from config.toml', async () => {
+    const { config, disposables } = await createConfig(
+      {},
+      '[visual_model]\nmodel = "provider/vision"\ndefault_effort = "low"\n',
+    );
+
+    expect(config.get<VisualModelConfig>(VISUAL_MODEL_SECTION)).toEqual({
+      model: 'provider/vision',
+      defaultEffort: 'low',
+    });
+
+    disposables.dispose();
+  });
+
+  it('lets the env vars win over config.toml', async () => {
+    const env: Record<string, string> = {};
+    const { config, disposables } = await createConfig(
+      env,
+      '[visual_model]\nmodel = "provider/vision"\ndefault_effort = "low"\n',
+    );
+
+    env[VISUAL_MODEL_ENV] = 'provider/other';
+    env[VISUAL_MODEL_EFFORT_ENV] = 'high';
+    expect(config.get<VisualModelConfig>(VISUAL_MODEL_SECTION)).toEqual({
+      model: 'provider/other',
+      defaultEffort: 'high',
+    });
+
+    disposables.dispose();
+  });
+
+  it('restores the env-owned fields to the raw value on set() while the env var is set', async () => {
+    const env: Record<string, string> = { [VISUAL_MODEL_ENV]: 'provider/other' };
+    const { config, disposables } = await createConfig(
+      env,
+      '[visual_model]\nmodel = "provider/vision"\n',
+    );
+
+    await config.set(VISUAL_MODEL_SECTION, { model: 'provider/other' });
+
+    expect(config.get<VisualModelConfig>(VISUAL_MODEL_SECTION)).toEqual({
+      model: 'provider/other',
+    });
+    expect(config.inspect<VisualModelConfig>(VISUAL_MODEL_SECTION).userValue).toEqual({
+      model: 'provider/vision',
+    });
+
+    disposables.dispose();
+  });
+
+  it('clears the raw section when stripping removes the last persisted field', async () => {
+    const env: Record<string, string> = { [VISUAL_MODEL_ENV]: 'provider/other' };
+    const { config, disposables } = await createConfig(env);
+
+    await config.set(VISUAL_MODEL_SECTION, { model: 'provider/other' });
+
+    expect(config.get<VisualModelConfig>(VISUAL_MODEL_SECTION)).toEqual({
+      model: 'provider/other',
+    });
+    expect(config.inspect<VisualModelConfig>(VISUAL_MODEL_SECTION).userValue).toBeUndefined();
+
+    delete env[VISUAL_MODEL_ENV];
+    // No registered default for `[visual_model]`; the stripped-empty section
+    // surfaces as an empty effective object (the subagent section would show
+    // its registered timeout default instead).
+    expect(config.get<VisualModelConfig>(VISUAL_MODEL_SECTION)).toEqual({});
+
+    disposables.dispose();
+  });
+
+  it('resolves the visual binding: configured recipe, unset fallback, primary opt-in', async () => {
+    const { config, disposables } = await createConfig(
+      {},
+      '[visual_model]\nmodel = "provider/vision"\n',
+    );
+    const flags = stubFlag((id) => id === VISUAL_MODEL_FLAG_ID);
+    const own = { modelAlias: 'provider/main', thinkingLevel: 'medium' };
+
+    expect(resolveVisualModel(config, flags)).toEqual({ model: 'provider/vision' });
+    expect(resolveVisualBinding(config, flags, own)).toEqual({
+      model: 'provider/vision',
+      thinking: undefined,
+      displayModel: 'provider/vision',
+    });
+    expect(resolveVisualBinding(config, flags, own, 'primary')).toEqual({
+      model: own.modelAlias,
+      thinking: own.thinkingLevel,
+      displayModel: own.modelAlias,
+    });
+
+    disposables.dispose();
+  });
+
+  it('ignores [visual_model] while the visual-model flag is off', async () => {
+    const { config, disposables } = await createConfig(
+      {},
+      '[visual_model]\nmodel = "provider/vision"\n',
+    );
+    const flags = stubFlag((id) => id === SECONDARY_MODEL_FLAG_ID);
+    const own = { modelAlias: 'provider/main', thinkingLevel: 'medium' };
+
+    expect(resolveVisualModel(config, flags)).toBeUndefined();
+    expect(resolveVisualBinding(config, flags, own)).toEqual({
+      model: own.modelAlias,
+      thinking: own.thinkingLevel,
+      displayModel: own.modelAlias,
+    });
+
+    disposables.dispose();
   });
 });
 

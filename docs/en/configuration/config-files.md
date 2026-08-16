@@ -260,6 +260,29 @@ Note that `default_effort` stays a model-level default: once a global `[thinking
 
 Configuration errors fail loudly instead of falling back silently: session creation, resume, and fork all fail at startup when `default_model` is missing, is not a pool key, or a pool key does not resolve to a configured `[models]` entry — and likewise when `force` is set without `default_model` or combined with a `[secondary_model.models]` table. The alias `primary` is reserved — it always binds the caller's own model — and is rejected as a pool key. A spawn whose `model` is neither a pool alias nor `"primary"` fails with an error listing the available choices.
 
+## `visual_model`
+
+The visual model is a companion model configuration for **vision-only work** — typically a vision-capable model you pin so image / screenshot / video inspection tasks can run even when your main coding model is text-only. It is a default binding, not a forced one: the resolver binds the configured visual model by default, and tools that perform visual work can expose a `model` parameter accepting the symbolic values `"visual"` (the configured visual model) and `"primary"` (the caller's own model) — the same shape as the subagent model choice. When unset, visual tasks bind the caller's model. The section defines the binding contract, not the wiring: no tool consumes it yet, so configuring it alone does not re-route image inspection — the media-tool wiring that consumes the binding is a follow-up.
+
+This section is on by default (native — it works with no env vars set). To turn it off, set `KIMI_CODE_EXPERIMENTAL_VISUAL_MODEL=false` or add `visual-model = false` under `[experimental]`; while off, `[visual_model]` is inert and visual tasks fall back to the caller's model.
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `model` | `string` | — | The alias of a configured [`[models]`](#models) entry, e.g. `kimi-code/kimi-vision` (any provider, not limited to Kimi models). Should be a vision-capable entry (`image_in` and/or `video_in` listed in its `capabilities`) |
+| `default_effort` | `string` | — | Thinking effort applied when visual tasks bind the visual model. Unset, the effort resolves naturally (global `[thinking]` config → the bound model's default effort) instead of inheriting the caller's effort. Follows the main model's thinking-effort semantics: models with strict effort validation (e.g. Kimi models) fall back to their default effort for unsupported values; other providers receive the value as-is |
+| Other fields | — | — | Accepts every field of [`[models."<alias>".overrides]`](#models) (`max_context_size`, `max_output_size`, `support_efforts`, …) as a model patch applied only to visual tasks |
+
+```toml
+[visual_model]
+model = "kimi-code/kimi-vision"
+default_effort = "low"
+max_output_size = 8192
+```
+
+`model` / `default_effort` can be overridden by the `KIMI_VISUAL_MODEL` / `KIMI_VISUAL_EFFORT` environment variables, which take higher priority than `config.toml`. While an env override is set, it never leaks into `config.toml` — writes restore the env-free raw value.
+
+Configuration errors fail loudly instead of falling back silently: session creation, resume, and fork all fail at startup when `model` is set but does not resolve to a configured `[models]` entry.
+
 ## `thinking`
 
 `thinking` sets the global default behavior for Thinking mode.

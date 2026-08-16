@@ -39,6 +39,7 @@ const KIMI_CONFIG_DOMAINS = [
   'background',
   'subagent',
   'secondaryModel',
+  'visualModel',
   'mcp',
   'image',
   'modelCatalog',
@@ -97,6 +98,12 @@ export interface ProviderRemovalPlan {
    * filtered out.
    */
   readonly secondaryModel: Record<string, unknown> | null | undefined;
+  /**
+   * Cascade for the `[visual_model]` single-pin recipe: `undefined` =
+   * unchanged, `null` = drop the whole section (its `model` pointer dangles,
+   * so the visual binding can no longer resolve).
+   */
+  readonly visualModel: Record<string, unknown> | null | undefined;
 }
 
 /**
@@ -119,6 +126,7 @@ export function planProviderRemoval(input: {
   readonly defaultModel: string | undefined;
   readonly defaultProvider: string | undefined;
   readonly secondaryModel?: Record<string, unknown>;
+  readonly visualModel?: Record<string, unknown>;
   readonly providerId: string;
 }): ProviderRemovalPlan {
   const providers = { ...input.providers };
@@ -140,6 +148,7 @@ export function planProviderRemoval(input: {
     clearDefaultModel: removedDefault,
     clearDefaultProvider: input.defaultProvider === input.providerId,
     secondaryModel: planSecondaryModelCascade(input.secondaryModel, models),
+    visualModel: planVisualModelCascade(input.visualModel, models),
   };
 }
 
@@ -170,6 +179,34 @@ function planSecondaryModelCascade(
 }
 
 /**
+ * Cascade the provider removal into the `[visual_model]` section against the
+ * surviving model-alias table. The section is a single pin: when its `model`
+ * pointer names a removed alias it can no longer resolve, so the whole
+ * section is dropped (`null`); otherwise it is left unchanged.
+ */
+function planVisualModelCascade(
+  visualModel: Record<string, unknown> | undefined,
+  survivingModels: Record<string, unknown>,
+): Record<string, unknown> | null | undefined {
+  if (visualModel === undefined) return undefined;
+  const model = visualModel['model'];
+  if (typeof model === 'string' && !(model in survivingModels)) {
+    return null;
+  }
+  return undefined;
+}
+
+/**
+ * `KimiConfig` widened with the v2-only `visualModel` domain. The v1 schema
+ * (`@moonshot-ai/agent-core`) has no such field, so the removal cascade reads
+ * and writes it through this local extension — structurally compatible with
+ * plain `KimiConfig` (the extra property is optional).
+ */
+export type KimiConfigWithVisualModel = KimiConfig & {
+  readonly visualModel?: Record<string, unknown>;
+};
+
+/**
  * Apply the v1 remove-provider cascade to a whole `KimiConfig` in memory (no
  * persistence): drop the provider entry, every model pointing at it, and the
  * default pointers when they dangle. Hosts that stage a removal and fold it
@@ -177,13 +214,17 @@ function planSecondaryModelCascade(
  * this — the same role the v2 engine's `shapeWithoutProvider` plays for its
  * own refresh path.
  */
-export function removeProviderFromConfig(config: KimiConfig, providerId: string): KimiConfig {
+export function removeProviderFromConfig(
+  config: KimiConfigWithVisualModel,
+  providerId: string,
+): KimiConfigWithVisualModel {
   const plan = planProviderRemoval({
     providers: config.providers as Record<string, unknown> | undefined,
     models: config.models as Record<string, Record<string, unknown>> | undefined,
     defaultModel: config.defaultModel,
     defaultProvider: config.defaultProvider,
     secondaryModel: config.secondaryModel as Record<string, unknown> | undefined,
+    visualModel: config.visualModel,
     providerId,
   });
   return {
@@ -196,5 +237,6 @@ export function removeProviderFromConfig(config: KimiConfig, providerId: string)
       plan.secondaryModel === null
         ? undefined
         : ((plan.secondaryModel ?? config.secondaryModel) as KimiConfig['secondaryModel']),
+    visualModel: plan.visualModel === null ? undefined : plan.visualModel ?? config.visualModel,
   };
 }

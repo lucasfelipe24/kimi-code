@@ -467,6 +467,32 @@ export * from '#/agent/tools/agent/subagent-task';
 export { AGENT_RUN_PROMPT_ORIGIN } from '#/session/subagent/runAgentTurn';
 export * from '#/session/subagent/mirrorAgentRun';
 import '#/session/subagent/configSection';
+import '#/session/visual/flag';
+import '#/session/visual/configSection';
+export * from '#/session/visual/visualModelsValidation';
+import '#/session/visual/visualModelsValidationService';
+export {
+  VISUAL_MODEL_FLAG_ID,
+  VISUAL_MODEL_FLAG_ENV,
+  visualModelFlag,
+} from '#/session/visual/flag';
+export {
+  VISUAL_MODEL_SECTION,
+  VISUAL_MODEL_ENV,
+  VISUAL_MODEL_EFFORT_ENV,
+  VisualModelConfigSchema,
+  type VisualModelConfig,
+  VISUAL_MODEL_CHOICE_SCHEMA,
+  type VisualModelChoice,
+  PRIMARY_VISUAL_MODEL_CHOICE,
+  resolveVisualModel,
+  resolveVisualBinding,
+  visualDisplayModel,
+  buildVisualModelDescriptions,
+  stripVisualModelParameter,
+  wrapVisualModelError,
+  assertValidVisualModelConfig,
+} from '#/session/visual/configSection';
 export * from '#/agent/tools/agent/agent';
 import '#/agent/tools/agent/agentTool';
 export * from '#/app/workspaceLifecycle/workspaceLifecycle';
