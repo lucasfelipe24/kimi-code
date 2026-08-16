@@ -54,7 +54,10 @@ import { IAgentContextMemoryService } from '#/agent/contextMemory/contextMemory'
 import { IAgentRuntimeBindingSeed, IAgentRuntimeBindingService } from '#/agent/runtimeBinding/runtimeBinding';
 import '#/agent/runtimeBinding/runtimeBindingService';
 import { IAgentFullCompactionService } from '#/agent/fullCompaction/fullCompaction';
-import { IAgentMemoryExtractService } from '#/agent/memoryExtract/memoryExtract';
+import {
+  DEFAULT_MEMORY_EXTRACT_TIMEOUT_MS,
+  IAgentMemoryExtractService,
+} from '#/agent/memoryExtract/memoryExtract';
 import { IAgentToolActivationService } from '#/agent/toolActivation/toolActivation';
 import { ISessionInteractionService } from '#/session/interaction/interaction';
 import { ISessionMemoryAccessFactory } from '#/session/persistentMemory/memoryAccessFactory';
@@ -305,10 +308,20 @@ export class AgentLifecycleService extends Disposable implements IAgentLifecycle
     // Flush automatic memory extraction before the agent scope tears down, so
     // the un-mined transcript tail and queued drafts survive agent removal —
     // covering session close/archive (which drain agents before the close hook
-    // fires) and direct subagent removals. Best-effort: bounded by the extract
-    // timeout, and teardown is never blocked by a flush failure.
+    // fires) and direct subagent removals. Best-effort and RACED against the
+    // extract timeout: `drainAgents` removes agents sequentially, so an
+    // unbound flush could stall close/archive for N × the extract timeout.
     try {
-      await handle.accessor.get(IAgentMemoryExtractService).flush();
+      const flush = handle.accessor.get(IAgentMemoryExtractService).flush();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, DEFAULT_MEMORY_EXTRACT_TIMEOUT_MS);
+      });
+      try {
+        await Promise.race([flush, timeout]);
+      } finally {
+        if (timer !== undefined) clearTimeout(timer);
+      }
     } catch {
       // Flush is best-effort; agent teardown must proceed regardless.
     }
