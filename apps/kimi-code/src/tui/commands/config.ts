@@ -27,6 +27,7 @@ import { currentTheme, isBuiltInTheme, lightColors, loadCustomThemeMerged } from
 import { NO_ACTIVE_SESSION_MESSAGE } from '../constant/kimi-tui';
 import { formatErrorMessage } from '../utils/event-payload';
 import { thinkingEffortToConfig } from '../utils/thinking-config';
+import { configuredVisualModel, visualModelConfigPatch } from '../utils/visual-model-config';
 import { showUsage } from './info';
 import { setExperimentalFeatures } from './experimental-flags';
 import { showWebSearchConfig } from './web-search';
@@ -296,6 +297,26 @@ export async function handleSecondaryModelCommand(host: SlashCommandHost, args: 
   // default — reflect it as the picker's current value.
   const current = secondary?.defaultModel ?? secondary?.model ?? '';
   showSecondaryModelPicker(host, models, current, alias.length > 0 ? alias : undefined);
+}
+
+export async function handleVisualModelCommand(host: SlashCommandHost, args: string): Promise<void> {
+  const alias = args.trim();
+  await refreshModelsForPicker(host);
+  const models = pickerModelsForHost(host);
+  if (Object.keys(models).length === 0) {
+    host.showNotice(
+      'No models configured',
+      'Run /login to sign in to Kimi, or /provider to add another provider from a model catalog.',
+    );
+    return;
+  }
+  if (alias.length > 0 && models[alias] === undefined) {
+    host.showError(`Unknown model alias: ${alias}`);
+    return;
+  }
+  const config = await host.harness.getConfig();
+  const current = configuredVisualModel(config) ?? '';
+  showVisualModelPicker(host, models, current, alias.length > 0 ? alias : undefined);
 }
 
 export async function handleEffortCommand(host: SlashCommandHost, args: string): Promise<void> {
@@ -675,6 +696,59 @@ async function performSecondaryModelSave(host: SlashCommandHost, alias: string):
   }
   host.showStatus(
     `Secondary model set to ${displayName}. Newly spawned subagents will use it by default.`,
+    'success',
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Visual model (`/visual-model`) — persists `[visual_model] model`
+// ---------------------------------------------------------------------------
+
+function showVisualModelPicker(
+  host: SlashCommandHost,
+  models: Record<string, ModelAlias>,
+  currentValue: string,
+  selectedValue?: string,
+): void {
+  host.mountEditorReplacement(
+    new TabbedModelSelectorComponent({
+      models,
+      currentValue,
+      selectedValue,
+      currentThinkingEffort: 'off',
+      // The visual binding carries no explicit thinking choice here — the
+      // engine applies `[visual_model] default_effort` (or resolves it
+      // naturally) at inspection time.
+      thinkingControl: false,
+      title: ' Select a visual model (media inspection)',
+      onSelect: ({ alias }) => {
+        host.restoreEditor();
+        void performVisualModelSave(host, alias);
+      },
+      onCancel: () => {
+        host.restoreEditor();
+      },
+    }),
+  );
+}
+
+/**
+ * Persists `[visual_model] model = <alias>`. The section is a single pin, so
+ * no pool bookkeeping is needed. No live-apply step: the engine re-resolves
+ * the visual binding per inspection and re-registers the media tools on a
+ * `[visual_model]` change, so the next inspection picks the value up on its
+ * own.
+ */
+async function performVisualModelSave(host: SlashCommandHost, alias: string): Promise<void> {
+  const displayName = modelDisplayName(alias, host.state.appState.availableModels[alias]);
+  try {
+    await host.harness.setConfig(visualModelConfigPatch(alias));
+  } catch (error) {
+    host.showError(`Failed to save visual model: ${formatErrorMessage(error)}`);
+    return;
+  }
+  host.showStatus(
+    `Visual model set to ${displayName}. Media inspection will use it when the current model is text-only.`,
     'success',
   );
 }

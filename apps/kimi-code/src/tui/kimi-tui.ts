@@ -155,6 +155,7 @@ import { formatErrorMessage } from './utils/event-payload';
 import { pickForegroundTasks } from './utils/foreground-task';
 import { ImageAttachmentStore, type ImageAttachment } from './utils/image-attachment-store';
 import { extractMediaAttachments, rewriteMediaPlaceholders } from './utils/image-placeholder';
+import { configuredVisualModel } from './utils/visual-model-config';
 import type { ExtractionResult } from './utils/image-placeholder';
 import { installInputLatencyProbe } from './utils/input-latency';
 import { startupTrace } from '#/utils/startup-trace';
@@ -1360,7 +1361,12 @@ export class KimiTUI {
       this.showError(`Failed to prepare media attachment: ${formatErrorMessage(error)}`);
       return;
     }
-    if (!this.validateMediaCapabilities(extraction)) return;
+    if (
+      !this.mediaCapabilitiesFastPath(extraction) &&
+      !(await this.validateMediaCapabilities(extraction))
+    ) {
+      return;
+    }
     // Idle cache-hint interception sits before session creation; it is
     // synchronous unless a hint actually fires, keeping the send path
     // await-free up to sendMessage.
@@ -1387,27 +1393,64 @@ export class KimiTUI {
     this.state.ui.requestRender();
   }
 
-  validateMediaCapabilities(extraction: {
+  /**
+   * Synchronous fast path of the media capability gate: true when there is no
+   * media or the current model can consume it. Send paths short-circuit on
+   * this before the async {@link validateMediaCapabilities}, so the common
+   * case stays await-free — the async gate consults the harness config for
+   * the `[visual_model]` companion fallback, which must not block ordinary
+   * sends.
+   */
+  mediaCapabilitiesFastPath(extraction: {
     hasMedia: boolean;
     imageAttachmentIds: readonly number[];
     videoAttachmentIds: readonly number[];
   }): boolean {
     if (!extraction.hasMedia) return true;
+    return (
+      (extraction.imageAttachmentIds.length === 0 ||
+        this.supportsCurrentModelCapability('image_in')) &&
+      (extraction.videoAttachmentIds.length === 0 ||
+        this.supportsCurrentModelCapability('video_in'))
+    );
+  }
+
+  async validateMediaCapabilities(extraction: {
+    hasMedia: boolean;
+    imageAttachmentIds: readonly number[];
+    videoAttachmentIds: readonly number[];
+  }): Promise<boolean> {
+    if (this.mediaCapabilitiesFastPath(extraction)) return true;
+    // A text-only model can still ship media when a `[visual_model]` companion
+    // is configured: the engine routes inspection to the visual model and
+    // degrades the raw parts before they reach the wire, so the paste is safe
+    // to submit. The config is read from the harness directly — this gate runs
+    // before session creation, so it must not depend on agent state.
+    if (await this.hasConfiguredVisualModel()) {
+      this.showStatus(
+        'Current model is text-only; media will be handled by the configured visual model.',
+      );
+      return true;
+    }
     if (
       extraction.imageAttachmentIds.length > 0 &&
       !this.supportsCurrentModelCapability('image_in')
     ) {
       this.showError('Current model does not support image input.');
-      return false;
-    }
-    if (
-      extraction.videoAttachmentIds.length > 0 &&
-      !this.supportsCurrentModelCapability('video_in')
-    ) {
+    } else {
       this.showError('Current model does not support video input.');
+    }
+    return false;
+  }
+
+  private async hasConfiguredVisualModel(): Promise<boolean> {
+    try {
+      const config = await this.harness.getConfig();
+      return configuredVisualModel(config) !== undefined;
+    } catch {
+      // Best-effort: if the config cannot be read, keep today's rejection.
       return false;
     }
-    return true;
   }
 
   private supportsCurrentModelCapability(capability: string): boolean {
@@ -1506,7 +1549,7 @@ export class KimiTUI {
     if (item.mode === 'skill' && item.skillName !== undefined) {
       // sendSkillActivation re-checks the busy state, so a premature drain
       // re-queues at the tail instead of racing the running turn.
-      this.sendSkillActivation(session, item.skillName, item.skillArgs ?? '');
+      void this.sendSkillActivation(session, item.skillName, item.skillArgs ?? '');
       return;
     }
     this.harness.withInteractiveAgent(item.agentId ?? MAIN_AGENT_ID, () => {
@@ -1560,7 +1603,7 @@ export class KimiTUI {
     });
   }
 
-  sendSkillActivation(session: Session, skillName: string, skillArgs: string): void {
+  async sendSkillActivation(session: Session, skillName: string, skillArgs: string): Promise<void> {
     // Args are a plain-text channel, so pasted media can't ride along as
     // inline parts. Skill args are XML-escaped on render (renderSkillAttributes
     // + expandSkillParameters), so rewrite placeholders into escape-proof
@@ -1574,7 +1617,12 @@ export class KimiTUI {
       this.showError(`Failed to prepare media attachment: ${formatErrorMessage(error)}`);
       return;
     }
-    if (!this.validateMediaCapabilities(rewrite)) return;
+    if (
+      !this.mediaCapabilitiesFastPath(rewrite) &&
+      !(await this.validateMediaCapabilities(rewrite))
+    ) {
+      return;
+    }
     // Compacting (or deferred input): queue behind it — visible and recallable.
     // Slash-skill items steer like any queued input on Ctrl-S (the activation
     // fires into the running turn instead of the literal text) — see
@@ -1605,12 +1653,12 @@ export class KimiTUI {
     });
   }
 
-  activatePluginCommand(
+  async activatePluginCommand(
     session: Session,
     pluginId: string,
     commandName: string,
     args: string,
-  ): void {
+  ): Promise<void> {
     // Plugin command args are expanded verbatim (no XML escaping), so the
     // standard <image|video path> tag convention works — see
     // sendSkillActivation for the escaped-channel variant.
@@ -1621,7 +1669,12 @@ export class KimiTUI {
       this.showError(`Failed to prepare media attachment: ${formatErrorMessage(error)}`);
       return;
     }
-    if (!this.validateMediaCapabilities(rewrite)) return;
+    if (
+      !this.mediaCapabilitiesFastPath(rewrite) &&
+      !(await this.validateMediaCapabilities(rewrite))
+    ) {
+      return;
+    }
     this.beginSessionRequest();
     void session
       .activatePluginCommand(pluginId, commandName, rewrite.text)

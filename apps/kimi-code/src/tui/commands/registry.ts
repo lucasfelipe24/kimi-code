@@ -280,6 +280,14 @@ export const BUILTIN_SLASH_COMMANDS = [
     experimentalFlag: 'secondary-model',
   },
   {
+    name: 'visual-model',
+    aliases: [],
+    description: 'Configure the visual model for media inspection',
+    priority: 90,
+    availability: 'always',
+    engineV2Only: true,
+  },
+  {
     name: 'effort',
     aliases: ['thinking'],
     description: 'Switch thinking effort',
