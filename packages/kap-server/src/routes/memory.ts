@@ -9,18 +9,19 @@
  *   PATCH  /workspaces/{workspace_id}/memories/{memory_id}    → update (scope in body)
  *   DELETE /workspaces/{workspace_id}/memories/{memory_id}?scope= → forget
  *
- * Every verb resolves the workspace's live handler
- * (`IWorkspaceLifecycleService.handlerFor`, materialized on demand) and reads
- * the Workspace-scope `IWorkspaceMemoryCatalog`. Reads use the public read
- * catalog (`list`); writes enter the authorized mutation boundary via
- * `memoryAccessForActor(catalog, 'main')` — the user acting through the app is
- * the main actor. All validation (feature flag, workspace trust, redaction,
- * byte/scope caps, actor scope) stays inside `WorkspaceMemoryCatalogService`;
- * the edge only maps the resulting `MemoryError` onto wire error codes.
+ * Every verb resolves the workspace's live instance
+ * (`IWorkspaceInstanceManager.getOrCreate`, materialized on demand) and reads
+ * the Workspace-scope `IWorkspaceMemoryCatalog` from its program. Reads use
+ * the public read catalog (`list`); writes enter the authorized mutation
+ * boundary via `memoryAccessForActor(catalog, 'main')` — the user acting
+ * through the app is the main actor. All validation (feature flag, workspace
+ * trust, redaction, byte/scope caps, actor scope) stays inside
+ * `WorkspaceMemoryCatalogService`; the edge only maps the resulting
+ * `MemoryError` onto wire error codes.
  */
 
 import {
-  IWorkspaceLifecycleService,
+  IWorkspaceInstanceManager,
   IWorkspaceService,
   IWorkspaceMemoryCatalog,
   memoryAccessForActor,
@@ -105,10 +106,10 @@ async function resolveCatalog(
     );
     return undefined;
   }
-  const handle = await core.accessor
-    .get(IWorkspaceLifecycleService)
-    .handlerFor({ workspaceId, root: ws.root });
-  const catalog = handle.accessor.get(IWorkspaceMemoryCatalog);
+  const instance = await core.accessor
+    .get(IWorkspaceInstanceManager)
+    .getOrCreate({ workspaceId, root: ws.root });
+  const catalog = instance.program.memory;
   await catalog.ready;
   return catalog;
 }

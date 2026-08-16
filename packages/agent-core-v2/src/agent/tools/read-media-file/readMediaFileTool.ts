@@ -64,8 +64,10 @@ import { inlineVideoPart, isVideoUploadAuthError } from '#/agent/media/videoUplo
 import type { VisualMediaInspector } from '#/agent/media/visualInspection';
 import type { ITelemetryService } from '#/app/telemetry/telemetry';
 
-import { IHostFileSystem } from '#/os/interface/hostFileSystem';
-import { IHostEnvironment } from '#/os/interface/hostEnvironment';
+import type { IHostFileSystem } from '#/os/interface/hostFileSystem';
+import { RuntimeWorkspaceView } from '#/runtime/runtimeWorkspaceView';
+import type { HostEnvironmentInfo } from '#/os/interface/hostEnvironment';
+import { inspectAgentRuntime, type IAgentRuntimeService } from '#/agent/runtimeBinding/agentRuntime';
 import {
   ToolAccesses,
   type AgentTool,
@@ -249,8 +251,7 @@ export class ReadMediaFileTool implements AgentTool<ReadMediaFileInput> {
   private readonly compressTelemetry: ImageCompressionTelemetry | undefined;
   private readonly inlineVideoSupported: boolean;
   constructor(
-    private readonly fs: IHostFileSystem,
-    private readonly env: IHostEnvironment,
+    private readonly runtime: IAgentRuntimeService,
     private readonly workspace: WorkspaceConfig,
     private readonly capabilities: ModelCapability,
     private readonly videoUploader?: VideoUploader,
@@ -287,9 +288,16 @@ export class ReadMediaFileTool implements AgentTool<ReadMediaFileInput> {
     if (!args.path) {
       return { isError: true, output: 'File path cannot be empty.' };
     }
+    const inspected = inspectAgentRuntime(this.runtime);
+    const env = inspected.environment;
+    const view = new RuntimeWorkspaceView(inspected, {
+      workDir: this.workspace.workspaceDir,
+      additionalDirs: this.workspace.additionalDirs,
+    });
+    const workspace = { workspaceDir: view.workDir, additionalDirs: view.additionalDirs };
     const path = resolvePathAccessPath(args.path, {
-      env: this.env,
-      workspace: this.workspace,
+      env,
+      workspace,
       operation: 'read',
     });
     return {
@@ -300,16 +308,28 @@ export class ReadMediaFileTool implements AgentTool<ReadMediaFileInput> {
       matchesRule: (ruleArgs) =>
         matchesPathRuleSubject(ruleArgs, path, {
           cwd: this.workspace.workspaceDir,
-          pathClass: this.env.pathClass,
-          homeDir: this.env.homeDir,
+          pathClass: env.pathClass,
+          homeDir: env.homeDir,
         }),
-      execute: (ctx) => this.execution(args, path, ctx.signal),
+      execute: async (ctx) => {
+        const lease = this.runtime.acquire(['fs']);
+        try {
+          if (lease.runtime.identity.generation !== inspected.identity.generation) {
+            return { isError: true, output: 'Runtime changed before execution. Retry the tool call.' };
+          }
+          return await this.execution(args, path, lease.runtime.fs!, env, ctx.signal);
+        } finally {
+          lease.dispose();
+        }
+      },
     };
   }
 
   private async execution(
     args: ReadMediaFileInput,
     safePath: string,
+    fs: IHostFileSystem,
+    env: HostEnvironmentInfo,
     signal?: AbortSignal,
   ): Promise<ExecutableToolResult> {
     if (!args.path) {
@@ -317,7 +337,7 @@ export class ReadMediaFileTool implements AgentTool<ReadMediaFileInput> {
     }
 
     try {
-      const header = await this.fs.readBytes(safePath, MEDIA_SNIFF_BYTES);
+      const header = await fs.readBytes(safePath, MEDIA_SNIFF_BYTES);
       const fileType = detectFileType(safePath, header, 'media');
 
       if (fileType.kind === 'text') {
@@ -346,7 +366,7 @@ export class ReadMediaFileTool implements AgentTool<ReadMediaFileInput> {
       if (fileType.kind === 'image' && !isModelAcceptedImageMime(fileType.mimeType)) {
         return {
           isError: true,
-          output: buildImageConversionGuidance(args.path, fileType.mimeType, this.env.osKind),
+          output: buildImageConversionGuidance(args.path, fileType.mimeType, env.osKind),
         };
       }
       if (fileType.kind === 'video' && !this.capabilities.video_in) {
@@ -358,7 +378,7 @@ export class ReadMediaFileTool implements AgentTool<ReadMediaFileInput> {
         };
       }
 
-      const stat = await this.fs.stat(safePath);
+      const stat = await fs.stat(safePath);
       if (stat.size === 0) {
         return { isError: true, output: `"${args.path}" is empty.` };
       }
@@ -421,7 +441,7 @@ export class ReadMediaFileTool implements AgentTool<ReadMediaFileInput> {
         };
       }
 
-      const data = Buffer.from(await this.fs.readBytes(safePath));
+      const data = Buffer.from(await fs.readBytes(safePath));
       let dimensions = fileType.kind === 'image' ? sniffImageDimensions(data) : null;
       let mediaPart: ContentPart;
       let delivery: ImageDelivery | undefined;

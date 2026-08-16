@@ -104,6 +104,7 @@ const V2_INJECTED_SECTION_DEFAULTS: Record<string, unknown> = {
   loopControl: {},
   background: {},
   mcp: {},
+  visualModel: {},
   defaultPlanMode: false,
   mergeAllAvailableSkills: true,
   extraSkillDirs: [],
@@ -458,10 +459,11 @@ function projectResumedAgent(agent: ResumedAgentState, home: HomePair): unknown 
     projected['tools'] = [];
   } else {
     const tools = projected['tools'] as readonly Record<string, unknown>[];
-    // `select_tools` is v1-only; `Memory`, `Monitor`, and `TowerInit` are
-    // v2-only builtins. None has a counterpart on the other engine, so drop
-    // them before the roster comparison (see the tools note above).
-    const engineOnlyTools = new Set(['select_tools', 'Memory', 'Monitor', 'TowerInit']);
+    // `select_tools` is v1-only; `Memory`, `Monitor`, `TowerInit`, and
+    // `Workflow` are v2-only builtins. None has a counterpart on the other
+    // engine, so drop them before the roster comparison (see the tools note
+    // above).
+    const engineOnlyTools = new Set(['select_tools', 'Memory', 'Monitor', 'TowerInit', 'Workflow']);
     projected['tools'] = tools
       .filter((tool) => !engineOnlyTools.has(tool['name'] as string))
       .map((tool) => ({ name: tool['name'], active: tool['active'], source: tool['source'] }))

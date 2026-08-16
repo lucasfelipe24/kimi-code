@@ -205,7 +205,7 @@ function formatMemoryError(error: unknown): string {
     case 'memory.version_conflict':
       return 'This memory changed since you opened it. Reopen it and retry.';
     case 'memory.trust_required':
-    case 40926:
+    case 40930:
       return 'Trust this workspace before creating or updating project memory.';
     case 'memory.content_rejected':
     case 40927:
@@ -217,7 +217,7 @@ function formatMemoryError(error: unknown): string {
     case 41306:
       return 'The memory body exceeds the size limit. Shorten it.';
     case 'memory.not_found':
-    case 40418:
+    case 40421:
       return 'That memory no longer exists.';
     default:
       break;

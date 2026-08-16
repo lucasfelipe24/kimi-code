@@ -53,6 +53,8 @@ const TOWER_WORKER_TOOLS = [
   'Grep',
   'Read',
   'ReadMediaFile',
+  'Memory',
+  'Monitor',
   'Skill',
   'TaskList',
   'TaskOutput',

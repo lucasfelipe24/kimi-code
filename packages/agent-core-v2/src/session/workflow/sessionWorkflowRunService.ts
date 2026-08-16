@@ -41,8 +41,8 @@ import {
 import { WorkflowValidationError } from '#/app/workflow/runtime/validate';
 import { IWorkflowCatalogService } from '#/app/workflow/workflowCatalog';
 import { IModelCatalog } from '#/kosong/model/catalog';
+import { IHostProcessService } from '#/os/interface/hostProcess';
 import { IAgentLifecycleService } from '#/session/agentLifecycle/agentLifecycle';
-import { ISessionProcessRunner } from '#/session/process/processRunner';
 import { ISessionAgentProfileCatalog } from '#/session/sessionAgentProfileCatalog/sessionAgentProfileCatalog';
 import { ISessionContext } from '#/session/sessionContext/sessionContext';
 import { ISessionSubagentService } from '#/session/subagent/subagent';
@@ -80,7 +80,7 @@ export class WorkflowRunService extends Disposable implements IWorkflowRunServic
     @ISessionSubagentService private readonly subagents: ISessionSubagentService,
     @ISessionAgentProfileCatalog private readonly profiles: ISessionAgentProfileCatalog,
     @ISessionContext private readonly sessionContext: ISessionContext,
-    @ISessionProcessRunner private readonly processRunner: ISessionProcessRunner,
+    @IHostProcessService private readonly process: IHostProcessService,
     @IConfigService private readonly config: IConfigService,
     @IFlagService private readonly flags: IFlagService,
     @IModelCatalog private readonly modelCatalog: IModelCatalog,
@@ -129,7 +129,7 @@ export class WorkflowRunService extends Disposable implements IWorkflowRunServic
       flags: this.flags,
       modelCatalog: this.modelCatalog,
       sessionContext: this.sessionContext,
-      processRunner: this.processRunner,
+      process: this.process,
       log: this.log,
     });
     const task = new WorkflowRunTask(

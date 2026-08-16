@@ -27,7 +27,7 @@ import { IModelService } from '#/kosong/model/model';
 import { ISessionLegacyService } from '#/app/sessionLegacy/sessionLegacy';
 import { SessionLegacyService } from '#/app/sessionLegacy/sessionLegacyService';
 import { ISessionIndex, ISessionIndexMirror } from '#/app/sessionIndex/sessionIndex';
-import { IWorkspaceLifecycleService } from '#/app/workspaceLifecycle/workspaceLifecycle';
+import { ISessionManager } from '#/app/sessionManager/sessionManager';
 import { ISessionLifecycleService } from '#/workspace/sessionLifecycle/sessionLifecycle';
 import { IAgentActivityView } from '#/agent/activityView/activityView';
 import { IAgentLifecycleService } from '#/session/agentLifecycle/agentLifecycle';
@@ -49,16 +49,18 @@ function accessor(
 function stubSessionChain(ix: TestInstantiationService, session: ISessionScopeHandle): void {
   const handler = {
     id: 'wd',
-    kind: LifecycleScope.Workspace,
-    accessor: accessor([
-      [
-        ISessionLifecycleService,
-        {
-          resume: () => Promise.resolve(session),
-          get: () => session,
-        },
-      ],
-    ]),
+    kind: 'program',
+    accessor: {
+      get<T>(id: ServiceIdentifier<T>): T {
+        if (id === ISessionLifecycleService) {
+          return {
+            resume: () => Promise.resolve(session),
+            get: () => session,
+          } as T;
+        }
+        return session.accessor.get(id);
+      },
+    },
     dispose: () => {},
   } as const;
   ix.stub(ISessionIndex, {
@@ -83,10 +85,18 @@ function stubSessionChain(ix: TestInstantiationService, session: ISessionScopeHa
     evict: () => Promise.resolve(),
     drain: () => Promise.resolve(),
   });
-  ix.stub(IWorkspaceLifecycleService, {
-    handlerFor: () => Promise.resolve(handler),
-    handlers: { list: () => [handler] },
-  });
+  ix.stub(ISessionManager, {
+    _serviceBrand: undefined,
+    create: () => Promise.resolve(handler),
+    resume: () => Promise.resolve(handler),
+    get: () => handler,
+    list: () => [handler],
+    close: () => Promise.resolve(),
+    archive: () => Promise.resolve(),
+    restore: () => Promise.resolve(handler),
+    delete: () => Promise.resolve(),
+    fork: () => Promise.resolve(handler),
+  } as unknown as ISessionManager);
 }
 
 describe('Session legacy status (best-effort runtime state)', () => {
@@ -123,6 +133,7 @@ describe('Session legacy status (best-effort runtime state)', () => {
       id: 'main',
       kind: LifecycleScope.Agent,
       accessor: accessor([
+        [IAgentLifecycleService, { main: () => Promise.resolve(agent) }],
         [IAgentProfileService, profile],
         [IAgentTokenCountingService, { get: () => ({ size: 25, measured: 20, estimated: 5 }), statusSize: () => 25 }],
         [IAgentPermissionModeService, { mode: 'manual' }],
@@ -183,6 +194,7 @@ describe('Session legacy status (best-effort runtime state)', () => {
       id: 'main',
       kind: LifecycleScope.Agent,
       accessor: accessor([
+        [IAgentLifecycleService, { main: () => Promise.resolve(agent) }],
         [IAgentProfileService, profile],
         [IAgentTokenCountingService, { get: () => ({ size: 0, measured: 0, estimated: 0 }), statusSize: () => 0 }],
         [IAgentPermissionModeService, { mode: 'manual' }],
@@ -247,6 +259,7 @@ describe('Session legacy status (best-effort runtime state)', () => {
       id: 'main',
       kind: LifecycleScope.Agent,
       accessor: accessor([
+        [IAgentLifecycleService, { main: () => Promise.resolve(agent) }],
         [IAgentProfileService, profile],
         [IAgentTokenCountingService, { get: () => ({ size: 0, measured: 0, estimated: 0 }), statusSize: () => 0 }],
         [IAgentPermissionModeService, { mode: 'manual' }],
@@ -331,6 +344,7 @@ describe('Session legacy status (best-effort runtime state)', () => {
       id: 'main',
       kind: LifecycleScope.Agent,
       accessor: accessor([
+        [IAgentLifecycleService, { main: () => Promise.resolve(agent) }],
         [IAgentProfileService, profile],
         [IAgentTokenCountingService, { get: () => ({ size: 120_000, measured: 110_000, estimated: 10_000 }), statusSize: () => 120_000 }],
         [IAgentPermissionModeService, { mode: 'manual' }],

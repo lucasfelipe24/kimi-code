@@ -35,7 +35,7 @@ import {
 } from '#/features/tower/towerModeInjection';
 import { IWireService } from '#/wire/wire';
 import { registerLogServices } from '../../_base/log/stubs';
-import { createTestAgent, type AgentTestContext } from '../../harness';
+import { createTestAgent, type TestAgentContext } from '../../harness';
 import { registerContextMemoryServices, type StubContextMemory } from '../contextMemory/stubs';
 import {
   runWillBeginStepHooks,
@@ -562,7 +562,7 @@ describe('AgentContextInjectorService', () => {
 });
 
 describe('TowerFeature — tower-mode injection wiring', () => {
-  let ctx: AgentTestContext;
+  let ctx: TestAgentContext;
 
   afterEach(async () => {
     try {

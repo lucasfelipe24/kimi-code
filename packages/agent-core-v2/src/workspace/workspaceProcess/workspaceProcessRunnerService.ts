@@ -1,21 +1,18 @@
 /**
  * `workspaceProcess` domain — `ISessionProcessRunner` implementation.
  *
- * Resolves the default cwd from the handler's `IWorkspaceContext` (chdir is
+ * Resolves the default cwd from the workspace's `IWorkspaceContext` (chdir is
  * gone, so the workspace root is the one fixed default) and delegates the
- * actual host spawn to the App-scope `IHostProcessService`. A per-call
- * `options.cwd` wins over the handler root. A per-call `options.env` is
+ * actual host spawn to the runtime's `IHostProcessService`. A per-call
+ * `options.cwd` wins over the workspace root. A per-call `options.env` is
  * overlaid onto `process.env` and passed as the child's complete env bag (the
  * host replaces the child env with what we pass); when `options.env` is
  * omitted we pass `undefined` so the child inherits `process.env` verbatim.
  *
- * Bound at Workspace scope — one runner per handler, shared by every session
- * of the workspace.
+ * Constructed per workspace generation by the `Program` (one runner per
+ * workspace instance, shared by every session of the workspace).
  */
 
-import { LifecycleScope } from '#/app/scopes';
-
-import { ScopeActivation, registerScopedService } from '#/_base/di/scope';
 import { BugIndicatingError } from '#/errors';
 import { IHostProcessService } from '#/os/interface/hostProcess';
 import { type IProcess, ISessionProcessRunner, type ProcessExecOptions } from '#/session/process/processRunner';
@@ -28,6 +25,10 @@ export class WorkspaceProcessRunnerService implements ISessionProcessRunner {
     @IWorkspaceContext private readonly ctx: IWorkspaceContext,
     @IHostProcessService private readonly hostProcess: IHostProcessService,
   ) {}
+
+  dispose(): void {
+    // The host process service is owned by the runtime lease; nothing to free.
+  }
 
   async exec(args: readonly string[], options?: ProcessExecOptions): Promise<IProcess> {
     const command = args[0];
@@ -56,11 +57,3 @@ export class WorkspaceProcessRunnerService implements ISessionProcessRunner {
     };
   }
 }
-
-registerScopedService(
-  LifecycleScope.Workspace,
-  ISessionProcessRunner,
-  WorkspaceProcessRunnerService,
-  ScopeActivation.OnScopeCreated,
-  'workspaceProcess',
-);

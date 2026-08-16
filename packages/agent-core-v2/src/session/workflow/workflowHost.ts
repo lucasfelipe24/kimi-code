@@ -22,9 +22,9 @@ import { applyProfilePromptPrefix } from '#/app/agentProfileCatalog/promptPrefix
 import type { IConfigService } from '#/app/config/config';
 import type { IFlagService } from '#/app/flag/flag';
 import type { IModelCatalog } from '#/kosong/model/catalog';
+import type { IHostProcessService } from '#/os/interface/hostProcess';
 import { IAgentLifecycleService } from '#/session/agentLifecycle/agentLifecycle';
 import { subagentLabels } from '#/session/agentLifecycle/subagentMetadata';
-import type { ISessionProcessRunner } from '#/session/process/processRunner';
 import type { ISessionAgentProfileCatalog } from '#/session/sessionAgentProfileCatalog/sessionAgentProfileCatalog';
 import type { ISessionContext } from '#/session/sessionContext/sessionContext';
 import { emitAgentRunSpawned, mirrorAgentRun } from '#/session/subagent/mirrorAgentRun';
@@ -52,7 +52,7 @@ export interface SubagentWorkflowHostOptions {
   readonly flags: IFlagService;
   readonly modelCatalog: IModelCatalog;
   readonly sessionContext: ISessionContext;
-  readonly processRunner: ISessionProcessRunner;
+  readonly process: IHostProcessService;
   readonly log: ILogService;
   /** Subagent profile; defaults to the `Agent` tool's default (`coder`). */
   readonly profileName?: string;
@@ -81,7 +81,7 @@ export class SubagentWorkflowHost implements WorkflowHost {
       flags,
       modelCatalog,
       sessionContext,
-      processRunner,
+      process,
       log,
     } = this.options;
     const controller = new AbortController();
@@ -128,7 +128,7 @@ export class SubagentWorkflowHost implements WorkflowHost {
       const promptText = await applyProfilePromptPrefix(
         profile,
         buildWorkflowAgentPrompt(request),
-        { cwd: sessionContext.cwd, runner: processRunner, log },
+        { cwd: sessionContext.cwd, process, log },
       );
       emitAgentRunSpawned(caller, child.id, {
         profileName: profile.name,

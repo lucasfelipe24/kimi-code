@@ -50,8 +50,7 @@ import { ITelemetryService } from '#/app/telemetry/telemetry';
 import { IModelCatalog, type Model } from '#/kosong/model/catalog';
 import { type ModelRequester } from '#/kosong/model/modelRequester';
 import { ILogService } from '#/_base/log/log';
-import { IHostEnvironment } from '#/os/interface/hostEnvironment';
-import { IHostFileSystem } from '#/os/interface/hostFileSystem';
+import { IAgentRuntimeService } from '#/agent/runtimeBinding/agentRuntime';
 import { ISessionSkillCatalog } from '#/session/sessionSkillCatalog/skillCatalog';
 import { ISessionWorkspaceContext } from '#/session/workspaceContext/workspaceContext';
 import { IAgentProfileService } from '#/agent/profile/profile';
@@ -78,8 +77,7 @@ export class AgentMediaToolsRegistrar extends Service implements IAgentMediaTool
     @IAgentProfileService private readonly profile: IAgentProfileService,
     @IModelCatalog private readonly modelCatalog: IModelCatalog,
     @IEventBus eventBus: IEventBus,
-    @IHostFileSystem private readonly fs: IHostFileSystem,
-    @IHostEnvironment private readonly env: IHostEnvironment,
+    @IAgentRuntimeService private readonly runtime: IAgentRuntimeService,
     @ISessionWorkspaceContext private readonly workspaceCtx: ISessionWorkspaceContext,
     @ITelemetryService private readonly telemetry: ITelemetryService,
     @IAgentStateService private readonly states: IAgentStateService,
@@ -91,12 +89,13 @@ export class AgentMediaToolsRegistrar extends Service implements IAgentMediaTool
     super();
     this.states.register(mediaRegisteredKeyKey);
     this.refresh();
-    this._register(eventBus.subscribe('agent.status.updated', () =>{  this.refresh(); }));
+    this._register(eventBus.subscribe('agent.status.updated', () => this.refresh()));
     this._register(
       this.appConfig.onDidSectionChange((e) => {
         if (e.domain === VISUAL_MODEL_SECTION) this.refresh();
       }),
     );
+    this._register(this.runtime.onDidChange(() => this.refresh()));
     this._register(toDisposable(() => this.registration?.dispose()));
   }
 
@@ -111,6 +110,25 @@ export class AgentMediaToolsRegistrar extends Service implements IAgentMediaTool
   private refresh(): void {
     const capabilities = this.profile.getModelCapabilities();
     const modelAlias = this.profile.getModel();
+    if (!this.runtime.isAvailable(['fs'])) {
+      const key = [
+        modelAlias,
+        String(capabilities.image_in),
+        String(capabilities.video_in),
+        'runtime-unavailable',
+      ].join('|');
+      if (key === this.registeredKey) return;
+      this.registeredKey = key;
+      this.registration?.dispose();
+      this.registration = undefined;
+      return;
+    }
+    const inspected = this.runtime.inspect();
+    const identityKey = [
+      inspected.identity.workspaceId,
+      inspected.identity.runtimeId,
+      inspected.identity.generation,
+    ].join('|');
     const visualRecipe = resolveVisualModel(this.appConfig, this.flags);
     const visualAlias = visualRecipe?.model;
     let visualRequester: ModelRequester | undefined;
@@ -139,6 +157,10 @@ export class AgentMediaToolsRegistrar extends Service implements IAgentMediaTool
       modelAlias,
       String(capabilities.image_in),
       String(capabilities.video_in),
+      identityKey,
+      inspected.status,
+      inspected.environment.pathClass,
+      String(inspected.capabilities.has('fs')),
       useVisual ? String(visualAlias) : '',
       useVisual ? String(visualCapabilities?.image_in) : '',
       useVisual ? String(visualCapabilities?.video_in) : '',
@@ -148,7 +170,8 @@ export class AgentMediaToolsRegistrar extends Service implements IAgentMediaTool
     this.registration?.dispose();
     const workspaceCtx = this.workspaceCtx;
     const skillCatalog = this.skillCatalog;
-    const env = this.env;
+    const runtime = this.runtime;
+    const pathClass = inspected.environment.pathClass;
     let requester: ModelRequester | undefined;
     let model: Model | undefined;
     if (modelAlias !== '') {
@@ -159,8 +182,7 @@ export class AgentMediaToolsRegistrar extends Service implements IAgentMediaTool
     const boundModel = useVisual ? visualModel : model;
     const boundModelAlias = useVisual ? String(visualAlias) : modelAlias;
     this.registration = registerMediaTools(this.toolRegistry, {
-      fs: this.fs,
-      env: this.env,
+      runtime,
       workspace: {
         get workspaceDir() {
           return workspaceCtx.workDir;
@@ -169,7 +191,7 @@ export class AgentMediaToolsRegistrar extends Service implements IAgentMediaTool
           return extendWorkspaceWithSkillRoots(
             { workspaceDir: workspaceCtx.workDir, additionalDirs: workspaceCtx.additionalDirs },
             skillCatalog?.catalog.getSkillRoots() ?? [],
-            env.pathClass,
+            pathClass,
           ).additionalDirs;
         },
       },

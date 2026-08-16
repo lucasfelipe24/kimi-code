@@ -33,7 +33,7 @@ import { IWorkflowModeService } from '#/agent/workflow/workflowMode';
 import {
   getLiveSessionById,
   resumeSessionById,
-} from '#/app/workspaceLifecycle/sessionLookup';
+} from '#/app/sessionManager/sessionLookup';
 import { IModelCatalog } from '#/kosong/model/catalog';
 import { IModelService } from '#/kosong/model/model';
 import { ErrorCodes, Error2 } from '#/errors';

@@ -76,8 +76,10 @@ export const ErrorCode = {
   CAPABILITY_NOT_FOUND: 40418,
   /** plugin_id 不存在 */
   PLUGIN_NOT_FOUND: 40419,
+  /** runtime_id 不存在 */
+  RUNTIME_NOT_FOUND: 40420,
   /** memory id 不存在 */
-  MEMORY_NOT_FOUND: 40420,
+  MEMORY_NOT_FOUND: 40421,
 
   /** session 有正在进行的 prompt，拒绝新请求 */
   SESSION_BUSY: 40901,
@@ -130,8 +132,10 @@ export const ErrorCode = {
   CAPABILITY_INSTALL_IN_PROGRESS: 40924,
   /** 当前平台/架构不支持该 capability */
   CAPABILITY_UNSUPPORTED: 40925,
+  /** runtime 当前不可用（未注册 / 不支持） */
+  RUNTIME_UNAVAILABLE: 40926,
   /** memory 写入需要受信任的 workspace（project scope） */
-  MEMORY_TRUST_REQUIRED: 40926,
+  MEMORY_TRUST_REQUIRED: 40930,
   /** memory 内容被拒绝（疑似凭证 / 敏感信息） */
   MEMORY_CONTENT_REJECTED: 40927,
   /** memory scope 已达容量上限 */

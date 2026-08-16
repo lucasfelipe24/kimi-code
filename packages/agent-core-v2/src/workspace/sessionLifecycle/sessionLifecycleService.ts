@@ -23,9 +23,9 @@
  * Every Session scope is also seeded with the handler's shared workspace
  * resources as pure-data read views (the injection contracts) — discovery,
  * watching and connecting all live on the Workspace-scope services; session
- * consumers read the seeds and refresh off their change events. The five
- * workspace-projection seeds are provided by the seed-adapter units
- * installed with the scope (`installSessionSeedAdapters`), not by `extra`.
+ * consumers read the seeds and refresh off their change events. The
+ * workspace-projection seeds (skill catalog data, instructions provider, MCP
+ * handle, workspace info) are provided directly, not by `extra`.
  * Materializes the session's initial metadata on
  * creation. Bound at Workspace scope.
  * Persisted sessions are discovered through the session-index read model.
@@ -107,19 +107,17 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'pathe';
 import { ulid } from 'ulid';
 
-import { IInstantiationService } from '#/_base/di/instantiation';
+import type { IInstantiationService } from '#/_base/di/instantiation';
 import { Disposable } from '#/_base/di/lifecycle';
-import { LifecycleScope } from '#/app/scopes';
 import {
   createScopedChildHandle,
   type ISessionScopeHandle,
-  ScopeActivation,
-  registerScopedService,
 } from '#/_base/di/scope';
 import { unwrapErrorCause } from '#/_base/errors/errors';
 import { AsyncEmitter, Emitter, type Event, type IWaitUntil } from '#/_base/event';
 import { DEFAULT_PLAN_MODE_SECTION } from '#/features/plan/configSection';
 import { IAgentPlanService } from '#/features/plan/plan';
+import { LifecycleScope } from '#/app/scopes';
 import { IBootstrapService } from '#/app/bootstrap/bootstrap';
 import { CRON_SESSION_TAG, type CronTask } from '#/app/cron/cronTask';
 import { ICronTaskPersistence } from '#/app/cron/cronTaskPersistence';
@@ -134,7 +132,6 @@ import {
 } from '#/app/sessionIndex/sessionIndex';
 import { ITelemetryService } from '#/app/telemetry/telemetry';
 import { ErrorCodes, Error2, isError2 } from '#/errors';
-import { IHostEnvironment } from '#/os/interface/hostEnvironment';
 import { IHostFileSystem, type HostDirEntry } from '#/os/interface/hostFileSystem';
 import { IAppendLogStore } from '#/persistence/interface/appendLogStore';
 import { IAtomicDocumentStore } from '#/persistence/interface/atomicDocumentStore';
@@ -149,10 +146,13 @@ import {
   sessionMemoryAccessFactorySeed,
 } from '#/session/persistentMemory/memoryAccessFactory';
 import { sessionMemoryAccessSeed } from '#/session/persistentMemory/memorySeed';
-import { installSessionSeedAdapters } from '#/session/sessionSeed/sessionSeedAdapters';
-import { ISessionMetadata, type SessionMeta } from '#/session/sessionMetadata/sessionMetadata';
-import { drainSessionMetadataWrites, toEpochMs } from '#/session/sessionMetadata/sessionMetadataService';
 import { ISessionProcessRunner } from '#/session/process/processRunner';
+import { ISessionMetadata, type SessionMeta } from '#/session/sessionMetadata/sessionMetadata';
+import { ISessionSkillCatalogData } from '#/session/sessionSkillCatalog/skillCatalogData';
+import { ISessionInstructionsProvider } from '#/session/sessionInstructions/instructionsProvider';
+import { ISessionMcpHandle } from '#/session/mcp/sessionMcpHandle';
+import { ISessionWorkspaceInfo } from '#/session/workspaceInfo/workspaceInfo';
+import { drainSessionMetadataWrites, toEpochMs } from '#/session/sessionMetadata/sessionMetadataService';
 import { ISessionToolPolicy } from '#/session/sessionToolPolicy/sessionToolPolicy';
 import { IWireService } from '#/wire/wire';
 import {
@@ -181,6 +181,10 @@ import { IWorkspaceMemoryCatalog } from '#/workspace/persistentMemory/memoryCata
 import { memoryAccessForActor } from '#/workspace/persistentMemory/memoryCatalogMutation';
 import { IWorkspaceDirs } from '#/workspace/workspaceDirs/workspaceDirs';
 import { IAgentActivityView } from '#/agent/activityView/activityView';
+import { IWorkspaceSkillCatalog } from '#/workspace/workspaceSkillCatalog/workspaceSkillCatalog';
+import { IWorkspaceInstructionsService } from '#/workspace/workspaceInstructions/workspaceInstructions';
+import { IWorkspaceMcpService } from '#/workspace/workspaceMcp/workspaceMcp';
+import { PLUGIN_SKILL_SOURCE_ID } from '#/app/skillCatalog/skillSource';
 
 import { agentScopeOf, sessionDirOf, sessionScopeOf } from './internal/addressing';
 import {
@@ -207,6 +211,13 @@ type MaterializeSessionOptions = Omit<CreateSessionOptions, 'sessionId'> & {
 };
 
 const NO_ABORT = new AbortController().signal;
+
+const SESSION_CREATE_RELOAD_SKILL_SOURCES: readonly string[] = [
+  'user',
+  'explicit',
+  'extra',
+  PLUGIN_SKILL_SOURCE_ID,
+];
 
 // NOTE: stays Disposable — its own 'get' and 'config' collide with the Fiber
 export class SessionLifecycleService extends Disposable implements ISessionLifecycleService {
@@ -236,11 +247,10 @@ export class SessionLifecycleService extends Disposable implements ISessionLifec
   private readonly resuming = new Map<string, Promise<ISessionScopeHandle | undefined>>();
 
   constructor(
-    @IInstantiationService private readonly instantiation: IInstantiationService,
+    private readonly instantiation: IInstantiationService,
     @IWorkspaceContext private readonly workspaceContext: IWorkspaceContext,
     @IBootstrapService private readonly bootstrap: IBootstrapService,
     @IConfigService private readonly config: IConfigService,
-    @IHostEnvironment private readonly hostEnv: IHostEnvironment,
     @ISessionIndex private readonly index: ISessionIndex,
     @ISessionIndexMirror private readonly indexMirror: ISessionIndexMirror,
     @IAppendLogStore private readonly appendLogStore: IAppendLogStore,
@@ -262,12 +272,17 @@ export class SessionLifecycleService extends Disposable implements ISessionLifec
     @IWorkspaceDirs private readonly workspaceDirs: IWorkspaceDirs,
     @IWorkspaceMemoryCatalog private readonly memoryCatalog: IWorkspaceMemoryCatalog,
     @ISessionProcessRunner private readonly processRunner: ISessionProcessRunner,
+    @IWorkspaceSkillCatalog private readonly workspaceSkillCatalog: IWorkspaceSkillCatalog,
+    @IWorkspaceInstructionsService private readonly workspaceInstructions: IWorkspaceInstructionsService,
+    @IWorkspaceMcpService private readonly workspaceMcp: IWorkspaceMcpService,
     @IModelCatalog private readonly modelCatalog: IModelCatalog,
     @IModelService private readonly models: IModelService,
     @IProviderService private readonly providers: IProviderService,
     @IFlagService private readonly flags: IFlagService,
+    onDispose?: () => void,
   ) {
     super();
+    if (onDispose !== undefined) this._register({ dispose: onDispose });
   }
 
   private get workspaceId(): string {
@@ -280,6 +295,9 @@ export class SessionLifecycleService extends Disposable implements ISessionLifec
 
   async create(opts: CreateSessionOptions): Promise<ISessionScopeHandle> {
     const sessionId = opts.sessionId ?? createSessionId();
+    await this.workspaceSkillCatalog
+      .reloadSources(SESSION_CREATE_RELOAD_SKILL_SOURCES)
+      .catch(() => undefined);
     const handle = await this.materializeSession({ ...opts, sessionId });
     try {
       const main =
@@ -334,7 +352,6 @@ export class SessionLifecycleService extends Disposable implements ISessionLifec
       forActor: (actor) => memoryAccessForActor(this.memoryCatalog, actor),
     };
     const mainMemoryAccess = memoryAccessFactory.forActor('main');
-    await this.hostEnv.ready;
     const handle = createScopedChildHandle(
       this.instantiation,
       LifecycleScope.Session,
@@ -350,13 +367,13 @@ export class SessionLifecycleService extends Disposable implements ISessionLifec
           ...sessionMemoryAccessFactorySeed(memoryAccessFactory),
           ...sessionMemoryAccessSeed(mainMemoryAccess),
           [ISessionProcessRunner, this.processRunner],
+          [ISessionSkillCatalogData, this.workspaceSkillCatalog.sessionData()],
+          [ISessionInstructionsProvider, this.workspaceInstructions.sessionProvider()],
+          [ISessionMcpHandle, this.workspaceMcp.sessionHandle()],
+          [ISessionWorkspaceInfo, this.workspaceDirs.sessionInfo()],
           ...sessionEphemeralMcpServersSeed(opts.mcpServers ?? {}),
         ],
         configureContainer: (container) => {
-          installSessionSeedAdapters(container);
-          // The will-create moment is a business-lifecycle event; the DI
-          // container behind the participation surface stays this service's
-          // implementation detail.
           this._onWillCreateSession.fire({
             sessionId: opts.sessionId,
             readSeed: (id) => container.invokeFunction((accessor) => accessor.get(id)),
@@ -836,13 +853,6 @@ export class SessionLifecycleService extends Disposable implements ISessionLifec
   }
 }
 
-registerScopedService(
-  LifecycleScope.Workspace,
-  ISessionLifecycleService,
-  SessionLifecycleService,
-  ScopeActivation.OnScopeCreated,
-  'sessionLifecycle',
-);
 
 async function collect<T>(iterable: AsyncIterable<T>): Promise<T[]> {
   const items: T[] = [];

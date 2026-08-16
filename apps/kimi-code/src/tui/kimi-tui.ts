@@ -139,6 +139,7 @@ import { createTUIState, type TUIState } from './tui-state';
 import {
   INITIAL_LIVE_PANE,
   type AppState,
+  type InlineSkillActivation,
   type KimiTUIOptions,
   type LivePaneState,
   type LoginProgressSpinnerHandle,
@@ -159,7 +160,7 @@ import { configuredVisualModel } from './utils/visual-model-config';
 import type { ExtractionResult } from './utils/image-placeholder';
 import { installInputLatencyProbe } from './utils/input-latency';
 import { startupTrace } from '#/utils/startup-trace';
-import { REPLAY_TURN_LIMIT } from './utils/message-replay';
+import { REPLAY_FETCH_TURN_LIMIT } from './utils/message-replay';
 import { hasPatchChanges } from './utils/object-patch';
 import { beginScreenTakeover, endScreenTakeover, type ScreenTakeover } from './utils/screen-takeover';
 import { sessionRowsForPicker } from './utils/session-picker-rows';
@@ -506,12 +507,14 @@ export class KimiTUI {
           : {}),
       };
     });
+    const skillCommandNames = new Set(this.skillCommandMap.keys());
     const provider = new FileMentionProvider(
       slashCommands,
       this.state.appState.workDir,
       this.fdPath,
       this.state.appState.additionalDirs,
       () => this.state.appState.inputMode,
+      skillCommandNames,
     );
     this.state.editor.setAutocompleteProvider(provider);
 
@@ -524,6 +527,7 @@ export class KimiTUI {
       }
     }
     this.state.editor.setArgumentHints(argumentHints);
+    this.state.editor.setSkillCommandNames(skillCommandNames);
   }
 
   refreshSlashCommandAutocomplete(): void {
@@ -914,7 +918,7 @@ export class KimiTUI {
           session = await this.harness.resumeSession({
             id: startup.sessionFlag,
             additionalDirs: createSessionOptions.additionalDirs,
-            replayTurnLimit: REPLAY_TURN_LIMIT,
+            replayTurnLimit: REPLAY_FETCH_TURN_LIMIT,
           });
           shouldReplayHistory = true;
         } else {
@@ -926,7 +930,7 @@ export class KimiTUI {
             session = await this.harness.resumeSession({
               id: target.id,
               additionalDirs: createSessionOptions.additionalDirs,
-              replayTurnLimit: REPLAY_TURN_LIMIT,
+              replayTurnLimit: REPLAY_FETCH_TURN_LIMIT,
             });
             shouldReplayHistory = true;
           } else {
@@ -1415,6 +1419,103 @@ export class KimiTUI {
     );
   }
 
+  async sendInlineSkillUserInput(
+    text: string,
+    activations: readonly InlineSkillActivation[],
+    preExtracted?: ExtractionResult,
+  ): Promise<void> {
+    if (this.btwPanelController.sendUserInput(text, activations)) return;
+    if (this.state.appState.model.trim().length === 0) {
+      this.showError(LLM_NOT_SET_MESSAGE);
+      return;
+    }
+    let extraction: ReturnType<typeof extractMediaAttachments>;
+    try {
+      extraction = preExtracted ?? extractMediaAttachments(text, this.imageStore);
+    } catch (error) {
+      this.showError(`Failed to prepare media attachment: ${formatErrorMessage(error)}`);
+      return;
+    }
+    if (
+      !this.mediaCapabilitiesFastPath(extraction) &&
+      !(await this.validateMediaCapabilities(extraction))
+    ) {
+      return;
+    }
+    if (this.cacheHint.maybeInterceptOnSubmit(text, extraction, activations)) return;
+    let session = this.session;
+    if (session === undefined) {
+      // Dispatch only routes here on the v2 engine, so the session is created
+      // lazily on first use exactly like a normal prompt.
+      session = await this.ensureSession();
+      if (session === undefined) return;
+    }
+    if (
+      this.deferUserMessages ||
+      this.state.appState.goal?.status === 'active' ||
+      this.state.appState.streamingPhase !== 'idle' ||
+      this.state.appState.isCompacting
+    ) {
+      this.enqueueMessage(
+        text,
+        extraction.hasMedia
+          ? {
+              hasMedia: true,
+              parts: extraction.parts,
+              imageAttachmentIds: extraction.imageAttachmentIds,
+              inlineSkillActivations: activations,
+            }
+          : { inlineSkillActivations: activations },
+      );
+      this.updateQueueDisplay();
+      this.state.ui.requestRender();
+      return;
+    }
+    this.beginSessionRequest();
+    void this.runInlineSkillActivations(session, text, activations, extraction).catch(
+      (error: unknown) => {
+        this.failSessionRequest(`Skill activation failed: ${formatErrorMessage(error)}`);
+      },
+    );
+  }
+
+  private async runInlineSkillActivations(
+    session: Session,
+    text: string,
+    activations: readonly InlineSkillActivation[],
+    extraction: ReturnType<typeof extractMediaAttachments>,
+  ): Promise<void> {
+    const knownEntryIds = new Set(this.state.transcriptEntries.map((entry) => entry.id));
+    await session.promptWithSkills(
+      extraction.hasMedia ? extraction.parts : text,
+      activations.map((activation) => ({ name: activation.skillName, args: activation.args })),
+    );
+    // The engine bundles the activations into the prompt's own message, and
+    // the `skill.activated` events land synchronously during the call — so
+    // the cards appended for this submission are the skill_activation entries
+    // with fresh ids (the window trim may replace the entries array mid-call,
+    // so membership is decided by id, not by index into a captured array).
+    // Appending the user entry afterwards keeps the live transcript in the
+    // same order as a resumed replay (skill cards first, prompt last).
+    // Marking only happens once the submission was accepted: a rejected
+    // bundle leaves no cards and must not leave a local undo anchor the
+    // engine never recorded.
+    for (const entry of this.state.transcriptEntries) {
+      if (entry.kind === 'skill_activation' && !knownEntryIds.has(entry.id)) {
+        entry.bundledWithPrompt = true;
+      }
+    }
+    this.appendTranscriptEntry({
+      id: nextTranscriptId(),
+      kind: 'user',
+      turnId: undefined,
+      renderMode: 'plain',
+      content: text,
+      imageAttachmentIds:
+        extraction.imageAttachmentIds.length > 0 ? extraction.imageAttachmentIds : undefined,
+    });
+  }
+
   async validateMediaCapabilities(extraction: {
     hasMedia: boolean;
     imageAttachmentIds: readonly number[];
@@ -1500,7 +1601,9 @@ export class KimiTUI {
 
   private enqueueMessage(
     text: string,
-    options?: SendMessageOptions,
+    options?: SendMessageOptions & {
+      readonly inlineSkillActivations?: readonly InlineSkillActivation[];
+    },
     mode?: 'prompt' | 'bash',
   ): void {
     this.state.queuedMessages.push({
@@ -1512,6 +1615,7 @@ export class KimiTUI {
           ? options.imageAttachmentIds
           : undefined,
       mode,
+      inlineSkillActivations: options?.inlineSkillActivations,
     });
     this.track('input_queue');
   }
@@ -1550,6 +1654,25 @@ export class KimiTUI {
       // sendSkillActivation re-checks the busy state, so a premature drain
       // re-queues at the tail instead of racing the running turn.
       void this.sendSkillActivation(session, item.skillName, item.skillArgs ?? '');
+      return;
+    }
+    if (item.inlineSkillActivations !== undefined && item.inlineSkillActivations.length > 0) {
+      // Media was extracted and validated at enqueue time; reuse the queued
+      // parts rather than re-extracting from a possibly-cleared image store.
+      this.beginSessionRequest();
+      void this.runInlineSkillActivations(
+        session,
+        item.text,
+        item.inlineSkillActivations,
+        {
+          parts: item.parts !== undefined ? [...item.parts] : [],
+          hasMedia: item.parts !== undefined && item.parts.length > 0,
+          imageAttachmentIds: item.imageAttachmentIds !== undefined ? [...item.imageAttachmentIds] : [],
+          videoAttachmentIds: [],
+        },
+      ).catch((error: unknown) => {
+        this.failSessionRequest(`Skill activation failed: ${formatErrorMessage(error)}`);
+      });
       return;
     }
     this.harness.withInteractiveAgent(item.agentId ?? MAIN_AGENT_ID, () => {
@@ -2304,7 +2427,7 @@ export class KimiTUI {
     try {
       session = await this.harness.resumeSession({
         id: targetSessionId,
-        replayTurnLimit: REPLAY_TURN_LIMIT,
+        replayTurnLimit: REPLAY_FETCH_TURN_LIMIT,
       });
     } catch (error) {
       const msg = formatErrorMessage(error);

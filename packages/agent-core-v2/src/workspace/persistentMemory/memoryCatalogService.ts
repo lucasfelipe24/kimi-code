@@ -5,14 +5,13 @@
  * records for one workspace. Public DI reflection sees only the read catalog.
  * Authorized actor-bound closures enter the symbol-only mutation boundary,
  * which enforces capability, actor scope, trust, redaction, and residual-secret
- * rejection before persistence. Bound at Workspace scope.
+ * rejection before persistence. Constructed per workspace generation by the
+ * `Program` (one catalog per workspace instance).
  */
 
 import { ulid } from 'ulid';
 
 import { Disposable } from '#/_base/di/lifecycle';
-import { LifecycleScope } from '#/app/scopes';
-import { ScopeActivation, registerScopedService } from '#/_base/di/scope';
 import { Emitter } from '#/_base/event';
 import { MemoryErrors } from '#/app/persistentMemory/errors';
 import {
@@ -255,11 +254,3 @@ export class WorkspaceMemoryCatalogService
     return { ...record, origin };
   }
 }
-
-registerScopedService(
-  LifecycleScope.Workspace,
-  IWorkspaceMemoryCatalog,
-  WorkspaceMemoryCatalogService,
-  ScopeActivation.OnDemand,
-  'persistentMemory',
-);

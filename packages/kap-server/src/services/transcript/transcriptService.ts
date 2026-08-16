@@ -48,7 +48,7 @@ import {
   ISessionIndex,
   ISessionMetadata,
   IAgentLoopService,
-  followWorkspaceHandlers,
+  followSessionLifecycles,
   getLiveSessionById,
   reduceContextTranscript,
   type IDisposable,
@@ -137,9 +137,9 @@ export class TranscriptService {
     // reads should fall through to the cold rebuild from disk. Close/archive
     // events are per-handler (Workspace scope), so follow every handler —
     // present and future — through the App-scope registry.
-    followWorkspaceHandlers(deps.core.accessor, (service) => {
-      const d1 = service.onDidCloseSession(({ sessionId }) =>{  this.dropSession(sessionId); });
-      const d2 = service.onDidArchiveSession(({ sessionId }) =>{  this.dropSession(sessionId); });
+    followSessionLifecycles(deps.core.accessor, (service) => {
+      const d1 = service.onDidCloseSession(({ sessionId }) => this.dropSession(sessionId));
+      const d2 = service.onDidArchiveSession(({ sessionId }) => this.dropSession(sessionId));
       return {
         dispose: () => {
           d1.dispose();
