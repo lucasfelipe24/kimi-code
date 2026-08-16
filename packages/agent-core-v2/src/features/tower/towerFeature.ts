@@ -51,6 +51,7 @@ import { TowerStatusTool } from './tools/status/statusTool';
 import { ITowerTeardownTool } from './tools/teardown/teardown';
 import { TowerTeardownTool } from './tools/teardown/teardownTool';
 import { TOWER_WORKER_PROFILE_DEF } from './workerProfile';
+import { IAgentTowerModeInjection, TowerModeInjection } from './towerModeInjection';
 
 /** Tower-orchestration tools exist only on the main agent (the tower). */
 const towerOnly = (accessor: ServicesAccessor): boolean =>
@@ -87,6 +88,9 @@ export class TowerFeature extends Feature {
 
   constructor() {
     super();
+    this.contributeAgentService(IAgentTowerModeInjection, TowerModeInjection, {
+      activation: ScopeActivation.OnScopeCreated,
+    });
     this.contributeService(LifecycleScope.App, ITowerRateLimitService, TowerRateLimitService, {
       activation: ScopeActivation.OnDemand,
     });
