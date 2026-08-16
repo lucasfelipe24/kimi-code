@@ -1,4 +1,19 @@
-import type { KimiConfig, KimiConfigPatch } from '@moonshot-ai/kimi-code-sdk';
+import type { KimiConfig, KimiConfigPatch, ModelAlias } from '@moonshot-ai/kimi-code-sdk';
+
+/**
+ * Media-input capabilities that make a model usable as a `[visual_model]`
+ * companion: it must be able to consume at least one media modality on its
+ * own (image, video, or audio). The `[visual_model]` picker filters the model
+ * list to these so users only ever pin a model that can actually inspect
+ * media.
+ */
+const MEDIA_INPUT_CAPABILITIES = ['image_in', 'video_in', 'audio_in'] as const;
+
+export function hasMediaInputCapability(model: ModelAlias | undefined): boolean {
+  return (model?.capabilities ?? []).some((capability) =>
+    MEDIA_INPUT_CAPABILITIES.includes(capability as (typeof MEDIA_INPUT_CAPABILITIES)[number]),
+  );
+}
 
 /**
  * Structural access to the v2-only `[visual_model]` config section. The SDK's

@@ -17,7 +17,7 @@ Some commands are only available in the idle state. Executing these commands whi
 | `/provider` | — | Open the interactive provider manager to view, add, and remove configured providers. See [Platforms & Models — `/provider` and provider management](../configuration/providers.md#provider-—-interactive-provider-management) | Yes |
 | `/model` | — | Switch the LLM model used in the current session | Yes |
 | `/secondary-model` | `/subagent-model` | Pick the default model for subagents (writes `[secondary_model] default_model`; see the [subagent model pool](../configuration/config-files.md#subagent-model-pool)). Visible when the subagent model pool experiment is enabled | Yes |
-| `/visual-model` | — | Pick the model used to inspect images / videos when the current model is text-only (writes `[visual_model] model`; see the [`visual_model` section](../configuration/config-files.md#visual_model)) | Yes |
+| `/visual-model` | — | Pick the model used to inspect images / videos when the current model is text-only (writes `[visual_model] model`; see the [`visual_model` section](../configuration/config-files.md#visual_model)). Only models that declare image, video, or audio input are offered | Yes |
 | `/settings` | `/config` | Open the settings panel inside the TUI | Yes |
 | `/experiments` | `/experimental` | Open the experimental feature panel | Yes |
 | `/permission` | — | Select a permission mode | Yes |

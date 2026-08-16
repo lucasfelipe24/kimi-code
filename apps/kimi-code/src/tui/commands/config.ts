@@ -27,7 +27,7 @@ import { currentTheme, isBuiltInTheme, lightColors, loadCustomThemeMerged } from
 import { NO_ACTIVE_SESSION_MESSAGE } from '../constant/kimi-tui';
 import { formatErrorMessage } from '../utils/event-payload';
 import { thinkingEffortToConfig } from '../utils/thinking-config';
-import { configuredVisualModel, visualModelConfigPatch } from '../utils/visual-model-config';
+import { configuredVisualModel, hasMediaInputCapability, visualModelConfigPatch } from '../utils/visual-model-config';
 import { showUsage } from './info';
 import { setExperimentalFeatures } from './experimental-flags';
 import { showWebSearchConfig } from './web-search';
@@ -302,20 +302,41 @@ export async function handleSecondaryModelCommand(host: SlashCommandHost, args: 
 export async function handleVisualModelCommand(host: SlashCommandHost, args: string): Promise<void> {
   const alias = args.trim();
   await refreshModelsForPicker(host);
-  const models = pickerModelsForHost(host);
-  if (Object.keys(models).length === 0) {
+  const allModels = pickerModelsForHost(host);
+  if (Object.keys(allModels).length === 0) {
     host.showNotice(
       'No models configured',
       'Run /login to sign in to Kimi, or /provider to add another provider from a model catalog.',
     );
     return;
   }
-  if (alias.length > 0 && models[alias] === undefined) {
+  const config = await host.harness.getConfig();
+  const current = configuredVisualModel(config) ?? '';
+  // Only media-capable models (image_in / video_in / audio_in) can serve as
+  // the visual companion. The currently pinned alias stays visible even if it
+  // lost its media capability — the picker must show the existing binding so
+  // the user can see and replace it.
+  const models = Object.fromEntries(
+    Object.entries(allModels).filter(
+      ([modelAlias, model]) =>
+        hasMediaInputCapability(model) || (current.length > 0 && modelAlias === current),
+    ),
+  );
+  if (Object.keys(models).length === 0) {
+    host.showNotice(
+      'No vision-capable models configured',
+      'None of your configured models declares image, video, or audio input. Run /provider to add a vision-capable model.',
+    );
+    return;
+  }
+  if (alias.length > 0 && allModels[alias] === undefined) {
     host.showError(`Unknown model alias: ${alias}`);
     return;
   }
-  const config = await host.harness.getConfig();
-  const current = configuredVisualModel(config) ?? '';
+  if (alias.length > 0 && !hasMediaInputCapability(allModels[alias])) {
+    host.showError(`${alias} does not support media input (image, video, or audio).`);
+    return;
+  }
   showVisualModelPicker(host, models, current, alias.length > 0 ? alias : undefined);
 }
 
