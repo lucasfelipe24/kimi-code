@@ -1,7 +1,7 @@
 /**
- * `loop` domain — the `turn.*` / delta event payloads published through
- * `IEventBus` as a turn runs. These are the loop's share of the agent event
- * stream; consumers subscribe by `type`.
+ * `loop` domain — the `turn.*` / `run.ended` / delta event payloads published
+ * through `IEventBus` as a turn runs and when the loop drains. These are the
+ * loop's share of the agent event stream; consumers subscribe by `type`.
  * `turn.started` additionally carries the text extracted from the turn's
  * input parts (absent when the turn opened with no text part): consumers
  * that render the user's prompt must take it from there, because the context
@@ -67,6 +67,20 @@ export interface TurnEndedEvent {
   readonly interruptReason?: TurnInterruptReason;
 }
 
+/**
+ * Published on the per-agent `eventBus` when the loop drains completely: after
+ * a turn's `turn.ended` is emitted and `pumpTurns()` leaves no pending turn,
+ * request, or held admission behind. The run has deterministically ended, so a
+ * consumer (automatic memory extraction) can mine whatever the last turn left
+ * in the transcript — including the tail of a cancelled/failed turn that no
+ * completed `turn.ended` covered. The engine never persists it to the wire
+ * model; kap-server classifies it as a volatile signal (live-only, never
+ * journaled or replayed as a session_event).
+ */
+export interface RunEndedEvent {
+  readonly type: 'run.ended';
+}
+
 export interface TurnStepStartedEvent {
   readonly type: 'turn.step.started';
   readonly turnId: number;
@@ -124,6 +138,7 @@ declare module '#/app/event/eventBus' {
   interface DomainEventMap {
     'turn.started': TurnStartedEvent;
     'turn.ended': TurnEndedEvent;
+    'run.ended': RunEndedEvent;
     'turn.step.started': TurnStepStartedEvent;
     'turn.step.completed': TurnStepCompletedEvent;
     'turn.step.interrupted': TurnStepInterruptedEvent;

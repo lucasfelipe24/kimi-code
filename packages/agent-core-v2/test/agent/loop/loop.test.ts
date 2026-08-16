@@ -107,6 +107,30 @@ describe('Agent loop', () => {
     expect(record?.['time']).toEqual(expect.any(Number));
   });
 
+  it('publishes run.ended when the run drains after a cancelled turn', async () => {
+    const events: string[] = [];
+    const subscription = ctx.get(IEventBus).subscribe((event) => {
+      events.push(event.type);
+    });
+    profile.update({ activeToolNames: [] });
+    const cancelSubscription = ctx.get(IEventBus).subscribe('assistant.delta', () => {
+      loop.cancel();
+    });
+
+    ctx.mockNextResponse({ type: 'text', text: 'done' });
+    await ctx.rpc.prompt({ input: [{ type: 'text', text: 'Hello' }] });
+    await ctx.untilTurnEnd();
+    subscription.dispose();
+    cancelSubscription.dispose();
+
+    // A cancelled turn ends the run without a completed `turn.ended`; `run.ended`
+    // signals the drained loop so automatic memory extraction can mine the tail
+    // the turn left behind. (Completed-turn runs do not publish it — their span
+    // is already mined by the completed `turn.ended` handler.)
+    expect(events.filter((type) => type === 'run.ended')).toHaveLength(1);
+    expect(events.indexOf('run.ended')).toBeGreaterThan(events.lastIndexOf('turn.ended'));
+  });
+
   it('fails the turn after a filtered step completes', async () => {
     ctx.mockNextProviderResponse({
       parts: [{ type: 'text', text: 'blocked' }],

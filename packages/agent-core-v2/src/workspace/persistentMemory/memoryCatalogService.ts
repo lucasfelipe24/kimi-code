@@ -27,7 +27,6 @@ import { IWorkspaceContext } from '#/workspace/workspaceContext/workspaceContext
 import { IWorkspaceTrust } from '#/workspace/workspaceTrust/workspaceTrust';
 
 import {
-  IWorkspaceMemoryCatalog,
   type EffectiveMemory,
   type MemoryCreateInput,
   type MemoryPatch,
@@ -100,6 +99,10 @@ export class WorkspaceMemoryCatalogService
       create: (input) => this.create(capability, actor, input),
       update: (scope, id, patch) => this.update(capability, actor, scope, id, patch),
       forget: (scope, id) => this.forget(capability, actor, scope, id),
+      // Live trust read for the auto-extraction scope policy; the extraction
+      // service never persists `user`, and `project` drafts fall back to
+      // `workspace` while the workspace is untrusted.
+      isTrusted: () => this.trust.isTrusted(),
     };
   }
 
