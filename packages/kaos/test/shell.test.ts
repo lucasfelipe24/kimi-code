@@ -101,7 +101,9 @@ describe.skipIf(process.platform === 'win32')('LocalKaos shell operations', () =
   });
 
   it('should handle command with error', async () => {
-    const result = await runSh(kaos, 'ls /nonexistent/directory');
+    // `LC_ALL=C` pins the error message to English regardless of the host
+    // locale (the test asserts the exact GNU `ls` wording).
+    const result = await runSh(kaos, 'LC_ALL=C ls /nonexistent/directory');
     expect(result.exitCode).not.toBe(0);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain('No such file or directory');

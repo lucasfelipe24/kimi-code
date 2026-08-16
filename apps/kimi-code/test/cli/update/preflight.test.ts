@@ -238,6 +238,10 @@ describe('runUpdatePreflight', () => {
     // regardless of the host environment (the flag bypasses batch holds).
     // Tests that exercise the bypass opt back in with `vi.stubEnv(..., '1')`.
     vi.stubEnv('KIMI_CODE_EXPERIMENTAL_FLAG', '');
+    // Neutralize auto-update disable envs from the host environment; tests
+    // that exercise them opt back in with `vi.stubEnv(..., '1')`.
+    vi.stubEnv('KIMI_CODE_NO_AUTO_UPDATE', '');
+    vi.stubEnv('KIMI_CLI_NO_AUTO_UPDATE', '');
     mocks.readUpdateInstallState.mockResolvedValue(emptyUpdateInstallState());
     mocks.writeUpdateInstallState.mockResolvedValue(undefined);
     mocks.loadTuiConfig.mockResolvedValue(tuiConfig());

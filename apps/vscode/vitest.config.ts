@@ -1,5 +1,10 @@
-import { defineConfig } from 'vitest/config';
+import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
+
+import { defineConfig } from 'vitest/config';
+
+const require = createRequire(import.meta.url);
+const pkg = require('./package.json') as { version: string };
 
 export default defineConfig({
   resolve: {
@@ -7,6 +12,11 @@ export default defineConfig({
       '@': resolve(import.meta.dirname, 'webview-ui/src'),
       shared: resolve(import.meta.dirname, 'shared'),
     },
+  },
+  define: {
+    // Mirrors the `define` in tsdown.config.ts so the extension's
+    // build-time version constant exists under vitest too.
+    __EXTENSION_VERSION__: JSON.stringify(pkg.version),
   },
   test: {
     include: ['test/**/*.test.ts'],

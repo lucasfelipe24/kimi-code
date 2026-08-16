@@ -68,7 +68,15 @@ export class HostFolderBrowser implements IHostFolderBrowser {
   }
 
   async home(): Promise<FsHomeResponse> {
-    const home = homedir();
+    // Resolve the realpath exactly like `browse` does, so the returned home
+    // and the browse of that home agree even when `$HOME` is a symlink
+    // (e.g. NixOS's `/var/home` → `/home`).
+    let home = homedir();
+    try {
+      home = await realpath(home);
+    } catch {
+      // Best-effort: keep the unresolved home when realpath fails.
+    }
     const workspaces = await this.registry.list();
     const recent_roots = workspaces.slice(0, RECENT_ROOTS_LIMIT).map((w) => w.root);
     return { home, recent_roots };

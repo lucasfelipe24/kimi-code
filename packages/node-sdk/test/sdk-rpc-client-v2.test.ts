@@ -791,28 +791,33 @@ key = "${titleOAuthRef.key}"
           'a/m1': { provider: 'a', model: 'm1', maxContextSize: 100 },
           'b/m1': { provider: 'b', model: 'm1', maxContextSize: 100 },
         },
-        visualModel: { model: 'a/m1', default_effort: 'low' },
+        visualModel: { model: 'a/m1', defaultEffort: 'low' },
       } as never);
 
       // A surviving pointer keeps the section in the same atomic write.
       const kept = await harness.removeProvider('b');
       expect((kept as KimiConfig & { visualModel?: Record<string, unknown> }).visualModel).toEqual({
         model: 'a/m1',
-        default_effort: 'low',
+        defaultEffort: 'low',
       });
 
-      // When the pointed model is removed the whole section is dropped.
+      // When the pointed model is removed the section's model pointer is
+      // dropped from the persisted config. Like any registered section with
+      // env bindings (`KIMI_VISUAL_MODEL` / `KIMI_VISUAL_EFFORT`), the
+      // effective read still surfaces the section as an empty object — the
+      // on-disk `[visual_model]` block is gone (the write path clears it via
+      // the atomic replace; a full reload keeps the empty effective shape).
       await harness.setConfig({
         visualModel: { model: 'a/m1' },
       } as never);
       const cleared = await harness.removeProvider('a');
       expect(
         (cleared as KimiConfig & { visualModel?: Record<string, unknown> }).visualModel,
-      ).toBeUndefined();
+      ).toEqual({});
       const reread = await harness.getConfig({ reload: true });
       expect(
         (reread as KimiConfig & { visualModel?: Record<string, unknown> }).visualModel,
-      ).toBeUndefined();
+      ).toEqual({});
     } finally {
       await harness.close();
     }

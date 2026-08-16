@@ -168,7 +168,10 @@ describe('server-v2 /api/v1 fs folder picker', () => {
     const { status, body } = await getJson<HomeWire>('/api/v1/fs:home');
     expect(status).toBe(200);
     expect(body.code).toBe(0);
-    expect(body.data.home).toBe(homedir());
+    // The engine resolves the home's realpath (a symlinked `$HOME`, e.g.
+    // NixOS's `/var/home` → `/home`, reports the resolved path), mirroring
+    // what `browse(home)` returns.
+    expect(body.data.home).toBe(await realpath(homedir()));
     expect(body.data.recent_roots).toEqual([]);
   });
 
