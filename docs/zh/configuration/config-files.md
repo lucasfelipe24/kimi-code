@@ -408,7 +408,7 @@ disabled = ["EnterPlanMode", "ExitPlanMode", "mcp__github__*"]
 
 ## `memory`
 
-`[memory]` 表只包含 engine v2 持久化 memory 使用的限制。持久化 memory 是 engine v2 的原生能力，始终启用；该表不会启用它，也不能包含 `enabled` 字段。
+`[memory]` 表包含 engine v2 持久化 memory 使用的限制和自动提取开关。持久化 memory 是 engine v2 的原生能力，始终启用；它没有针对该能力本身的 `enabled` 字段，但下面的 `extraction_enabled` 可以开关自动提取（默认开启）。
 
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
@@ -416,6 +416,7 @@ disabled = ["EnterPlanMode", "ExitPlanMode", "mcp__github__*"]
 | `recall_max_bytes_per_entry` | `integer` | `4096` | 单条 recall memory 正文最多渲染的 UTF-8 字节数 |
 | `recall_max_session_bytes` | `integer` | `61440` | 单次 recall 注入的完整 memory 信封的 UTF-8 字节上限 |
 | `extraction_max_turns` | `integer` | `5` | 单次自动提取最多包含的最近 User 轮次 |
+| `extraction_enabled` | `boolean` | `true` | 是否启用轮次结束时的自动 memory 提取；设为 `false` 时不运行提取、不写入任何 draft，重新启用后会从上次中断的位置继续 |
 
 ```toml
 [memory]
@@ -423,6 +424,7 @@ recall_max_entries = 5
 recall_max_bytes_per_entry = 4096
 recall_max_session_bytes = 61440
 extraction_max_turns = 5
+extraction_enabled = true
 ```
 
 自动提取是 engine v2 的原生能力，会在 main agent 的每个已完成轮次后运行。它会对安全的 draft 做安全处理并自动持久化，同时排除 memory 目录中已可见的重复项和同一次运行内的重复项。瞬态持久化失败时，受影响的 draft 会保留到后续已完成轮次后重试；终态 memory 错误（例如 workspace 不可信时的 project 写入）会被直接丢弃，不再重试。这种去重不提供跨进程的原子幂等保证。提取不会向模型发送凭据形态的 transcript 内容，draft 在持久化前还会再次脱敏并拒绝不安全内容。
