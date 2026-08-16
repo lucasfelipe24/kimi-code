@@ -35,6 +35,7 @@ import { IAgentToolSelectService } from '#/agent/toolSelect/toolSelect';
 import { IAgentVideoResolverService } from '#/agent/media/videoResolver';
 import { IAgentUsageService } from '#/agent/usage/usage';
 import { IConfigService } from '#/app/config/config';
+import { IFlagService } from '#/app/flag/flag';
 import { type DomainEvent, IEventBus } from '#/app/event/eventBus';
 import {
   APIConnectionError,
@@ -45,6 +46,7 @@ import {
 import { emptyUsage, type TokenUsage } from '#/kosong/contract/usage';
 import {
   isToolCall,
+  type ContentPart,
   type Message,
   type StreamedMessagePart,
   type ToolCall,
@@ -64,6 +66,7 @@ import { Error2, ErrorCodes } from '#/errors';
 import { IWireService } from '#/wire/wire';
 import type { WireRecord } from '#/wire/record';
 import { recordingTelemetry, type TelemetryRecord } from '../../app/telemetry/stubs';
+import { stubFlag } from '../../app/flag/stubs';
 
 import { recordingWireLog, registerTestAgentWire } from '../../wire/stubs';
 
@@ -85,6 +88,7 @@ function createRequester(
   firstCallError?: Error | null,
   subsequentCallErrors: readonly Error[] = [],
   capturedInputs?: ModelRequestInput[],
+  requesterCapabilities: ModelCapability = capabilities,
 ): ModelRequester {
   const model: Model = {
     id: 'm',
@@ -93,7 +97,7 @@ function createRequester(
     protocol: 'anthropic',
     baseUrl: 'https://example.test',
     headers: {},
-    capabilities,
+    capabilities: requesterCapabilities,
     maxContextSize: 1000,
     alwaysThinking: false,
     providerName: 'p',
@@ -147,14 +151,17 @@ function createService(
   options: {
     readonly thinkingLevel?: ThinkingEffort;
     readonly contextMessages?: Message[];
+    readonly modelCapabilities?: ModelCapability;
+    readonly visualModel?: string;
   } = {},
 ) {
   const ix = disposables.add(new TestInstantiationService());
   const thinkingLevel = options.thinkingLevel ?? 'off';
+  const modelCapabilities = options.modelCapabilities ?? capabilities;
   const profile: Partial<IAgentProfileService> = {
     resolveModelContext: () => ({
       modelAlias: 'm',
-      modelCapabilities: capabilities,
+      modelCapabilities,
       maxOutputSize: undefined,
       alwaysThinking: undefined,
       thinkingLevel,
@@ -166,7 +173,7 @@ function createService(
     data: () => ({
       cwd: '',
       modelAlias: 'm',
-      modelCapabilities: capabilities,
+      modelCapabilities,
       thinkingLevel,
       systemPrompt: 'system',
     }),
@@ -182,7 +189,10 @@ function createService(
   const context = { get: () => options.contextMessages ?? history };
   const tools = { list: () => [] };
   const config: Partial<IConfigService> = {
-    get: (() => undefined) as IConfigService['get'],
+    get: ((domain: string) =>
+      domain === 'visualModel' && options.visualModel !== undefined
+        ? { model: options.visualModel }
+        : undefined) as IConfigService['get'],
   };
   const log = { info: () => undefined, warn: () => undefined };
   const telemetryRecords: TelemetryRecord[] = [];
@@ -223,6 +233,7 @@ function createService(
   ix.stub(IConfigService, config);
   ix.stub(ILogService, log);
   ix.stub(ITelemetryService, telemetry);
+  ix.stub(IFlagService, stubFlag(true));
   ix.stub(IModelCatalog, {
     _serviceBrand: undefined,
     get: () => requester.model,
@@ -536,6 +547,14 @@ describe('AgentLLMRequesterService media-degraded resend', () => {
     const capturedInputs: ModelRequestInput[] = [];
     const oldUrl = 'data:image/png;base64,REJECTED';
     const newUrl = 'data:image/png;base64,SMALL';
+    const visionCapabilities: ModelCapability = {
+      image_in: true,
+      video_in: false,
+      audio_in: false,
+      thinking: false,
+      tool_use: true,
+      max_context_tokens: 1000,
+    };
     const imageMessage = (url: string, id: string): Message => ({
       role: 'user',
       content: [{ type: 'image_url', imageUrl: { url, id } }],
@@ -547,8 +566,10 @@ describe('AgentLLMRequesterService media-degraded resend', () => {
         BODY_TOO_LARGE_413,
         [BODY_TOO_LARGE_413],
         capturedInputs,
+        visionCapabilities,
       ),
       undefined,
+      { modelCapabilities: visionCapabilities },
     );
 
     await service.request({
@@ -932,5 +953,140 @@ describe('AgentLLMRequesterService tool call id normalization', () => {
 
     const result = await service.request();
     expect(result.message.toolCalls[0]!.id).toBe('Bash_0__2');
+  });
+});
+
+describe('AgentLLMRequesterService capability-driven media degradation', () => {
+  const mediaMessages: Message[] = [
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'here is the media' },
+        { type: 'image_url', imageUrl: { url: 'data:image/png;base64,aW1n' } },
+        { type: 'video_url', videoUrl: { url: 'data:video/mp4;base64,dmlk' } },
+        { type: 'audio_url', audioUrl: { url: 'data:audio/mp3;base64,YXVk' } },
+      ],
+      toolCalls: [],
+    },
+  ];
+  const textOnly: ModelCapability = {
+    image_in: false,
+    video_in: false,
+    audio_in: false,
+    thinking: false,
+    tool_use: true,
+    max_context_tokens: 1000,
+  };
+  const visionCapable: ModelCapability = {
+    image_in: true,
+    video_in: true,
+    audio_in: true,
+    thinking: false,
+    tool_use: true,
+    max_context_tokens: 1000,
+  };
+  const imageOnly: ModelCapability = {
+    image_in: true,
+    video_in: false,
+    audio_in: true,
+    thinking: false,
+    tool_use: true,
+    max_context_tokens: 1000,
+  };
+
+  function wireParts(inputs: readonly ModelRequestInput[]): ContentPart[] {
+    return inputs.flatMap((input) => input.messages.flatMap((message) => message.content));
+  }
+
+  it('replaces image/video/audio parts with plain placeholders before the wire for a text-only caller', async () => {
+    const captured: ModelRequestInput[] = [];
+    const requester = createRequester({ value: 0 }, null, [], captured, textOnly);
+    const { service } = createService(requester, undefined, {
+      contextMessages: mediaMessages,
+      modelCapabilities: textOnly,
+    });
+
+    await service.request();
+
+    const parts = wireParts(captured);
+    expect(parts).toContainEqual({
+      type: 'text',
+      text: '[image omitted: current model has no image input]',
+    });
+    expect(parts).toContainEqual({
+      type: 'text',
+      text: '[video omitted: current model has no video input]',
+    });
+    expect(parts).toContainEqual({
+      type: 'text',
+      text: '[audio omitted: current model has no audio input]',
+    });
+    expect(parts.some((part) => part.type === 'image_url')).toBe(false);
+    expect(parts.some((part) => part.type === 'video_url')).toBe(false);
+    expect(parts.some((part) => part.type === 'audio_url')).toBe(false);
+  });
+
+  it('uses visual-model-aware wording when a [visual_model] is configured', async () => {
+    const captured: ModelRequestInput[] = [];
+    const requester = createRequester({ value: 0 }, null, [], captured, textOnly);
+    const { service } = createService(requester, undefined, {
+      contextMessages: mediaMessages,
+      modelCapabilities: textOnly,
+      visualModel: 'visual-model',
+    });
+
+    await service.request();
+
+    const parts = wireParts(captured);
+    expect(parts).toContainEqual({
+      type: 'text',
+      text: '[image omitted: current model has no image input; use ReadMediaFile to inspect it with the configured visual model]',
+    });
+    expect(parts).toContainEqual({
+      type: 'text',
+      text: '[video omitted: current model has no video input; use ReadMediaFile to inspect it with the configured visual model]',
+    });
+  });
+
+  it('passes media parts through unchanged for a vision-capable caller', async () => {
+    const captured: ModelRequestInput[] = [];
+    const requester = createRequester({ value: 0 }, null, [], captured, visionCapable);
+    const { service } = createService(requester, undefined, {
+      contextMessages: mediaMessages,
+      modelCapabilities: visionCapable,
+      visualModel: 'visual-model',
+    });
+
+    await service.request();
+
+    const parts = wireParts(captured);
+    expect(parts.some((part) => part.type === 'image_url')).toBe(true);
+    expect(parts.some((part) => part.type === 'video_url')).toBe(true);
+    expect(parts.some((part) => part.type === 'audio_url')).toBe(true);
+    expect(
+      parts.some(
+        (part) => part.type === 'text' && part.text.includes('omitted'),
+      ),
+    ).toBe(false);
+  });
+
+  it('strips only the capability the caller lacks', async () => {
+    const captured: ModelRequestInput[] = [];
+    const requester = createRequester({ value: 0 }, null, [], captured, imageOnly);
+    const { service } = createService(requester, undefined, {
+      contextMessages: mediaMessages,
+      modelCapabilities: imageOnly,
+    });
+
+    await service.request();
+
+    const parts = wireParts(captured);
+    expect(parts.some((part) => part.type === 'image_url')).toBe(true);
+    expect(parts.some((part) => part.type === 'video_url')).toBe(false);
+    expect(parts).toContainEqual({
+      type: 'text',
+      text: '[video omitted: current model has no video input]',
+    });
+    expect(parts.some((part) => part.type === 'audio_url')).toBe(true);
   });
 });

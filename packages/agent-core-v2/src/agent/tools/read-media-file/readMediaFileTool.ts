@@ -44,7 +44,10 @@
  * credential refresh rather than mask a bad token.
  *
  * Registration is capability-gated: this tool is
- * only registered when the active model supports image or video input.
+ * only registered when a model that can consume the media is bound — normally
+ * the active (caller) model, or the configured visual model when the caller is
+ * text-only and a `[visual_model]` is set, in which case reads are delegated
+ * to the visual model and the caller receives the inspection as text.
  *
  * This tool is a deliberate exception to the `registerAgentToolService` contribution
  * table: its constructor depends on runtime model capabilities (capability
@@ -58,6 +61,7 @@ import type { ModelCapability } from '#/kosong/contract/capability';
 import type { ContentPart } from '#/kosong/contract/message';
 import { VideoUploadUnsupportedError } from '#/kosong/contract/errors';
 import { inlineVideoPart, isVideoUploadAuthError } from '#/agent/media/videoUpload';
+import type { VisualMediaInspector } from '#/agent/media/visualInspection';
 import type { ITelemetryService } from '#/app/telemetry/telemetry';
 
 import { IHostFileSystem } from '#/os/interface/hostFileSystem';
@@ -101,12 +105,21 @@ import {
 } from './read-media-file';
 import readMediaDescriptionHead from './read-media.md?raw';
 
+const VISUAL_INSPECTION_INSTRUCTION =
+  'Describe the media above in detail: what is depicted, any visible text, coordinates, ' +
+  'colors, and layout. The viewer cannot see it, so be thorough and concrete.';
 
-function buildDescription(capabilities: ModelCapability): string {
+function buildDescription(capabilities: ModelCapability, delegated?: boolean): string {
   const head = renderPrompt(readMediaDescriptionHead, { MAX_MEDIA_MEGABYTES });
   const lines: string[] = [head];
   const hasImage = capabilities.image_in;
   const hasVideo = capabilities.video_in;
+  if (delegated === true) {
+    lines.push(
+      '- Media files are inspected by the configured visual model and the result is returned as text — the current model never receives raw image/video content.',
+    );
+    return lines.join('\n');
+  }
   if (hasImage && hasVideo) {
     lines.push('- This tool supports image and video files for the current model.');
   } else if (hasImage) {
@@ -243,8 +256,9 @@ export class ReadMediaFileTool implements AgentTool<ReadMediaFileInput> {
     private readonly videoUploader?: VideoUploader,
     telemetry?: ITelemetryService,
     inlineVideoSupported?: boolean,
+    private readonly visualInspector?: VisualMediaInspector,
   ) {
-    this.description = buildDescription(capabilities);
+    this.description = buildDescription(capabilities, visualInspector !== undefined);
     this.compressTelemetry =
       telemetry === undefined ? undefined : { client: telemetry, source: 'read_media' };
     this.inlineVideoSupported = inlineVideoSupported ?? false;
@@ -289,13 +303,14 @@ export class ReadMediaFileTool implements AgentTool<ReadMediaFileInput> {
           pathClass: this.env.pathClass,
           homeDir: this.env.homeDir,
         }),
-      execute: () => this.execution(args, path),
+      execute: (ctx) => this.execution(args, path, ctx.signal),
     };
   }
 
   private async execution(
     args: ReadMediaFileInput,
     safePath: string,
+    signal?: AbortSignal,
   ): Promise<ExecutableToolResult> {
     if (!args.path) {
       return { isError: true, output: 'File path cannot be empty.' };
@@ -504,6 +519,17 @@ export class ReadMediaFileTool implements AgentTool<ReadMediaFileInput> {
         dimensions,
         delivery,
       });
+
+      if (this.visualInspector !== undefined) {
+        const inspectionText = await this.visualInspector(
+          {
+            description: `${openText}\n${VISUAL_INSPECTION_INSTRUCTION}\n${closeText}`,
+            parts: [mediaPart],
+          },
+          signal,
+        );
+        return { output: [{ type: 'text', text: inspectionText }], note, isError: false };
+      }
 
       const output: ContentPart[] = [
         { type: 'text', text: openText },
