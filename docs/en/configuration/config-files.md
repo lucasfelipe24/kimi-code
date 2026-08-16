@@ -409,7 +409,7 @@ Like the `tools` / `disallowedTools` fields of an agent file, this section shape
 
 ## `memory`
 
-The `[memory]` table contains only the limits used by persistent memory in engine v2. Persistent memory is a native engine-v2 capability that is always on; this table does not enable it and must not contain an `enabled` field.
+The `[memory]` table contains the limits used by persistent memory in engine v2 and the switch for automatic extraction. Persistent memory is a native engine-v2 capability that is always on; there is no `enabled` field for the capability itself, but `extraction_enabled` below toggles automatic extraction (on by default).
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -417,6 +417,7 @@ The `[memory]` table contains only the limits used by persistent memory in engin
 | `recall_max_bytes_per_entry` | `integer` | `4096` | Maximum UTF-8 bytes rendered for one recalled entry's body |
 | `recall_max_session_bytes` | `integer` | `61440` | Maximum UTF-8 bytes for the complete recalled-memory envelope in one recall injection |
 | `extraction_max_turns` | `integer` | `5` | Maximum recent user turns included in one automatic extraction run |
+| `extraction_enabled` | `boolean` | `true` | Whether automatic end-of-turn memory extraction is enabled; when `false`, no extraction runs and no drafts are written, and re-enabling resumes from where it left off |
 
 ```toml
 [memory]
@@ -424,6 +425,7 @@ recall_max_entries = 5
 recall_max_bytes_per_entry = 4096
 recall_max_session_bytes = 61440
 extraction_max_turns = 5
+extraction_enabled = true
 ```
 
 Automatic extraction is a native engine-v2 capability that runs after each completed main-agent turn. It sanitizes safe drafts and persists them automatically, excluding duplicates that are already visible in the memory catalog and duplicates within the same run. Transient persistence failures keep the affected drafts for retry after a later completed turn; terminal memory errors (such as project writes in an untrusted workspace) are dropped rather than retried. This deduplication does not provide atomic cross-process idempotency. Extraction never sends credential-shaped transcript content to the model, and drafts are redacted and rejected again before persistence.
