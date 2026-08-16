@@ -77,6 +77,12 @@ export interface EditorKeyboardHost {
 export class EditorKeyboardController {
   private pendingExit: PendingExit | null = null;
   private pendingUndoEsc: { readonly timer: ReturnType<typeof setTimeout> } | null = null;
+  /**
+   * A Ctrl-S steer whose media gate is awaiting the harness config. A second
+   * Ctrl-S while this is set is a no-op: the first press owns the queue splice
+   * and the dispatch, so a rapid double-press can never double-apply.
+   */
+  private steerGateInFlight = false;
 
   constructor(
     private readonly host: EditorKeyboardHost,
@@ -352,7 +358,18 @@ export class EditorKeyboardController {
       flushTextRun();
 
       if (runs.length > 0) {
-        void this.steerQueuedWithMediaGate(host, queued, runs, editorExtraction, editorIsBash);
+        // A steer already in flight (its media gate is awaiting the harness
+        // config) owns the queue splice and the dispatch — a second Ctrl-S is
+        // a no-op so a rapid double-press can never double-apply.
+        if (this.steerGateInFlight) return;
+        this.steerGateInFlight = true;
+        void this.steerQueuedWithMediaGate(host, runs, editorExtraction, editorIsBash)
+          .catch(() => {
+            // Best-effort tail: a gate/splice failure must not wedge the flag.
+          })
+          .finally(() => {
+            this.steerGateInFlight = false;
+          });
       } else {
         host.updateQueueDisplay();
         host.state.ui.requestRender();
@@ -410,10 +427,10 @@ export class EditorKeyboardController {
    * capabilities before splicing the queue, so a rejection leaves the queue
    * and the draft untouched. Runs async because the gate consults the harness
    * config (a `[visual_model]` companion lets a text-only model ship media).
+   * The caller owns the in-flight guard (see `steerGateInFlight`).
    */
   private async steerQueuedWithMediaGate(
     host: EditorKeyboardHost,
-    queued: readonly QueuedMessage[],
     runs: readonly SteerRun[],
     editorExtraction: ReturnType<typeof extractMediaAttachments> | undefined,
     editorIsBash: boolean,
@@ -428,6 +445,10 @@ export class EditorKeyboardController {
     ) {
       return;
     }
+    // Snapshot the queue AFTER the gate: the queue may have changed while the
+    // gate awaited the harness config, so the splice operates on fresh state,
+    // never a stale pre-await capture.
+    const queued = host.state.queuedMessages;
     host.state.queuedMessages = queued.filter((m) => m.mode === 'bash');
     if (!editorIsBash) host.state.editor.setText('');
     const session = host.session;

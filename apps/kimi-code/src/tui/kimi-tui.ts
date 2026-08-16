@@ -1432,7 +1432,10 @@ export class KimiTUI {
       );
       return true;
     }
-    if (extraction.imageAttachmentIds.length > 0) {
+    if (
+      extraction.imageAttachmentIds.length > 0 &&
+      !this.supportsCurrentModelCapability('image_in')
+    ) {
       this.showError('Current model does not support image input.');
     } else {
       this.showError('Current model does not support video input.');

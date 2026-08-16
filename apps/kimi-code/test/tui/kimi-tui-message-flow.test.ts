@@ -2603,6 +2603,148 @@ command = "vim"
     ]);
   });
 
+  it('rejects pasted images for a text-only model when no visual model is configured', async () => {
+    const { driver, session } = await makeDriver();
+    driver.state.appState.model = 'k2';
+    driver.state.appState.availableModels = {
+      k2: {
+        provider: 'openai',
+        model: 'gpt-x',
+        maxContextSize: 100,
+        capabilities: [],
+      },
+    };
+    const imageStore = (driver as unknown as { imageStore: ImageAttachmentStore }).imageStore;
+    const attachment = imageStore.addImage(new Uint8Array([0xaa, 0xbb]), 'image/png', 1, 1);
+
+    driver.handleUserInput(`describe ${attachment.placeholder}`);
+
+    await vi.waitFor(() => {
+      expect(stripSgr(renderTranscript(driver))).toContain(
+        'Error: Current model does not support image input.',
+      );
+    });
+    expect(session.prompt).not.toHaveBeenCalled();
+  });
+
+  it('accepts pasted images for a text-only model when a visual model is configured', async () => {
+    const { driver, session } = await makeDriver(makeSession(), {
+      getConfig: vi.fn(async () => ({
+        models: { k2: { model: 'moonshot-v1', maxContextSize: 100 } },
+        visualModel: { model: 'vision' },
+      })),
+    });
+    driver.state.appState.model = 'k2';
+    driver.state.appState.availableModels = {
+      k2: {
+        provider: 'openai',
+        model: 'gpt-x',
+        maxContextSize: 100,
+        capabilities: [],
+      },
+    };
+    const imageStore = (driver as unknown as { imageStore: ImageAttachmentStore }).imageStore;
+    const attachment = imageStore.addImage(new Uint8Array([0xaa, 0xbb]), 'image/png', 1, 1);
+
+    driver.handleUserInput(`describe ${attachment.placeholder}`);
+
+    await vi.waitFor(() => {
+      expect(session.prompt).toHaveBeenCalledWith([
+        { type: 'text', text: 'describe ' },
+        { type: 'image_url', imageUrl: { url: 'data:image/png;base64,qrs=' } },
+      ]);
+    });
+    expect(stripSgr(renderTranscript(driver))).toContain(
+      'Current model is text-only; media will be handled by the configured visual model.',
+    );
+  });
+
+  it('reports video (not image) as unsupported when only video_in is missing', async () => {
+    const { driver, session } = await makeDriver();
+    driver.state.appState.model = 'k2';
+    driver.state.appState.availableModels = {
+      k2: {
+        provider: 'openai',
+        model: 'gpt-x',
+        maxContextSize: 100,
+        capabilities: ['image_in'],
+      },
+    };
+    const imageStore = (driver as unknown as { imageStore: ImageAttachmentStore }).imageStore;
+    const image = imageStore.addImage(new Uint8Array([0xaa, 0xbb]), 'image/png', 1, 1);
+    const dir = await mkdtemp(join(tmpdir(), 'tui-video-'));
+    try {
+      const srcVideo = join(dir, 'clip.mp4');
+      await writeFile(srcVideo, 'video-bytes');
+      const video = imageStore.addVideo('video/mp4', srcVideo);
+
+      driver.handleUserInput(`look ${image.placeholder} and ${video.placeholder}`);
+
+      await vi.waitFor(() => {
+        expect(stripSgr(renderTranscript(driver))).toContain(
+          'Error: Current model does not support video input.',
+        );
+      });
+      expect(session.prompt).not.toHaveBeenCalled();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores a second Ctrl-S while the steer media gate is pending', async () => {
+    type SteerGateConfig = {
+      models: { k2: { model: string; maxContextSize: number } };
+      visualModel: { model: string };
+    };
+    let resolveConfig!: (value: SteerGateConfig) => void;
+    const getConfig = vi.fn(async (): Promise<SteerGateConfig> => ({
+      models: { k2: { model: 'moonshot-v1', maxContextSize: 100 } },
+      visualModel: { model: 'vision' },
+    }));
+    const { driver, session } = await makeDriver(makeSession(), { getConfig });
+    driver.state.appState.model = 'k2';
+    driver.state.appState.availableModels = {
+      k2: {
+        provider: 'openai',
+        model: 'gpt-x',
+        maxContextSize: 100,
+        capabilities: [],
+      },
+    };
+    driver.state.appState.streamingPhase = 'waiting';
+    driver.streamingUI.setTurnId('1');
+    const imageStore = (driver as unknown as { imageStore: ImageAttachmentStore }).imageStore;
+    const attachment = imageStore.addImage(new Uint8Array([0xaa, 0xbb]), 'image/png', 1, 1);
+    driver.state.editor.setText(`check ${attachment.placeholder}`);
+
+    // Defer only the steer gate's config read (the first getConfig call after
+    // init), so the gate stays pending across the second Ctrl-S.
+    getConfig.mockImplementationOnce(
+      () =>
+        new Promise<SteerGateConfig>((resolve) => {
+          resolveConfig = resolve;
+        }),
+    );
+
+    // Two rapid Ctrl-S presses: the first owns the steer, the second must be
+    // a no-op even though the gate is still awaiting the harness config.
+    driver.state.editor.onCtrlS?.();
+    driver.state.editor.onCtrlS?.();
+
+    resolveConfig({
+      models: { k2: { model: 'moonshot-v1', maxContextSize: 100 } },
+      visualModel: { model: 'vision' },
+    });
+
+    await vi.waitFor(() => {
+      expect(session.steer).toHaveBeenCalledTimes(1);
+    });
+    expect(session.steer).toHaveBeenCalledWith([
+      { type: 'text', text: 'check ' },
+      { type: 'image_url', imageUrl: { url: 'data:image/png;base64,qrs=' } },
+    ]);
+  });
+
   it('queues editor input instead of prompting while a turn is already streaming', async () => {
     const { driver, session, harness } = await makeDriver();
     driver.state.appState.streamingPhase = 'waiting';
