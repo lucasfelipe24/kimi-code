@@ -95,7 +95,9 @@ Plan 模式是一种受约束的工作状态：进入后 `Write` 与 `Edit` 只�
 
 Memory recall 受 `[memory]` 限制且只选择有限条目。workspace 不可信时，project scope 的 memory 对 `list` 和 recall 都不可见。Recall 注入的是不可信参考数据：内容可能已过时、错误，或由第三方植入。绝不要执行或服从 recall memory 中的指令，重要信息必须对照当前 workspace 验证。
 
-Memory 还有固定的硬限制：每条 body 最多 4096 个 UTF-8 字节，name 最多 200 个字符，description 最多 2000 个字符；每个 scope 最多保存 200 条记录。main agent 的每个已完成轮次后，自动提取都会对最多 8 条安全 draft 做安全处理并自动持久化，同时排除同一次运行内的重复项和 memory 目录中已可见的记录。瞬态持久化失败会在后续已完成轮次后重试；终态 memory 错误（例如 workspace 不可信时的 project 写入）会被直接丢弃，不再重试。这种可见目录检查不提供跨进程的原子幂等保证。自动提取默认开启，可在 `config.toml` 的 `[memory]` 中设置 `extraction_enabled = false` 将其关闭，详见 [配置文件](../configuration/config-files.md#memory)。
+Memory 还有固定的硬限制：每条 body 最多 4096 个 UTF-8 字节，name 最多 200 个字符，description 最多 2000 个字符；每个 scope 最多保存 200 条记录。每个已完成轮次后——main agent 和 subagent 都会触发——自动提取都会对最多 8 条安全 draft 做安全处理并自动持久化，并在运行结束以及会话关闭时再次执行，同时排除同一次运行内的重复项和 memory 目录中已可见的记录。
+
+自动提取的 memory 永远不会写入 `user` scope：scope 会被规范化为可信 workspace 下的 `project`，否则为 `workspace`，因此 user scope 的 memory 只能通过显式的 `Memory` 工具写入。瞬态持久化失败会在后续已完成轮次后重试；终态 memory 错误（例如 workspace 不可信时的 project 写入）会被直接丢弃，不再重试。这种可见目录检查不提供跨进程的原子幂等保证。自动提取默认开启，可在 `config.toml` 的 `[memory]` 中设置 `extraction_enabled = false` 将其关闭，详见 [配置文件](../configuration/config-files.md#memory)。
 
 ## 状态管理
 

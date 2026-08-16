@@ -441,7 +441,7 @@ disabled = ["EnterPlanMode", "ExitPlanMode", "mcp__github__*"]
 | `recall_max_bytes_per_entry` | `integer` | `4096` | 单条 recall memory 正文最多渲染的 UTF-8 字节数 |
 | `recall_max_session_bytes` | `integer` | `61440` | 单次 recall 注入的完整 memory 信封的 UTF-8 字节上限 |
 | `extraction_max_turns` | `integer` | `5` | 单次自动提取最多包含的最近 User 轮次 |
-| `extraction_enabled` | `boolean` | `true` | 是否启用轮次结束时的自动 memory 提取；设为 `false` 时不运行提取、不写入任何 draft，重新启用后会从上次中断的位置继续 |
+| `extraction_enabled` | `boolean` | `true` | 是否启用自动 memory 提取（轮次结束时以及运行/会话结束时都会执行）；设为 `false` 时不运行提取、不写入任何 draft，重新启用后会从上次中断的位置继续 |
 
 ```toml
 [memory]
@@ -452,7 +452,9 @@ extraction_max_turns = 5
 extraction_enabled = true
 ```
 
-自动提取是 engine v2 的原生能力，会在 main agent 的每个已完成轮次后运行。它会对安全的 draft 做安全处理并自动持久化，同时排除 memory 目录中已可见的重复项和同一次运行内的重复项。瞬态持久化失败时，受影响的 draft 会保留到后续已完成轮次后重试；终态 memory 错误（例如 workspace 不可信时的 project 写入）会被直接丢弃，不再重试。这种去重不提供跨进程的原子幂等保证。提取不会向模型发送凭据形态的 transcript 内容，draft 在持久化前还会再次脱敏并拒绝不安全内容。
+自动提取是 engine v2 的原生能力，会在每个已完成轮次后运行——main agent 和 subagent 都会触发——并在运行结束以及会话关闭时再次执行，确保最后一个轮次遗留的内容不会丢失。自动提取的 memory 永远不会落入 `user` scope：scope 会被规范化为可信 workspace 下的 `project`，否则为 `workspace`；subagent 只能写入 `workspace`/`project`。显式的 `Memory` 工具不受影响，仍保留全部三个 scope。
+
+它会先对安全的 draft 做安全处理再自动持久化，同时排除 memory 目录中已可见的重复项和同一次运行内的重复项。若 agent 已在本轮通过 `Memory` 工具成功写入 memory，则该轮会被跳过，不再提取。瞬态持久化失败时，受影响的 draft 会保留到后续已完成轮次后重试；终态 memory 错误（例如 workspace 不可信时的 project 写入）会被直接丢弃，不再重试。这种去重不提供跨进程的原子幂等保证。提取不会向模型发送凭据形态的 transcript 内容，draft 在持久化前还会再次脱敏并拒绝不安全内容。
 
 <!--
 ## `experimental`
