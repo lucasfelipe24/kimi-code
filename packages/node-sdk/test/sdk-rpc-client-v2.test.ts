@@ -8,9 +8,10 @@
  * Wiring: real v2 engine bootstrapped on a temp KIMI_CODE_HOME; remote provider calls are stubbed.
  * Run: pnpm exec vitest run test/sdk-rpc-client-v2.test.ts
  */
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, rmdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import {
   FileTokenStorage,
@@ -29,6 +30,7 @@ import {
   SDKRpcClientV2,
   type Event,
   type KimiConfig,
+  type Session,
 } from '#/index';
 import { foldAgentWireReplay } from '#/v2/resume-replay';
 import {
@@ -1044,6 +1046,110 @@ key = "${titleOAuthRef.key}"
       await harness.close();
     }
   });
+
+  it('wires dynamic workflows: save/list/get/reload/run/runs/cancel with v1 shapes', async () => {
+    const { harness } = await makeHarness();
+    const workDir = await mkdtemp(join(tmpdir(), 'kimi-sdk-v2-wf-work-'));
+    tempDirs.push(workDir);
+    // The v2 catalog anchors its project root at the engine's bootstrap cwd
+    // (process cwd) — the same single-workspace assumption v1's per-session
+    // registry made for the CLI — so a saved workflow lands there and must
+    // be cleaned up after the run.
+    const savedName = `wf-v2-flow-${Math.random().toString(36).slice(2, 8)}`;
+    let savedPath: string | undefined;
+    try {
+      const session = await harness.createSession({ id: 'ses_v2_wf_catalog', workDir });
+
+      // save → { path, name }: the name derives from the saved script's meta.
+      const saved = await session.saveWorkflow({
+        script: workflowScript(savedName),
+        scope: 'project',
+      });
+      savedPath = saved.path;
+      expect(saved.name).toBe(savedName);
+      expect(saved.path).toMatch(/\.kimi-code[\\/]workflows[\\/]wf-v2-flow-.*\.js$/);
+
+      // list → { workflows, skipped } with the v1 flattened summary (no script text).
+      const { workflows, skipped } = await session.listWorkflows();
+      expect(skipped).toEqual([]);
+      expect(workflows.find((workflow) => workflow.name === savedName)).toMatchObject({
+        name: savedName,
+        description: `SDK demo workflow ${savedName}.`,
+        source: 'project',
+        path: savedPath,
+        phases: [{ title: 'Phase A' }, { title: 'Phase B' }],
+      });
+      expect(JSON.stringify(workflows)).not.toContain('export const meta');
+
+      // get → { workflow } detail carrying the script; unknown → null.
+      const { workflow } = await session.getWorkflow(savedName);
+      expect(workflow?.script).toContain('export const meta');
+      await expect(session.getWorkflow('missing')).resolves.toEqual({ workflow: null });
+
+      // reload re-scans the catalog and returns the same envelope.
+      const { workflows: reloaded } = await session.reloadWorkflows();
+      expect(reloaded.some((workflow) => workflow.name === savedName)).toBe(true);
+
+      // inline run → { runId, taskId, workflowName }: the name comes from the
+      // started run's record (the extracted meta name).
+      const started = await session.runWorkflow({
+        script: workflowScript('wf-v2-inline'),
+        args: 'v2',
+      });
+      expect(started.workflowName).toBe('wf-v2-inline');
+      expect(started.runId).toMatch(/^wfrun-/);
+      expect(started.taskId.length).toBeGreaterThan(0);
+      const run = await waitForWorkflowRunSettled(session, started.runId);
+      expect(run).toMatchObject({
+        runId: started.runId,
+        workflowName: 'wf-v2-inline',
+        status: 'completed',
+        source: 'extra',
+        args: 'v2',
+      });
+      expect(run.script).toContain('export const meta');
+
+      // run by catalog name → workflowName comes from the input name.
+      const byName = await session.runWorkflow({ name: savedName });
+      expect(byName.workflowName).toBe(savedName);
+
+      // runs → { runs } snapshots: no script text, no caller id.
+      const { runs } = await session.listWorkflowRuns();
+      expect(runs).toHaveLength(2);
+      expect(runs[0]).not.toHaveProperty('script');
+      expect(runs[0]).not.toHaveProperty('callerAgentId');
+
+      // getRun → { run } detail carrying the script.
+      const { run: detail } = await session.getWorkflowRun(started.runId);
+      expect(detail?.script).toContain('export const meta');
+
+      // cancel on a settled run is a no-op → { cancelled: false }.
+      await expect(session.cancelWorkflowRun(started.runId)).resolves.toEqual({ cancelled: false });
+    } finally {
+      if (savedPath !== undefined) await removeWorkflowArtifacts(savedPath);
+      await harness.close();
+    }
+  });
+
+  it('wires setWorkflowMode on/off without not_implemented and injects the reminders', async () => {
+    const { harness } = await makeHarness();
+    const workDir = await mkdtemp(join(tmpdir(), 'kimi-sdk-v2-wf-work-'));
+    tempDirs.push(workDir);
+    try {
+      const session = await harness.createSession({ id: 'ses_v2_wf_mode', workDir });
+      await session.setWorkflowMode(true, 'manual');
+      const entered = await session.getContext();
+      expect(entered.history).toHaveLength(1);
+      expect(JSON.stringify(entered.history[0])).toContain('## Dynamic Workflow Mode');
+      await session.setWorkflowMode(false, 'manual');
+      const exited = await session.getContext();
+      // v2 pops the enter reminder and leaves the mode-off notice in its place.
+      expect(exited.history).toHaveLength(1);
+      expect(JSON.stringify(exited.history[0])).toContain('no longer active');
+    } finally {
+      await harness.close();
+    }
+  });
 });
 
 describe('SDKRpcClientV2 workspace trust', () => {
@@ -1390,4 +1496,42 @@ async function writeSkill(dir: string, name: string): Promise<void> {  await mkd
     `---\nname: ${name}\ndescription: Skill ${name} for the escape-hatch test\n---\n\nBody of ${name}.\n`,
     'utf-8',
   );
+}
+
+function workflowScript(name: string): string {
+  return `export const meta = {
+  name: '${name}',
+  description: 'SDK demo workflow ${name}.',
+  phases: [{ title: 'Phase A' }, { title: 'Phase B' }],
+};
+phase('Phase A');
+log('working on ' + args);
+phase('Phase B');
+return { name: '${name}', args };
+`;
+}
+
+async function waitForWorkflowRunSettled(
+  session: Session,
+  runId: string,
+): Promise<NonNullable<Awaited<ReturnType<Session['getWorkflowRun']>>['run']>> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const { run } = await session.getWorkflowRun(runId);
+    if (run !== null && run.status !== 'running') return run;
+    await delay(10);
+  }
+  throw new Error(`Timed out waiting for workflow run ${runId} to settle`);
+}
+
+/**
+ * Remove a workflow file saved under the engine's bootstrap-cwd project root
+ * (`.kimi-code/workflows/`), plus the parent dirs when they empty out — the
+ * v2 catalog is process-wide, so a save is not hermetically scoped to the
+ * session's temp workDir.
+ */
+async function removeWorkflowArtifacts(filePath: string): Promise<void> {
+  await rm(filePath, { force: true }).catch(() => undefined);
+  await rmdir(dirname(filePath)).catch(() => undefined);
+  await rmdir(dirname(dirname(filePath))).catch(() => undefined);
 }
