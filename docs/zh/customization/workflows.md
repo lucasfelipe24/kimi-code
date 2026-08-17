@@ -8,9 +8,9 @@ Dynamic Workflow（动态工作流）用一个经用户批准的 JavaScript 脚�
 Workflow 脚本运行在 sandbox（隔离环境，限制脚本可访问的能力）中，但 sandbox 只是控制边界，不是安全屏障。在 `manual` 权限模式下，每次执行 Workflow 之前都必须经过你的明确批准；在 `yolo` 和 `auto` 权限模式下，运行会自动获得批准。
 :::
 
-## 启用 Dynamic Workflow
+## 使用 Dynamic Workflow
 
-Dynamic Workflow 是原生功能——无需任何 flag、环境变量或配置开关。main agent 始终持有 `Workflow` 工具，并会在遇到大型、多阶段任务时自动进入 **Dynamic Workflow 模式**（见 [Dynamic Workflow 模式](#dynamic-workflow-模式)）；`coder`、`explore` 等 subagent profile 永远不包含该工具，因此委派任务无法嵌套 workflow 运行。
+main agent 持有 `Workflow` 工具，并会在遇到大型、多阶段任务时自动进入 **Dynamic Workflow 模式**（见 [Dynamic Workflow 模式](#dynamic-workflow-模式)）；`coder`、`explore` 等 subagent profile 永远不包含该工具，因此委派任务无法嵌套 workflow 运行。
 
 使用时，把脚本放进 [Workflow 目录](#workflow-目录) 后用 `/workflow run <name>` 运行，或直接用自然语言让 Kimi 创建或运行。即使任务不会自动触发该模式，也可以用 `/workflow on` 让 agent 为大型任务主动提出 Workflow 方案；`/workflow off` 随时关闭该模式。
 

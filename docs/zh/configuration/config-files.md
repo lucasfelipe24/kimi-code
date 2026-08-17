@@ -268,8 +268,6 @@ k3-max = "同一模型的 max Thinking 档位。适合最难的子任务。"
 
 配置后该绑定即刻生效：主编码模型是纯文本时，`ReadMediaFile` 工具仍然保留，其图像 / 视频检查会委托给视觉模型；直接粘贴进消息里的图像 / 视频部分会被替换成指向视觉模型的文本提示，而不会让请求失败。终端界面只要当前模型可直接处理媒体、或已配置视觉模型，就会接受粘贴的媒体。
 
-视觉模型是原生功能——无需任何实验 flag 或环境变量即可生效。不设置 `model` 时，视觉任务绑定调用方模型。
-
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `model` | `string` | — | [`[models]`](#models) 中已配置条目的别名，如 `kimi-code/kimi-vision`（不限 kimi 模型，可用任意供应商）。应选择具备视觉能力的条目（其 `capabilities` 列出 `image_in` 和/或 `video_in`） |
@@ -361,7 +359,7 @@ max_output_size = 8192
 
 ## `workflows`
 
-`workflows` 用于调整 [Dynamic Workflow](../customization/workflows.md) 的运行限制并声明额外的 Workflow 目录。Dynamic Workflow 始终可用——无需任何 flag 或开关。
+`workflows` 用于调整 [Dynamic Workflow](../customization/workflows.md) 的运行限制并声明额外的 Workflow 目录。
 
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
@@ -481,7 +479,7 @@ extraction_enabled = true
 
 除后端配置表外，`[services]` 的 `active_search_provider` 字段用于选择由哪个后端提供 [`WebSearch`](../reference/tools.md#网络类)：`brave`、`langsearch` 或 `moonshot`。
 
-Brave Search 是原生、非实验性的后端，但不会自动选中：请配置 `[services.brave]` API 密钥，并通过 `active_search_provider = "brave"` 或 `kimi search set brave` 显式选择 Brave。LangSearch 网页搜索同样是原生后端：请配置 `[services.langsearch]` API 密钥，并通过 `active_search_provider = "langsearch"` 或 `kimi search set langsearch` 显式选择它。未选中上述后端时，Moonshot 搜索仍可正常使用。在默认的 `agent-core-v2` 引擎上，搜索后端的选择是原子的：选中的后端必须有有效 API 密钥，否则其 `WebSearch` 实现和专用工具都不可用，不会回退到其他后端。
+Brave Search 不会自动选中：请配置 `[services.brave]` API 密钥，并通过 `active_search_provider = "brave"` 或 `kimi search set brave` 显式选择 Brave。LangSearch 网页搜索用法相同：请配置 `[services.langsearch]` API 密钥，并通过 `active_search_provider = "langsearch"` 或 `kimi search set langsearch` 显式选择它。未选中上述后端时，Moonshot 搜索仍可正常使用。在默认的 `agent-core-v2` 引擎上，搜索后端的选择是原子的：选中的后端必须有有效 API 密钥，否则其 `WebSearch` 实现和专用工具都不可用，不会回退到其他后端。
 
 当 `active_search_provider` 指定某个后端时，`WebSearch` 由该后端提供且不做回退：如果其凭据缺失，网页搜索将不可用。当 `active_search_provider` 缺省时，运行时保持旧的优先级——先是已配置的 LangSearch，然后是已配置的 Moonshot，最后是托管的 Kimi OAuth 搜索服务。运行 `kimi search set brave` 或 `kimi search set langsearch` 会同时配置并选择该后端（写入 `active_search_provider`），从而把旧配置迁移到显式选择。
 
@@ -526,7 +524,7 @@ api_key = "sk-xxx"
 
 ### Brave Search
 
-`brave` 调用 [Brave Search API](https://brave.com/search/api/)。它是原生、非实验性的后端，但需要显式选择和有效 API 密钥。可以在 TUI 的 **Settings → Web Search** 中配置，也可以运行 `kimi search set brave` 或直接编辑 `config.toml`。运行 `kimi search set brave` 会同时选择它（`active_search_provider = "brave"`）；在 TUI 中，请先在 **Web search provider** 下完成配置，再用 **Active web search provider** 切换到它。
+`brave` 调用 [Brave Search API](https://brave.com/search/api/)。它需要显式选择和有效 API 密钥。可以在 TUI 的 **Settings → Web Search** 中配置，也可以运行 `kimi search set brave` 或直接编辑 `config.toml`。运行 `kimi search set brave` 会同时选择它（`active_search_provider = "brave"`）；在 TUI 中，请先在 **Web search provider** 下完成配置，再用 **Active web search provider** 切换到它。
 
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |

@@ -8,9 +8,9 @@ Dynamic workflows orchestrate multiple subagents from a single user-approved Jav
 A workflow script runs in a sandbox (an isolated environment that restricts what the script can access), but the sandbox is a control boundary, not a security barrier. In `manual` permission mode, every workflow run therefore requires your explicit approval before anything executes; in `yolo` and `auto` modes, runs are approved automatically.
 :::
 
-## Enabling dynamic workflows
+## Using dynamic workflows
 
-Dynamic workflows are a native feature — no flag, environment variable, or config opt-in is needed. The main agent always has the `Workflow` tool and enters **Dynamic Workflow mode** automatically for large, multi-phase tasks (see [Dynamic Workflow mode](#dynamic-workflow-mode)); subagent profiles such as `coder` and `explore` never include the tool, so delegated tasks cannot nest workflow runs.
+The main agent has the `Workflow` tool and enters **Dynamic Workflow mode** automatically for large, multi-phase tasks (see [Dynamic Workflow mode](#dynamic-workflow-mode)); subagent profiles such as `coder` and `explore` never include the tool, so delegated tasks cannot nest workflow runs.
 
 To use one, drop a script into a [workflow directory](#workflow-locations) and run it with `/workflow run <name>`, or ask Kimi in natural language to create or run it. Use `/workflow on` to have the agent propose a workflow for a large task even when it would not auto-engage, and `/workflow off` to disable the mode.
 

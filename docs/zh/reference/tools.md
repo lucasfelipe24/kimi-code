@@ -128,7 +128,7 @@ Memory 还有固定的硬限制：每条 body 最多 4096 个 UTF-8 字节，nam
 
 ## Workflows
 
-`Workflow` 工具用于启动 [Dynamic Workflow](../customization/workflows.md) —— 一个由用户编写的、按阶段编排 subagent 的 JavaScript 脚本。main agent 始终持有该工具，并会对大型、多阶段任务自动进入 Dynamic Workflow 模式；`coder`、`explore` 等 subagent profile 永远不包含它，因此委派任务无法嵌套 workflow 运行。
+`Workflow` 工具用于启动 [Dynamic Workflow](../customization/workflows.md) —— 一个由用户编写的、按阶段编排 subagent 的 JavaScript 脚本。main agent 持有该工具，并会对大型、多阶段任务自动进入 Dynamic Workflow 模式；`coder`、`explore` 等 subagent profile 永远不包含它，因此委派任务无法嵌套 workflow 运行。
 
 | 工具 | 默认审批 | 说明 |
 | --- | --- | --- |

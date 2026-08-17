@@ -269,8 +269,6 @@ The visual model is a companion model configuration for **vision-only work** —
 
 When set, the binding is live: a text-only main model keeps the `ReadMediaFile` tool, which delegates image / video inspection to the visual model, and image / video parts pasted directly into a message are replaced with a text hint pointing at the visual model instead of failing the request. The terminal UI accepts pasted media whenever the current model handles it directly or a visual model is configured.
 
-The visual model is a native feature — it takes effect without any experimental flag or env var. Leave `model` unset to keep visual tasks bound to the caller's model.
-
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
 | `model` | `string` | — | The alias of a configured [`[models]`](#models) entry, e.g. `kimi-code/kimi-vision` (any provider, not limited to Kimi models). Should be a vision-capable entry (`image_in` and/or `video_in` listed in its `capabilities`) |
@@ -362,7 +360,7 @@ In print mode (`kimi -p "<prompt>"`), Kimi Code stays alive after the main agent
 
 ## `workflows`
 
-`workflows` tunes the run limits of [dynamic workflows](../customization/workflows.md) and declares extra workflow directories. Dynamic workflows are always available — no flag or opt-in is required.
+`workflows` tunes the run limits of [dynamic workflows](../customization/workflows.md) and declares extra workflow directories.
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -482,7 +480,7 @@ It sanitizes safe drafts and persists them automatically, excluding duplicates t
 
 Alongside the backend tables, the `active_search_provider` field of `[services]` selects which backend serves [`WebSearch`](../reference/tools.md#web-tools): `brave`, `langsearch`, or `moonshot`.
 
-Brave Search is a native, non-experimental backend, but it is not selected automatically: configure a `[services.brave]` API key and explicitly select Brave with `active_search_provider = "brave"` or `kimi search set brave`. LangSearch web search is likewise native: configure a `[services.langsearch]` API key and explicitly select it with `active_search_provider = "langsearch"` or `kimi search set langsearch`. Moonshot search remains available when neither is the active provider. On the default `agent-core-v2` engine, selecting a search provider is atomic: the selected backend must have a valid API key or its `WebSearch` implementation and specialized tools are unavailable; there is no fallback to another backend.
+Brave Search is not selected automatically: configure a `[services.brave]` API key and explicitly select Brave with `active_search_provider = "brave"` or `kimi search set brave`. LangSearch web search works the same way: configure a `[services.langsearch]` API key and explicitly select it with `active_search_provider = "langsearch"` or `kimi search set langsearch`. Moonshot search remains available when neither is the active provider. On the default `agent-core-v2` engine, selecting a search provider is atomic: the selected backend must have a valid API key or its `WebSearch` implementation and specialized tools are unavailable; there is no fallback to another backend.
 
 When `active_search_provider` names a backend, that backend serves `WebSearch` with no fallback: if its credentials are missing, web search is simply unavailable. When `active_search_provider` is absent, the runtime keeps the legacy precedence — configured LangSearch first, then configured Moonshot, then the managed Kimi OAuth search service. Running `kimi search set brave` or `kimi search set langsearch` both configures the backend and selects it (writes `active_search_provider`), migrating older configs to explicit selection.
 
@@ -527,7 +525,7 @@ api_key = "sk-xxx"
 
 ### Brave Search
 
-`brave` calls the [Brave Search API](https://brave.com/search/api/). It is a native, non-experimental backend, but it requires explicit selection and a valid API key. Configure it from **Settings → Web Search** in the TUI, with `kimi search set brave`, or by editing `config.toml`. Running `kimi search set brave` also selects it (`active_search_provider = "brave"`); in the TUI, configure it under **Web search provider** first, then switch to it with **Active web search provider**.
+`brave` calls the [Brave Search API](https://brave.com/search/api/). It requires explicit selection and a valid API key. Configure it from **Settings → Web Search** in the TUI, with `kimi search set brave`, or by editing `config.toml`. Running `kimi search set brave` also selects it (`active_search_provider = "brave"`); in the TUI, configure it under **Web search provider** first, then switch to it with **Active web search provider**.
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
