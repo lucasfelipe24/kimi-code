@@ -129,7 +129,7 @@ Workflow start and completion events also appear directly in the conversation, a
 
 ## Dynamic Workflow mode
 
-**Dynamic Workflow mode** instructs the model to analyse the task first and, for large or multi-phase tasks, propose a dynamic workflow script (via the `Workflow` tool) instead of executing directly. The mode engages automatically for large, multi-phase requests — with the `dynamic-workflows` flag on, the main agent enters it on its own when a prompt is long enough and shows at least two signs of multi-step structure (task lists, sequencing words, phase or milestone nouns, explicit step counts, or task verbs) — or manually via `/workflow on` or the **Workflow** toggle in the Web UI composer's Mode menu. `/workflow off` or the mode toggle disables it at any time.
+**Dynamic Workflow mode** instructs the model to analyse the task first and, for large or multi-phase tasks, propose a dynamic workflow script (via the `Workflow` tool) instead of executing directly. The mode engages automatically for large, multi-phase requests — with the `dynamic-workflows` flag on, the main agent enters it on its own when a prompt is long enough and shows at least two types of multi-step signals (task lists, sequencing words, phase or milestone nouns, explicit step counts, or task verbs) — or manually via `/workflow on` or the **Workflow** toggle in the Web UI composer's Mode menu. `/workflow off` or the mode toggle disables it at any time.
 
 A `Dynamic Workflow` label in the terminal footer (CLI) or a `Workflow` badge in the composer toolbar (Web UI) shows that the mode is active.
 
