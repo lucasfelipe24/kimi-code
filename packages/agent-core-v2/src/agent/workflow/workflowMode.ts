@@ -1,6 +1,6 @@
 import { createDecorator } from "#/_base/di/instantiation";
 
-export type WorkflowModeTrigger = 'manual' | 'command';
+export type WorkflowModeTrigger = 'manual' | 'command' | 'auto';
 
 export interface IWorkflowModeService {
   readonly _serviceBrand: undefined;

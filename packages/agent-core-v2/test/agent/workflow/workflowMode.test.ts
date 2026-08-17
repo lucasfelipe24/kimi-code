@@ -4,12 +4,19 @@ import { DisposableStore } from '#/_base/di/lifecycle';
 import { TestInstantiationService } from '#/_base/di/test';
 import { IAgentContextInjectorService } from '#/agent/contextInjector/contextInjector';
 import { IAgentContextMemoryService } from '#/agent/contextMemory/contextMemory';
+import type { ContextMessage } from '#/agent/contextMemory/types';
 import { IAgentStateService } from '#/agent/state/agentState';
 import { IAgentSystemReminderService } from '#/agent/systemReminder/systemReminder';
 import { AgentSystemReminderService } from '#/agent/systemReminder/systemReminderService';
 import { IWorkflowModeService } from '#/agent/workflow/workflowMode';
 import { WorkflowModeService } from '#/agent/workflow/workflowModeService';
 import { workflowModeKey } from '#/agent/workflow/workflowModeOps';
+import {
+  WorkflowModeInjection,
+  workflowWasActiveKey,
+} from '#/agent/workflow/workflowModeInjector';
+import { IWorkflowCatalogService } from '#/app/workflow/workflowCatalog';
+import type { WorkflowDefinition } from '#/app/workflow/runtime/types';
 import { IAppendLogStore } from '#/persistence/interface/appendLogStore';
 import { IFileSystemStorageService } from '#/persistence/interface/storage';
 import { AppendLogStore } from '#/persistence/backends/node-fs/appendLogStore';
@@ -26,6 +33,14 @@ import {
   testWireScope,
 } from '../../wire/stubs';
 import { AGENT_WIRE_RECORD_KEY, type WireRecord } from '#/wire/record';
+
+function stubCatalog(): Partial<IWorkflowCatalogService> {
+  return { list: () => [] };
+}
+
+function workflowModeState(ix: TestInstantiationService): unknown {
+  return ix.get(IAgentStateService).get(workflowModeKey);
+}
 
 describe('WorkflowModeService', () => {
   let disposables: DisposableStore;
@@ -48,6 +63,7 @@ describe('WorkflowModeService', () => {
       register: () => ({ dispose: () => {} }),
       reconcileWhenIdle: async () => {},
     });
+    ix.stub(IWorkflowCatalogService, stubCatalog());
     ix.set(IWorkflowModeService, new SyncDescriptor(WorkflowModeService));
   });
 
@@ -107,6 +123,15 @@ describe('WorkflowModeService', () => {
     expect(workflow.isActive).toBe(false);
   });
 
+  it('enter accepts the auto trigger used by the proactive service', () => {
+    const workflow = ix.get(IWorkflowModeService);
+    workflow.enter('auto');
+    expect(workflow.isActive).toBe(true);
+    expect(workflowModeState(ix)).toBe('auto');
+    workflow.exit();
+    expect(workflow.isActive).toBe(false);
+  });
+
   it('dispatch persists enter/exit records and replay rebuilds the trigger', async () => {
     const workflow = ix.get(IWorkflowModeService);
     workflow.enter('manual');
@@ -139,5 +164,121 @@ describe('WorkflowModeService', () => {
       records,
     );
     expect(freshState.get(workflowModeKey)).toBe('manual');
+  });
+});
+
+describe('WorkflowModeInjection dedup', () => {
+  let disposables: DisposableStore;
+  let active: boolean;
+  let state: Record<string, unknown>;
+  let providers: ((context: unknown) => unknown)[];
+  let context: ReturnType<typeof stubContextMemory>;
+
+  const states = {
+    contributeState: (key: { readonly name: string; readonly initial: () => unknown }) => {
+      if (state[key.name] === undefined) state[key.name] = key.initial();
+    },
+    get: (key: { readonly name: string }) => state[key.name],
+    set: (key: { readonly name: string }, value: unknown) => {
+      state[key.name] = value;
+    },
+  };
+  const workflow = {
+    get isActive(): boolean {
+      return active;
+    },
+    enter: () => {},
+    exit: () => {},
+  };
+  const catalog = {
+    ready: Promise.resolve(),
+    list: () =>
+      [
+        {
+          meta: {
+            name: 'deep-research',
+            description: 'Fan out research across sources.',
+          },
+        },
+      ] as unknown as readonly WorkflowDefinition[],
+    get: () => undefined,
+    skipped: () => [],
+    reload: async () => {},
+    save: async () => ({ path: '' }),
+  };
+  const injector = {
+    register: (name: string, provider: (context: unknown) => unknown) => {
+      providers.push(provider);
+      return { dispose: () => {} };
+    },
+    reconcileWhenIdle: async () => {},
+  };
+
+  function reminder(variant: string): ContextMessage {
+    return {
+      role: 'user',
+      content: [{ type: 'text', text: 'reminder' }],
+      toolCalls: [],
+      origin: { kind: 'injection', variant },
+    };
+  }
+
+  beforeEach(() => {
+    disposables = new DisposableStore();
+    active = false;
+    state = {};
+    providers = [];
+    context = stubContextMemory();
+    disposables.add(
+      new WorkflowModeInjection(
+        injector as never,
+        context as never,
+        workflow as never,
+        catalog as never,
+        states as never,
+      ),
+    );
+  });
+
+  afterEach(() => {
+    disposables.dispose();
+  });
+
+  it('emits the rendered enter reminder when active and not already in context', () => {
+    active = true;
+    const content = providers[0]!({}) as string;
+    expect(content).toContain('Dynamic Workflow Mode');
+    expect(content).toContain('deep-research');
+  });
+
+  it('does not re-emit the enter reminder when it is already in context', () => {
+    active = true;
+    context.append(reminder('workflow_mode'));
+    expect(providers[0]!({})).toBeUndefined();
+  });
+
+  it('re-emits the enter reminder after compaction drops the injection', () => {
+    active = true;
+    context.append(reminder('workflow_mode'));
+    expect(providers[0]!({})).toBeUndefined();
+    context.clear();
+    expect(providers[0]!({})).toContain('Dynamic Workflow Mode');
+  });
+
+  it('emits the exit reminder once on deactivation and then stays silent', () => {
+    active = true;
+    providers[0]!({});
+    active = false;
+    expect(providers[0]!({})).toContain('no longer active');
+    expect(providers[0]!({})).toBeUndefined();
+  });
+
+  it('skips the exit reminder when the service already appended one', () => {
+    active = true;
+    providers[0]!({});
+    active = false;
+    context.append(reminder('workflow_mode_exit'));
+    expect(providers[0]!({})).toBeUndefined();
+    expect(providers[0]!({})).toBeUndefined();
   });
 });

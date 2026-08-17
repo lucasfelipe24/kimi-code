@@ -9,6 +9,8 @@ import type {
   BeforeExecuteDecision,
   BeforeToolExecuteEvent,
 } from '#/agent/toolExecutor/toolHooks';
+import { IAgentPermissionModeService } from '#/agent/permissionMode/permissionMode';
+import type { PermissionMode } from '#/agent/permissionPolicy/types';
 import { ToolAccesses } from '#/tool/toolContract';
 import { IFlagService } from '#/app/flag/flag';
 import { DYNAMIC_WORKFLOWS_FLAG_ID } from '#/app/workflow/flag';
@@ -56,6 +58,7 @@ describe('AgentWorkflowReviewService', () => {
   let disposables: DisposableStore;
   let ix: TestInstantiationService;
   let flagEnabled: boolean;
+  let permissionMode: PermissionMode;
   let listener: ((event: BeforeToolExecuteEvent) => void) | undefined;
   let approvalCalls: { origin: string; kind: string }[];
   let approvalDecision: BeforeExecuteDecision | undefined;
@@ -63,6 +66,7 @@ describe('AgentWorkflowReviewService', () => {
   beforeEach(() => {
     disposables = new DisposableStore();
     flagEnabled = true;
+    permissionMode = 'manual';
     listener = undefined;
     approvalCalls = [];
     approvalDecision = undefined;
@@ -81,6 +85,13 @@ describe('AgentWorkflowReviewService', () => {
           },
         });
         reg.definePartialInstance(IFlagService, { enabled: () => flagEnabled });
+        reg.definePartialInstance(IAgentPermissionModeService, {
+          get mode(): PermissionMode {
+            return permissionMode;
+          },
+          setMode: () => {},
+          setModeAndBroadcast: () => {},
+        });
         reg.define(IAgentWorkflowReviewService, AgentWorkflowReviewService);
       },
     });
@@ -102,6 +113,19 @@ describe('AgentWorkflowReviewService', () => {
     expect(decision).toBeUndefined();
     expect(approvalCalls).toEqual([{ origin: WORKFLOW_REVIEW_ORIGIN, kind: 'ask' }]);
   });
+
+  it.each(['yolo', 'auto'] as const)(
+    'skips the approval round-trip in %s mode (policy already approves)',
+    async (mode) => {
+      permissionMode = mode;
+      ix.get(IAgentWorkflowReviewService);
+      const event = makeEvent(WORKFLOW_TOOL_NAME);
+      listener!(event);
+
+      expect(event.waitUntilFactories).toEqual([]);
+      expect(approvalCalls).toEqual([]);
+    },
+  );
 
   it('vetoes the call when the approval round-trip rejects', async () => {
     approvalDecision = { veto: { output: 'denied', isError: true } };

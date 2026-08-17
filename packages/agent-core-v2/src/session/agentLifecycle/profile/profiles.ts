@@ -50,6 +50,9 @@ const AGENT_TOOLS = [
   // TowerInit stays in the default allowlist so the main agent can enter
   // tower mode; the rest of the Tower* set is activated by TowerInit.
   'TowerInit',
+  // Workflow is main-agent-only by design: subagent profiles (coder/explore)
+  // keep it out so delegated tasks never nest workflow runs (cost + approval).
+  'Workflow',
   'mcp__*',
 ] as const;
 
