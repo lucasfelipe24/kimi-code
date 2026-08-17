@@ -134,7 +134,6 @@ kimi
 | `KIMI_CODE_BUILTIN_PRODUCT_SKILLS` | 是否向模型提供介绍 Kimi Code 自身的内置 Skills，优先级高于 `config.toml` 的 `builtin_product_skills`（默认开启） | 真值：`1`/`true`/`yes`/`on`；假值：`0`/`false`/`no`/`off` |
 | `KIMI_CODE_TUI_FULL_SCREEN` | 启用实验性的 fullscreen alternate-screen 界面：可滚动的 transcript 视口、鼠标选择文本、可点击链接、Ctrl-Shift-F 搜索 | `1` 开启；其他值保持常规内联界面 |
 | `KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL` | 在包括交互式 TUI 在内的所有启动方式下启用实验性的 [subagent 模型池](./config-files.md#subagent-模型池)；master `KIMI_CODE_EXPERIMENTAL_FLAG=1` 也会启用本功能 | 真值：`1`/`true`/`yes`/`on`；假值：`0`/`false`/`no`/`off` |
-| `KIMI_CODE_EXPERIMENTAL_DYNAMIC_WORKFLOWS` | 启用实验性的 Dynamic Workflow：main agent 获得 `Workflow` 工具，并会对大型多阶段任务自动进入 Dynamic Workflow 模式；master `KIMI_CODE_EXPERIMENTAL_FLAG=1` 也会启用它。见 [Dynamic Workflows](../customization/workflows.md) | 真值：`1`/`true`/`yes`/`on`；假值：`0`/`false`/`no`/`off` |
 | `KIMI_SECONDARY_MODEL` | 次主力模型；优先级高于 `config.toml` 的 [`[secondary_model] model`](./config-files.md#secondary-model)。次主力模型实验功能启用后，新派生的 subagent 默认绑定该模型，而不再继承 main agent 的模型 | `[models]` 中已配置条目的别名，如 `kimi-code/kimi-for-coding`；空白值被忽略 |
 | `KIMI_SECONDARY_EFFORT` | 次主力模型的 thinking effort；优先级高于 `[secondary_model] default_effort`，仅在次主力模型及其实验功能均启用时生效 | effort 取值，如 `low`；空白值被忽略 |
 | `KIMI_MCP_STARTUP_TIMEOUT_MS` | 所有 MCP server 的全局默认连接超时（毫秒）；优先级高于 `config.toml` 的 `[mcp] startup_timeout_ms`，但低于 `mcp.json` 中单个 server 的 `startupTimeoutMs`（默认 `30000`） | `1` 到 `2147483647` 的整数；非法值被忽略 |
@@ -148,7 +147,6 @@ kimi
 | `KIMI_WEB_FETCH_API_KEY` | 网页抓取（`FetchURL`）服务的 API 密钥；设置后同时替换配置中的 API 密钥和 OAuth 凭据 | 非空字符串；空白值被忽略 |
 | `KIMI_BRAVE_BASE_URL` | Brave Search 后端的 API URL；优先级高于 `config.toml` 的 `[services.brave] base_url`。文件中持久化的凭据和自定义 header 不会发送到环境变量指定的端点。仅由默认的 `agent-core-v2` 引擎读取 | 非空字符串；空白值被忽略 |
 | `KIMI_BRAVE_API_KEY` | Brave Search 后端的 API 密钥；优先级高于 `[services.brave] api_key`。需要 `active_search_provider = "brave"` 才会为 `WebSearch` 提供服务。仅由默认的 `agent-core-v2` 引擎读取 | 非空字符串；空白值被忽略 |
-| `KIMI_CODE_EXPERIMENTAL_LANGSEARCH_WEB_SEARCH` | 启用实验性的 LangSearch 网页搜索后端及其可选的语义重排（`langsearch-web-search` flag）；master `KIMI_CODE_EXPERIMENTAL_FLAG=1` 也会启用它 | 真值：`1`/`true`/`yes`/`on`；假值：`0`/`false`/`no`/`off` |
 | `KIMI_CODE_EXPERIMENTAL_FLAG` | 在当前进程启用所有已注册的实验功能；不用于选择 Agent 引擎 | `1`、`true`、`yes`、`on` |
 | `KIMI_CODE_LEGACY_FLAG` | 让 `kimi`、`kimi -p`、`kimi doctor`、`kimi acp`、`kimi export` 和 `kimi provider` 使用旧版 `agent-core` 引擎；这些命令默认使用 `agent-core-v2` | `1`、`true`、`yes`、`on` |
 | `KIMI_SHELL_PATH` | Windows 上覆盖 Git Bash 路径（自动探测失败时使用） | 绝对路径 |

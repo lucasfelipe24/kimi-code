@@ -298,7 +298,7 @@ kimi vis --host 0.0.0.0 --port 8123 --no-open
 
 ### `kimi search`
 
-无需打开 TUI 即可管理网页搜索后端和语义重排。在 **Settings → Web Search** 中，顶部会显示当前供应商：**Web search provider** 只用于配置或编辑 Moonshot、LangSearch 或 Brave（并保留当前选择），**Active web search provider** 用于显式切换由哪个已配置后端提供 `WebSearch`，**Rerank provider** 则独立管理重排状态和 API 密钥。配置 Moonshot 时可以复用当前 Kimi Code OAuth 登录，也可以使用中国区或全球区 API 密钥。CLI 和 TUI 都会把更改持久化到 `config.toml` 的 `[services]` 中；在 CLI 上，`kimi search set brave|langsearch` 会同时配置并选择后端（写入 `active_search_provider`），而 `kimi search use` 只切换选择。Brave Search 是原生、非实验性的后端，但需要显式选择和有效 API 密钥。LangSearch 网页搜索仍属于实验功能；配置前请在 **Settings → Experiments** 中启用 **LangSearch web search**（或设置 `KIMI_CODE_EXPERIMENTAL_LANGSEARCH_WEB_SEARCH=1`）。在默认的 `agent-core-v2` 引擎上，选中的供应商是原子的：如果凭据缺失或无效，`WebSearch` 不可用，不会回退到其他后端。
+无需打开 TUI 即可管理网页搜索后端和语义重排。在 **Settings → Web Search** 中，顶部会显示当前供应商：**Web search provider** 只用于配置或编辑 Moonshot、LangSearch 或 Brave（并保留当前选择），**Active web search provider** 用于显式切换由哪个已配置后端提供 `WebSearch`，**Rerank provider** 则独立管理重排状态和 API 密钥。配置 Moonshot 时可以复用当前 Kimi Code OAuth 登录，也可以使用中国区或全球区 API 密钥。CLI 和 TUI 都会把更改持久化到 `config.toml` 的 `[services]` 中；在 CLI 上，`kimi search set brave|langsearch` 会同时配置并选择后端（写入 `active_search_provider`），而 `kimi search use` 只切换选择。Brave Search 是原生、非实验性的后端，但需要显式选择和有效 API 密钥。LangSearch 网页搜索同样是原生后端，也需要显式选择和有效 API 密钥。在默认的 `agent-core-v2` 引擎上，选中的供应商是原子的：如果凭据缺失或无效，`WebSearch` 不可用，不会回退到其他后端。
 
 | 命令 | 说明 |
 | --- | --- |

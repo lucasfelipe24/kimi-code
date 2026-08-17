@@ -268,7 +268,7 @@ k3-max = "同一模型的 max Thinking 档位。适合最难的子任务。"
 
 配置后该绑定即刻生效：主编码模型是纯文本时，`ReadMediaFile` 工具仍然保留，其图像 / 视频检查会委托给视觉模型；直接粘贴进消息里的图像 / 视频部分会被替换成指向视觉模型的文本提示，而不会让请求失败。终端界面只要当前模型可直接处理媒体、或已配置视觉模型，就会接受粘贴的媒体。
 
-该节默认开启（native——无需设置任何环境变量即可生效）。要关闭它，设置 `KIMI_CODE_EXPERIMENTAL_VISUAL_MODEL=false`，或在 `[experimental]` 下添加 `visual-model = false`；关闭时 `[visual_model]` 不生效，视觉任务回退到调用方模型。
+视觉模型是原生功能——无需任何实验 flag 或环境变量即可生效。不设置 `model` 时，视觉任务绑定调用方模型。
 
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
@@ -361,7 +361,7 @@ max_output_size = 8192
 
 ## `workflows`
 
-`workflows` 用于调整 [Dynamic Workflow](../customization/workflows.md) 的运行限制并声明额外的 Workflow 目录。Dynamic Workflow 是实验功能，默认关闭；启用方式见 [Dynamic Workflows](../customization/workflows.md#启用-dynamic-workflow)。
+`workflows` 用于调整 [Dynamic Workflow](../customization/workflows.md) 的运行限制并声明额外的 Workflow 目录。Dynamic Workflow 始终可用——无需任何 flag 或开关。
 
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
@@ -481,9 +481,9 @@ extraction_enabled = true
 
 除后端配置表外，`[services]` 的 `active_search_provider` 字段用于选择由哪个后端提供 [`WebSearch`](../reference/tools.md#网络类)：`brave`、`langsearch` 或 `moonshot`。
 
-Brave Search 是原生、非实验性的后端，但不会自动选中：请配置 `[services.brave]` API 密钥，并通过 `active_search_provider = "brave"` 或 `kimi search set brave` 显式选择 Brave。LangSearch 网页搜索仍属于实验功能，默认关闭：可在 **Settings → Experiments** 中启用 **LangSearch web search**，设置 `KIMI_CODE_EXPERIMENTAL_LANGSEARCH_WEB_SEARCH=1`，或在 `[experimental]` 下添加 `langsearch-web-search = true`。未选中上述后端时，Moonshot 搜索仍可正常使用。在默认的 `agent-core-v2` 引擎上，搜索后端的选择是原子的：选中的后端必须有有效 API 密钥，否则其 `WebSearch` 实现和专用工具都不可用，不会回退到其他后端。
+Brave Search 是原生、非实验性的后端，但不会自动选中：请配置 `[services.brave]` API 密钥，并通过 `active_search_provider = "brave"` 或 `kimi search set brave` 显式选择 Brave。LangSearch 网页搜索同样是原生后端：请配置 `[services.langsearch]` API 密钥，并通过 `active_search_provider = "langsearch"` 或 `kimi search set langsearch` 显式选择它。未选中上述后端时，Moonshot 搜索仍可正常使用。在默认的 `agent-core-v2` 引擎上，搜索后端的选择是原子的：选中的后端必须有有效 API 密钥，否则其 `WebSearch` 实现和专用工具都不可用，不会回退到其他后端。
 
-当 `active_search_provider` 指定某个后端时，`WebSearch` 由该后端提供且不做回退：如果其凭据缺失，网页搜索将不可用。LangSearch 还要求启用其实验功能。当 `active_search_provider` 缺省时，运行时保持旧的优先级——先是已配置的 LangSearch（且其实验已启用），然后是已配置的 Moonshot，最后是托管的 Kimi OAuth 搜索服务。运行 `kimi search set brave` 或 `kimi search set langsearch` 会同时配置并选择该后端（写入 `active_search_provider`），从而把旧配置迁移到显式选择。
+当 `active_search_provider` 指定某个后端时，`WebSearch` 由该后端提供且不做回退：如果其凭据缺失，网页搜索将不可用。当 `active_search_provider` 缺省时，运行时保持旧的优先级——先是已配置的 LangSearch，然后是已配置的 Moonshot，最后是托管的 Kimi OAuth 搜索服务。运行 `kimi search set brave` 或 `kimi search set langsearch` 会同时配置并选择该后端（写入 `active_search_provider`），从而把旧配置迁移到显式选择。
 
 在 TUI 的 **Settings → Web Search** 中，顶部会显示当前搜索和重排供应商。**Web search provider** 只用于配置或编辑 Moonshot、LangSearch 或 Brave——它会保留当前选择，不会切换当前后端。使用 **Active web search provider** 可显式切换由哪个已配置后端提供 `WebSearch`；使用 **Rerank provider** 可独立配置、启用、禁用、编辑或移除语义重排。配置 Moonshot 时，可以复用当前 Kimi Code OAuth 登录，也可以为中国区或全球区 API 配置密钥。
 
@@ -559,9 +559,6 @@ api_key = "YOUR_API_KEY"
 以下示例会启用 LangSearch 搜索和 [LangSearch Semantic Rerank API](https://docs.langsearch.com/api/semantic-rerank-api)：
 
 ```toml
-[experimental]
-langsearch-web-search = true
-
 [services.langsearch]
 api_key = "YOUR_API_KEY"
 tier = "free"
