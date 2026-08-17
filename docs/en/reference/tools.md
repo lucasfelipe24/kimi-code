@@ -126,6 +126,16 @@ Collaboration tools handle inter-Agent coordination, user interaction, and Skill
 
 **`Skill`** allows the Agent to actively invoke a registered inline-type Skill. Accepts `skill` (the Skill name) and optional `args` (additional argument text). Only `type = "inline"` Skills can be called via this tool; Skills with `disableModelInvocation: true` are rejected. Maximum nesting depth is 3 levels. See [Agent Skills](../customization/skills.md) for details.
 
+## Workflows
+
+The `Workflow` tool starts a [dynamic workflow](../customization/workflows.md) — a user-authored JavaScript script that orchestrates subagents in phases. It is experimental and gated by the `dynamic-workflows` flag (off by default): with the flag on, the main agent gains the tool and enters workflow mode automatically for large, multi-phase tasks; subagent profiles (`coder`, `explore`) never include it, so delegated tasks cannot nest workflow runs.
+
+| Tool | Default Approval | Description |
+| --- | --- | --- |
+| `Workflow` | Auto-allow (reviewed in manual mode) | Start a dynamic workflow by catalog `name` or inline `script` |
+
+**`Workflow`** accepts exactly one of `name` (a catalog workflow, e.g. `deep-research`) or `script` (an inline workflow script), plus an optional `args` string passed to the script as its `args` value. The tool returns immediately with the run and task IDs; the run executes in the background and its completion arrives as an automatic notification in a later turn. Every call carries a display of the workflow meta, phases, full script, resolved limits, and a token-consumption warning. In `manual` permission mode, each call goes through an approval review before anything executes; in `yolo` and `auto` modes, the tool is approved automatically. See [Dynamic Workflows](../customization/workflows.md) for the script API, run limits, and monitoring.
+
 ## Background Tasks
 
 Background task tools manage tasks started via `Bash`, `Agent`, or `AskUserQuestion`. When a task reaches a terminal state, its status and saved output path are automatically delivered back to the Agent; use `TaskOutput` to check progress early.

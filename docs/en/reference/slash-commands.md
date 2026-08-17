@@ -100,7 +100,7 @@ Prompt mode exits with code `0` when the goal completes, `3` when it blocks, and
 
 ## Dynamic Workflows
 
-`/workflow` (alias `/workflows`) manages [dynamic workflows](../customization/workflows.md) — an experimental feature that runs user-approved JavaScript scripts orchestrating subagents. In the **CLI** these commands are available when the `dynamic-workflows` experimental flag is enabled; in the **Web UI** they are always available from the chat composer. Every run asks for confirmation before anything executes.
+`/workflow` (alias `/workflows`) manages [dynamic workflows](../customization/workflows.md) — an experimental feature that runs JavaScript scripts orchestrating subagents. In the **CLI** these commands are available when the `dynamic-workflows` experimental flag is enabled; in the **Web UI** they are always available from the chat composer. Runs proposed by the model require your approval in `manual` permission mode; in `yolo` and `auto` modes they are approved automatically.
 
 | Command | Description |
 | --- | --- |
@@ -111,7 +111,7 @@ Prompt mode exits with code `0` when the goal completes, `3` when it blocks, and
 | `/workflow cancel <runId>` | Cancel a running workflow |
 | `/workflow save <runId> [--user]` | Save the script of a run into the project workflow directory (`.kimi-code/workflows/`); with `--user`, into the user directory (`~/.kimi-code/workflows/`) |
 | `/workflow reload` | Rescan the workflow directories |
-| `/workflow on` | Enable Dynamic Workflow mode: the model analyses the task first and proposes dynamic workflows for large multi-phase tasks |
+| `/workflow on` | Enable Dynamic Workflow mode manually: the model analyses the task first and proposes dynamic workflows for large multi-phase tasks (with the flag on, the mode also engages automatically) |
 | `/workflow off` | Disable Dynamic Workflow mode |
 
 ## Information & Status

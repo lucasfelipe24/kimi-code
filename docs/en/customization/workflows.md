@@ -5,15 +5,15 @@ Dynamic workflows orchestrate multiple subagents from a single user-approved Jav
 > Dynamic workflows are an experimental feature and consume significantly more tokens than a normal session. Enable them only when you need this kind of orchestration.
 
 ::: warning Note
-A workflow script runs in a sandbox (an isolated environment that restricts what the script can access), but the sandbox is a control boundary, not a security barrier. Every workflow run therefore requires your explicit approval before anything executes.
+A workflow script runs in a sandbox (an isolated environment that restricts what the script can access), but the sandbox is a control boundary, not a security barrier. In `manual` permission mode, every workflow run therefore requires your explicit approval before anything executes; in `yolo` and `auto` modes, runs are approved automatically.
 :::
 
 ## Enabling dynamic workflows
 
-The feature is gated by the `dynamic-workflows` experimental flag and is off by default. Enable it in one of three ways:
+The feature is gated by the `dynamic-workflows` experimental flag and is off by default. When the flag is on, the main agent gains the `Workflow` tool and enters **Dynamic Workflow mode** automatically for large, multi-phase tasks (see [Dynamic Workflow mode](#dynamic-workflow-mode)); subagent profiles such as `coder` and `explore` never include the tool. Enable it in one of three ways:
 
 - Open the experimental feature panel with `/experiments` (Settings → Experiments) and turn on **Dynamic workflows**.
-- Set the environment variable `KIMI_CODE_EXPERIMENTAL_DYNAMIC_WORKFLOWS=1` before starting Kimi Code CLI.
+- Set the environment variable `KIMI_CODE_EXPERIMENTAL_DYNAMIC_WORKFLOWS=1` before starting Kimi Code CLI; the master `KIMI_CODE_EXPERIMENTAL_FLAG=1` also enables it.
 - Add `dynamic-workflows = true` under `[experimental]` in `config.toml`.
 
 ## Writing a workflow script
@@ -102,9 +102,9 @@ The `/workflow` slash command (alias `/workflows`) manages workflows from the TU
 
 When you type `/workflow run ` the autocomplete popup lists the available workflows with their argument hints, so you can quickly find the workflow you need. `/workflow` without arguments opens the run browser directly.
 
-You can also just ask Kimi in natural language to create or run a workflow — for example, "research how our auth flow handles token refresh with a workflow". The model then proposes the run through the `Workflow` tool, and nothing executes before your approval.
+You can also just ask Kimi in natural language to create or run a workflow — for example, "research how our auth flow handles token refresh with a workflow". The model then proposes the run through the `Workflow` tool. What happens next depends on the permission mode: in `manual` mode, nothing executes before you approve the run; in `yolo` and `auto` modes, the run is approved automatically.
 
-Whether a run comes from `/workflow run` or from the model, execution always starts with a confirmation dialog showing the workflow's name, description, and phases, a warning about token consumption, the configured limits, and an option to inspect the full script. The workflow runs only after you explicitly confirm.
+Approval depends on how the run was started. Runs you start yourself with `/workflow run` begin immediately — the command itself is your confirmation. Runs proposed by the model through the `Workflow` tool follow the permission mode: in `manual` mode, the run goes through an approval review before anything executes — the dialog shows the workflow's meta, phases, and full script, the resolved limits, and a token-consumption warning, and you can approve or decline; in `yolo` and `auto` modes, the `Workflow` tool is approved automatically and the run starts without a dialog.
 
 ### Kimi Code Web UI
 
@@ -129,15 +129,15 @@ Workflow start and completion events also appear directly in the conversation, a
 
 ## Dynamic Workflow mode
 
-When enabled via `/workflow on` or the **Workflow** toggle in the Web UI composer's Mode menu, **Dynamic Workflow mode** instructs the model to analyse the task first and, for large or multi-phase tasks, propose a dynamic workflow script (via the `Workflow` tool) instead of executing directly. The proposal goes through the same confirmation dialog as any other workflow — nothing runs before you approve.
+**Dynamic Workflow mode** instructs the model to analyse the task first and, for large or multi-phase tasks, propose a dynamic workflow script (via the `Workflow` tool) instead of executing directly. The mode engages automatically for large, multi-phase requests — with the `dynamic-workflows` flag on, the main agent enters it on its own when a prompt is long enough and shows at least two signs of multi-step structure (task lists, sequencing words, phase or milestone nouns, explicit step counts, or task verbs) — or manually via `/workflow on` or the **Workflow** toggle in the Web UI composer's Mode menu. `/workflow off` or the mode toggle disables it at any time.
 
-A `Dynamic Workflow` label in the terminal footer (CLI) or a `Workflow` badge in the composer toolbar (Web UI) shows that the mode is active. Disable it at any time with `/workflow off` or the mode toggle.
+A `Dynamic Workflow` label in the terminal footer (CLI) or a `Workflow` badge in the composer toolbar (Web UI) shows that the mode is active.
 
 Dynamic Workflow mode composes with all existing modes:
 - **Plan mode**: while planning, the agent reads the codebase and writes a plan; when you exit plan mode, the agent can convert the approved plan into a workflow script.
 - **Swarm mode**: swarm fans out independent subagents; workflow mode orchestrates sequenced phases. They are independent and can be active together.
 - **Goal mode**: the goal drives autonomous turns; inside a turn the agent may create a workflow, which then runs in the background while the goal continues.
-- **Permission**: every workflow run still requires explicit approval (the `workflow-run-review-ask` policy); in `auto` mode the policy approves automatically, matching the semantics of goal and swarm.
+- **Permission**: in `manual` mode, every model-proposed workflow run goes through the approval review (`workflow-run-review-ask`) — the only dialog for a run — showing meta, phases, script, and limits; in `yolo` and `auto` modes, the policy approves the `Workflow` tool and runs start without a dialog, matching the semantics of goal and swarm.
 
 ## Saving a workflow for reuse
 
@@ -180,7 +180,7 @@ Workflows never report false success. A failing subagent throws out of `agent()`
 
 - Dynamic workflows are experimental: the script format and the `/workflow` subcommands may change between releases.
 - Only `.js` scripts in the format documented on this page are supported; workflow scripts are not compatible with Claude Code.
-- Natural-language requests always produce a proposal first — the model never executes a workflow directly without your confirmation.
+- Natural-language requests always produce a proposal first — in `manual` mode the model never executes a workflow without your approval; in `yolo` and `auto` modes runs are approved automatically.
 
 ## Next steps
 

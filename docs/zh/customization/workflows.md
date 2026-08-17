@@ -5,15 +5,15 @@ Dynamic Workflow（动态工作流）用一个经用户批准的 JavaScript 脚�
 > Dynamic Workflow 是实验功能，且 token 消耗显著高于普通会话。仅在确实需要这种编排能力时启用。
 
 ::: warning 注意
-Workflow 脚本运行在 sandbox（隔离环境，限制脚本可访问的能力）中，但 sandbox 只是控制边界，不是安全屏障。因此每次执行 Workflow 之前都必须经过你的明确批准。
+Workflow 脚本运行在 sandbox（隔离环境，限制脚本可访问的能力）中，但 sandbox 只是控制边界，不是安全屏障。在 `manual` 权限模式下，每次执行 Workflow 之前都必须经过你的明确批准；在 `yolo` 和 `auto` 权限模式下，运行会自动获得批准。
 :::
 
 ## 启用 Dynamic Workflow
 
-该功能由 `dynamic-workflows` 实验 flag 控制，默认关闭。可通过以下三种方式之一启用：
+该功能由 `dynamic-workflows` 实验 flag 控制，默认关闭。flag 开启后，main agent 会获得 `Workflow` 工具，并在遇到大型、多阶段任务时自动进入 **Dynamic Workflow 模式**（见 [Dynamic Workflow 模式](#dynamic-workflow-模式)）；`coder`、`explore` 等 subagent profile 永远不包含该工具。可通过以下三种方式之一启用：
 
 - 用 `/experiments` 打开实验功能面板（Settings → Experiments），开启 **Dynamic workflows**。
-- 在启动 Kimi Code CLI 前设置环境变量 `KIMI_CODE_EXPERIMENTAL_DYNAMIC_WORKFLOWS=1`。
+- 在启动 Kimi Code CLI 前设置环境变量 `KIMI_CODE_EXPERIMENTAL_DYNAMIC_WORKFLOWS=1`；master `KIMI_CODE_EXPERIMENTAL_FLAG=1` 也会启用它。
 - 在 `config.toml` 的 `[experimental]` 下添加 `dynamic-workflows = true`。
 
 ## 编写 Workflow 脚本
@@ -102,9 +102,9 @@ extra_workflow_dirs = ["~/team-workflows"]
 
 当你输入 `/workflow run ` 时，自动补全弹出框会列出可用的 Workflow 及其参数提示，帮助你快速找到需要的 Workflow。`/workflow`（不加参数）直接打开运行浏览器。
 
-你也可以直接用自然语言让 Kimi 创建或运行 Workflow —— 例如「用一个 workflow 调研我们的 auth 流程如何刷新 token」。模型会通过 `Workflow` 工具提出一个**提案**，在你批准之前不会执行任何内容。
+你也可以直接用自然语言让 Kimi 创建或运行 Workflow —— 例如「用一个 workflow 调研我们的 auth 流程如何刷新 token」。模型会通过 `Workflow` 工具提出一个**提案**。后续行为取决于权限模式：在 `manual` 权限模式下，你批准之前不会执行任何内容；在 `yolo` 和 `auto` 权限模式下，运行会自动获得批准。
 
-无论运行来自 `/workflow run` 还是来自模型，执行前都会先弹出确认对话框，展示 Workflow 的名称、描述和阶段、token 消耗警告、已配置的限制，以及查看完整脚本的选项。只有在你明确确认后，Workflow 才会运行。
+审批行为取决于运行的发起方式。你用 `/workflow run` 手动发起的运行会立即开始——命令本身就是你的确认。模型通过 `Workflow` 工具发起的运行则遵循权限模式：在 `manual` 权限模式下，运行前会先经过审批 review，对话框展示 Workflow 的 meta、阶段和完整脚本、已解析的限制以及 token 消耗警告，你可以批准或拒绝；在 `yolo` 和 `auto` 权限模式下，`Workflow` 工具自动获得批准，运行无需对话框直接开始。
 
 ### Kimi Code Web UI
 
@@ -129,16 +129,19 @@ Workflow 的开始和完成事件也会直接出现在会话中，并且每次�
 
 ## Dynamic Workflow 模式
 
-通过 `/workflow on` 或 Web UI composer 的 Mode 菜单中的 **Workflow** 开关启用后，**Dynamic Workflow 模式**会让模型先分析任务，对于大型或多阶段的复杂任务，使用 `Workflow` 工具主动创建动态 Workflow 脚本提交给你审批，而不是直接执行。提案与普通 Workflow 走相同的确认流程——在你批准之前不会运行任何内容。
+**Dynamic Workflow 模式**会让模型先分析任务，对于大型或多阶段的复杂任务，使用 `Workflow` 工具主动创建动态 Workflow 脚本提交给你审批，而不是直接执行。该模式可通过两种方式进入：
 
-终端底部（CLI）的 `Dynamic Workflow` 标签或 composer 工具栏（Web UI）中的 `Workflow` 徽章会显示该模式已激活。可通过 `/workflow off` 或模式开关随时禁用它。
+- **自动进入**：`dynamic-workflows` flag 开启后，当提示词足够长且包含至少两种多步骤结构特征（任务列表、顺序连接词、phase 或 milestone 名词、显式的步骤数量、任务动词）时，main agent 会自行进入该模式，无需任何命令。
+- **手动进入**：通过 `/workflow on` 或 Web UI composer 的 Mode 菜单中的 **Workflow** 开关启用；可用 `/workflow off` 或模式开关随时关闭。
+
+终端底部（CLI）的 `Dynamic Workflow` 标签或 composer 工具栏（Web UI）中的 `Workflow` 徽章会显示该模式已激活。
 
 Dynamic Workflow 模式与所有现有模式兼容：
 
 - **Plan 模式**：规划期间 agent 阅读代码库、撰写计划；退出 plan 模式后，agent 可以将审批通过的计划转换为 Workflow 脚本。
 - **Swarm 模式**：swarm 用于独立子任务的 fan-out；workflow 模式用于编排有先后顺序的阶段。两者独立，可以同时启用。
 - **Goal 模式**：goal 驱动自主多轮对话；在一轮对话中 agent 可以创建 Workflow，Workflow 在后台运行，goal 继续推进。
-- **权限模式**：每次 Workflow 运行仍然要求明确审批（`workflow-run-review-ask` 策略）；在 `auto` 模式下自动批准，与 goal 和 swarm 的语义一致。
+- **权限模式**：在 `manual` 权限模式下，模型发起的每次 Workflow 运行都会经过审批 review（`workflow-run-review-ask`）—— 这是运行前唯一的对话框 —— 展示 meta、阶段、脚本和限制；在 `yolo` 和 `auto` 权限模式下，权限策略自动批准 `Workflow` 工具，运行无需对话框直接开始，与 goal 和 swarm 的语义一致。
 
 ## 保存 Workflow 以便复用
 
@@ -181,7 +184,7 @@ Workflow 绝不会虚报成功。子 Agent 失败会从 `agent()` 抛出异常�
 
 - Dynamic Workflow 是实验功能：脚本格式和 `/workflow` 子命令可能在版本之间发生变化。
 - 仅支持本页文档所述格式的 `.js` 脚本；Workflow 脚本与 Claude Code 不兼容。
-- 自然语言请求总是先产生提案 —— 模型绝不会在未经你确认的情况下直接执行 Workflow。
+- 自然语言请求总是先产生提案 —— 在 `manual` 权限模式下，模型绝不会在未经你批准的情况下直接执行 Workflow；在 `yolo` 和 `auto` 权限模式下，运行会自动获得批准。
 
 ## 下一步
 
