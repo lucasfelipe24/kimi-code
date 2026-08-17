@@ -1187,8 +1187,7 @@ export class Session {
 
   /**
    * Session workflow run manager (lazy). Runs execute as background tasks of
-   * the main agent and spawn subagents through its subagent host. Callers are
-   * responsible for gating on the `dynamic-workflows` experimental flag.
+   * the main agent and spawn subagents through its subagent host.
    */
   get workflowRuns(): WorkflowRunManager {
     this.workflowRunManager ??= new WorkflowRunManager({

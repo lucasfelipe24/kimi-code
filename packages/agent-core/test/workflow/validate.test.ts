@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import { KimiConfigSchema, KimiConfigPatchSchema } from '../../src/config/schema';
-import { FLAG_DEFINITIONS } from '../../src/flags';
 import {
   DEFAULT_WORKFLOW_LIMITS,
   WorkflowValidationError,
@@ -209,15 +208,5 @@ describe('workflows config section', () => {
     expect(() =>
       KimiConfigPatchSchema.parse({ workflows: { maxAgentCalls: 10, extraWorkflowDirs: ['x'] } }),
     ).not.toThrow();
-  });
-});
-
-describe('dynamic-workflows flag', () => {
-  it('is registered with the expected env and default off', () => {
-    const def = FLAG_DEFINITIONS.find((d) => d.id === 'dynamic-workflows');
-    expect(def).toBeDefined();
-    expect(def?.env).toBe('KIMI_CODE_EXPERIMENTAL_DYNAMIC_WORKFLOWS');
-    expect(def?.default).toBe(false);
-    expect(def?.surface).toBe('core');
   });
 });

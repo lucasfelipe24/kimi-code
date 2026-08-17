@@ -33,24 +33,6 @@ export const FLAG_DEFINITIONS = [
     surface: 'core',
   },
   {
-    id: 'dynamic-workflows',
-    title: 'Dynamic workflows',
-    description:
-      'User-approved JS workflow scripts that orchestrate subagents in phases with parallel fan-out, pipelines, and JSON-schema structured output.',
-    env: 'KIMI_CODE_EXPERIMENTAL_DYNAMIC_WORKFLOWS',
-    default: false,
-    surface: 'core',
-  },
-  {
-    id: 'langsearch-web-search',
-    title: 'LangSearch web search',
-    description:
-      'Use LangSearch as a configurable WebSearch backend and optionally rerank search results with its semantic reranker.',
-    env: 'KIMI_CODE_EXPERIMENTAL_LANGSEARCH_WEB_SEARCH',
-    default: false,
-    surface: 'both',
-  },
-  {
     id: 'secondary-model',
     title: 'Secondary model for subagents',
     description:

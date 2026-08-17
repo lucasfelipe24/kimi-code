@@ -338,7 +338,7 @@ export interface ActivatePluginCommandPayload {
   readonly args?: string | undefined;
 }
 
-// ─── Dynamic workflows (gated by the 'dynamic-workflows' experimental flag) ─
+// ─── Dynamic workflows ─────────────────────────────────────────────────────
 
 export interface WorkflowPhaseSummary {
   readonly title: string;
@@ -809,8 +809,7 @@ export interface SessionAPI extends AgentAPIWithId {
   waitForBackgroundTasksOnPrint: (payload: EmptyPayload) => void;
   handlePrintMainTurnCompleted: (payload: EmptyPayload) => 'finish' | 'continue';
   addAdditionalDir: (payload: AddAdditionalDirPayload) => AddAdditionalDirResult;
-  // Dynamic workflows — every method below requires the 'dynamic-workflows'
-  // experimental flag and fails with `request.invalid` when it is disabled.
+  // Dynamic workflows — every method below is available unconditionally.
   listWorkflows: (payload: EmptyPayload) => ListWorkflowsResult;
   getWorkflow: (payload: GetWorkflowPayload) => GetWorkflowResult;
   reloadWorkflows: (payload: EmptyPayload) => ListWorkflowsResult;

@@ -1975,7 +1975,6 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
       this.runtimeOverride ??
       (await createRuntimeConfig({
         config,
-        langSearchEnabled: this.experimentalFlags.enabled('langsearch-web-search'),
         kimiRequestHeaders: this.kimiRequestHeaders,
         resolveOAuthTokenProvider: this.resolveOAuthTokenProvider,
       }));
@@ -2325,7 +2324,6 @@ function standaloneMcpTestResult(
 
 async function createRuntimeConfig(input: {
   readonly config: KimiConfig;
-  readonly langSearchEnabled: boolean;
   readonly kimiRequestHeaders?: Record<string, string> | undefined;
   readonly resolveOAuthTokenProvider?: OAuthTokenProviderResolver | undefined;
 }): Promise<ToolServices> {
@@ -2335,9 +2333,9 @@ async function createRuntimeConfig(input: {
     WEB_FETCH_BASE_URL_ENV,
     WEB_FETCH_API_KEY_ENV,
   );
-  const langSearchLimiter = createLangSearchRateLimiter(input.config, input.langSearchEnabled);
+  const langSearchLimiter = createLangSearchRateLimiter(input.config);
   const search = createWebSearchProvider(input, langSearchLimiter);
-  const reranker = createRerankProvider(input.config, input.langSearchEnabled, langSearchLimiter);
+  const reranker = createRerankProvider(input.config, langSearchLimiter);
 
   return {
     urlFetcher:
@@ -2359,7 +2357,6 @@ async function createRuntimeConfig(input: {
 function createWebSearchProvider(
   input: {
     readonly config: KimiConfig;
-    readonly langSearchEnabled: boolean;
     readonly kimiRequestHeaders?: Record<string, string> | undefined;
     readonly resolveOAuthTokenProvider?: OAuthTokenProviderResolver | undefined;
   },
@@ -2370,7 +2367,7 @@ function createWebSearchProvider(
 
   const langsearch = services?.langsearch;
   const langsearchApiKey = nonEmptyString(langsearch?.apiKey);
-  if (input.langSearchEnabled && langsearchApiKey !== undefined) {
+  if (langsearchApiKey !== undefined) {
     return new LangSearchWebSearchProvider({
       apiKey: langsearchApiKey,
       baseUrl: langsearch?.baseUrl,
@@ -2398,16 +2395,11 @@ function createWebSearchProvider(
 
 function createRerankProvider(
   config: KimiConfig,
-  langSearchEnabled: boolean,
   limiter: RateLimiter | undefined,
 ): LangSearchRerankProvider | undefined {
   const services = config.services;
   const rerank = services?.rerank;
-  if (
-    !langSearchEnabled ||
-    rerank?.enabled === false ||
-    rerank?.provider !== 'langsearch'
-  ) {
+  if (rerank?.enabled === false || rerank?.provider !== 'langsearch') {
     return undefined;
   }
 
@@ -2422,11 +2414,7 @@ function createRerankProvider(
   });
 }
 
-function createLangSearchRateLimiter(
-  config: KimiConfig,
-  langSearchEnabled: boolean,
-): RateLimiter | undefined {
-  if (!langSearchEnabled) return undefined;
+function createLangSearchRateLimiter(config: KimiConfig): RateLimiter | undefined {
   const services = config.services;
   const searchConfigured = nonEmptyString(services?.langsearch?.apiKey) !== undefined;
   const rerankConfigured =

@@ -99,9 +99,9 @@ export interface AgentOptions {
   readonly microCompaction?: Partial<MicroCompactionConfig>;
   readonly modelProvider?: ModelProvider | undefined;
   readonly subagentHost?: SessionSubagentHost | undefined;
-  /** Session workflow discovery registry (dynamic-workflows feature). */
+  /** Session workflow discovery registry. */
   readonly workflows?: SessionWorkflowRegistry | undefined;
-  /** Session workflow run manager (dynamic-workflows feature). */
+  /** Session workflow run manager. */
   readonly workflowRuns?: WorkflowRunManager | undefined;
   readonly skills?: SkillRegistry;
   readonly mcp?: McpConnectionManager;
