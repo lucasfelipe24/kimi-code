@@ -100,7 +100,7 @@ Prompt mode exits with code `0` when the goal completes, `3` when it blocks, and
 
 ## Dynamic Workflows
 
-`/workflow` (alias `/workflows`) manages [dynamic workflows](../customization/workflows.md) — an experimental feature that runs JavaScript scripts orchestrating subagents. In the **CLI** these commands are available when the `dynamic-workflows` experimental flag is enabled; in the **Web UI** they are always available from the chat composer. Runs proposed by the model require your approval in `manual` permission mode; in `yolo` and `auto` modes they are approved automatically.
+`/workflow` (alias `/workflows`) manages [dynamic workflows](../customization/workflows.md) — a native feature that runs JavaScript scripts orchestrating subagents. The commands are always available in the **CLI** and in the **Web UI** chat composer. Runs proposed by the model require your approval in `manual` permission mode; in `yolo` and `auto` modes they are approved automatically.
 
 | Command | Description |
 | --- | --- |

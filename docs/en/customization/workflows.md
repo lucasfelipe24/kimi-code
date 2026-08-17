@@ -2,7 +2,7 @@
 
 Dynamic workflows orchestrate multiple subagents from a single user-approved JavaScript script. The script runs in phases, fans out subagents in parallel (starting several at once and waiting for all of them), pipelines items through processing stages, validates structured output against JSON Schema (a standard format for describing the expected shape of JSON data), and returns a final result. They are built for large, multi-step tasks — for example, researching a question across many sources or auditing a whole repository — that would otherwise take many manual turns.
 
-> Dynamic workflows are an experimental feature and consume significantly more tokens than a normal session. Enable them only when you need this kind of orchestration.
+> Dynamic workflows consume significantly more tokens than a normal session. Use them only when you need this kind of orchestration.
 
 ::: warning Note
 A workflow script runs in a sandbox (an isolated environment that restricts what the script can access), but the sandbox is a control boundary, not a security barrier. In `manual` permission mode, every workflow run therefore requires your explicit approval before anything executes; in `yolo` and `auto` modes, runs are approved automatically.
@@ -10,11 +10,9 @@ A workflow script runs in a sandbox (an isolated environment that restricts what
 
 ## Enabling dynamic workflows
 
-The feature is gated by the `dynamic-workflows` experimental flag and is off by default. When the flag is on, the main agent gains the `Workflow` tool and enters **Dynamic Workflow mode** automatically for large, multi-phase tasks (see [Dynamic Workflow mode](#dynamic-workflow-mode)); subagent profiles such as `coder` and `explore` never include the tool. Enable it in one of three ways:
+Dynamic workflows are a native feature — no flag, environment variable, or config opt-in is needed. The main agent always has the `Workflow` tool and enters **Dynamic Workflow mode** automatically for large, multi-phase tasks (see [Dynamic Workflow mode](#dynamic-workflow-mode)); subagent profiles such as `coder` and `explore` never include the tool, so delegated tasks cannot nest workflow runs.
 
-- Open the experimental feature panel with `/experiments` (Settings → Experiments) and turn on **Dynamic workflows**.
-- Set the environment variable `KIMI_CODE_EXPERIMENTAL_DYNAMIC_WORKFLOWS=1` before starting Kimi Code CLI; the master `KIMI_CODE_EXPERIMENTAL_FLAG=1` also enables it.
-- Add `dynamic-workflows = true` under `[experimental]` in `config.toml`.
+To use one, drop a script into a [workflow directory](#workflow-locations) and run it with `/workflow run <name>`, or ask Kimi in natural language to create or run it. Use `/workflow on` to have the agent propose a workflow for a large task even when it would not auto-engage, and `/workflow off` to disable the mode.
 
 ## Writing a workflow script
 
@@ -129,7 +127,7 @@ Workflow start and completion events also appear directly in the conversation, a
 
 ## Dynamic Workflow mode
 
-**Dynamic Workflow mode** instructs the model to analyse the task first and, for large or multi-phase tasks, propose a dynamic workflow script (via the `Workflow` tool) instead of executing directly. The mode engages automatically for large, multi-phase requests — with the `dynamic-workflows` flag on, the main agent enters it on its own when a prompt is long enough and shows at least two types of multi-step signals (task lists, sequencing words, phase or milestone nouns, explicit step counts, or task verbs) — or manually via `/workflow on` or the **Workflow** toggle in the Web UI composer's Mode menu. `/workflow off` or the mode toggle disables it at any time.
+**Dynamic Workflow mode** instructs the model to analyse the task first and, for large or multi-phase tasks, propose a dynamic workflow script (via the `Workflow` tool) instead of executing directly. The mode engages automatically for large, multi-phase requests — the main agent enters it on its own when a prompt is long enough and shows at least two types of multi-step signals (task lists, sequencing words, phase or milestone nouns, explicit step counts, or task verbs) — or manually via `/workflow on` or the **Workflow** toggle in the Web UI composer's Mode menu. `/workflow off` or the mode toggle disables it at any time.
 
 A `Dynamic Workflow` label in the terminal footer (CLI) or a `Workflow` badge in the composer toolbar (Web UI) shows that the mode is active.
 
@@ -178,7 +176,7 @@ Workflows never report false success. A failing subagent throws out of `agent()`
 
 ## Current limitations
 
-- Dynamic workflows are experimental: the script format and the `/workflow` subcommands may change between releases.
+- The script format and the `/workflow` subcommands may change between releases.
 - Only `.js` scripts in the format documented on this page are supported; workflow scripts are not compatible with Claude Code.
 - Natural-language requests always produce a proposal first — in `manual` mode the model never executes a workflow without your approval; in `yolo` and `auto` modes runs are approved automatically.
 

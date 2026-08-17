@@ -128,7 +128,7 @@ Collaboration tools handle inter-Agent coordination, user interaction, and Skill
 
 ## Workflows
 
-The `Workflow` tool starts a [dynamic workflow](../customization/workflows.md) — a user-authored JavaScript script that orchestrates subagents in phases. It is experimental and gated by the `dynamic-workflows` flag (off by default): with the flag on, the main agent gains the tool and enters Dynamic Workflow mode automatically for large, multi-phase tasks; subagent profiles (`coder`, `explore`) never include it, so delegated tasks cannot nest workflow runs.
+The `Workflow` tool starts a [dynamic workflow](../customization/workflows.md) — a user-authored JavaScript script that orchestrates subagents in phases. The main agent always has the tool and enters Dynamic Workflow mode automatically for large, multi-phase tasks; subagent profiles (`coder`, `explore`) never include it, so delegated tasks cannot nest workflow runs.
 
 | Tool | Default Approval | Description |
 | --- | --- | --- |

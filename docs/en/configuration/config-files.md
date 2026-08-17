@@ -269,7 +269,7 @@ The visual model is a companion model configuration for **vision-only work** —
 
 When set, the binding is live: a text-only main model keeps the `ReadMediaFile` tool, which delegates image / video inspection to the visual model, and image / video parts pasted directly into a message are replaced with a text hint pointing at the visual model instead of failing the request. The terminal UI accepts pasted media whenever the current model handles it directly or a visual model is configured.
 
-This section is on by default (native — it works with no env vars set). To turn it off, set `KIMI_CODE_EXPERIMENTAL_VISUAL_MODEL=false` or add `visual-model = false` under `[experimental]`; while off, `[visual_model]` is inert and visual tasks fall back to the caller's model.
+The visual model is a native feature — it takes effect without any experimental flag or env var. Leave `model` unset to keep visual tasks bound to the caller's model.
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -362,7 +362,7 @@ In print mode (`kimi -p "<prompt>"`), Kimi Code stays alive after the main agent
 
 ## `workflows`
 
-`workflows` tunes the run limits of [dynamic workflows](../customization/workflows.md) and declares extra workflow directories. Dynamic workflows are experimental and disabled by default; see [Dynamic Workflows](../customization/workflows.md#enabling-dynamic-workflows) for how to enable them.
+`workflows` tunes the run limits of [dynamic workflows](../customization/workflows.md) and declares extra workflow directories. Dynamic workflows are always available — no flag or opt-in is required.
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -482,9 +482,9 @@ It sanitizes safe drafts and persists them automatically, excluding duplicates t
 
 Alongside the backend tables, the `active_search_provider` field of `[services]` selects which backend serves [`WebSearch`](../reference/tools.md#web-tools): `brave`, `langsearch`, or `moonshot`.
 
-Brave Search is a native, non-experimental backend, but it is not selected automatically: configure a `[services.brave]` API key and explicitly select Brave with `active_search_provider = "brave"` or `kimi search set brave`. LangSearch web search is still experimental and disabled by default: enable **LangSearch web search** under **Settings → Experiments**, set `KIMI_CODE_EXPERIMENTAL_LANGSEARCH_WEB_SEARCH=1`, or add `langsearch-web-search = true` under `[experimental]`. Moonshot search remains available when neither is the active provider. On the default `agent-core-v2` engine, selecting a search provider is atomic: the selected backend must have a valid API key or its `WebSearch` implementation and specialized tools are unavailable; there is no fallback to another backend.
+Brave Search is a native, non-experimental backend, but it is not selected automatically: configure a `[services.brave]` API key and explicitly select Brave with `active_search_provider = "brave"` or `kimi search set brave`. LangSearch web search is likewise native: configure a `[services.langsearch]` API key and explicitly select it with `active_search_provider = "langsearch"` or `kimi search set langsearch`. Moonshot search remains available when neither is the active provider. On the default `agent-core-v2` engine, selecting a search provider is atomic: the selected backend must have a valid API key or its `WebSearch` implementation and specialized tools are unavailable; there is no fallback to another backend.
 
-When `active_search_provider` names a backend, that backend serves `WebSearch` with no fallback: if its credentials are missing, web search is simply unavailable. LangSearch also requires its experiment to be enabled. When `active_search_provider` is absent, the runtime keeps the legacy precedence — configured LangSearch (with its experiment enabled) first, then configured Moonshot, then the managed Kimi OAuth search service. Running `kimi search set brave` or `kimi search set langsearch` both configures the backend and selects it (writes `active_search_provider`), migrating older configs to explicit selection.
+When `active_search_provider` names a backend, that backend serves `WebSearch` with no fallback: if its credentials are missing, web search is simply unavailable. When `active_search_provider` is absent, the runtime keeps the legacy precedence — configured LangSearch first, then configured Moonshot, then the managed Kimi OAuth search service. Running `kimi search set brave` or `kimi search set langsearch` both configures the backend and selects it (writes `active_search_provider`), migrating older configs to explicit selection.
 
 In the TUI, **Settings → Web Search** shows the current search and rerank providers at the top. **Web search provider** only configures or edits Moonshot, LangSearch, or Brave — it preserves the current selection and does not switch the active backend. Use **Active web search provider** to explicitly switch which configured backend serves `WebSearch`, and **Rerank provider** to configure, enable, disable, edit, or remove semantic reranking independently. Configuring Moonshot can reuse the current Kimi Code OAuth login or configure an API key for the China or Global API region.
 
@@ -560,9 +560,6 @@ When Brave is the active backend and its API key is valid, `WebSearch` is served
 The following example activates LangSearch search and the [LangSearch Semantic Rerank API](https://docs.langsearch.com/api/semantic-rerank-api):
 
 ```toml
-[experimental]
-langsearch-web-search = true
-
 [services.langsearch]
 api_key = "YOUR_API_KEY"
 tier = "free"
