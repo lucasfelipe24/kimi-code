@@ -28,4 +28,13 @@ describe('builtin agent profiles', () => {
     // user-defined profiles delegatable, tower-worker included.
     expect(agent.subagents).toBeUndefined();
   });
+
+  it('activates the Workflow tool for the main agent profile only', () => {
+    // The Workflow tool must reach the model for the main `agent` profile,
+    // and must stay out of subagent profiles so delegated tasks never nest
+    // workflow runs (cost + approval).
+    expect(profile('agent').tools).toContain('Workflow');
+    expect(profile('coder').tools).not.toContain('Workflow');
+    expect(profile('explore').tools).not.toContain('Workflow');
+  });
 });

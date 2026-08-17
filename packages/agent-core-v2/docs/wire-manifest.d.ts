@@ -706,7 +706,7 @@ interface UsageRecordPayload {
 interface WorkflowModeEnterPayload {
   _name: 'workflow_mode.enter';
   /** WorkflowModeTrigger */
-  trigger: 'manual' | 'command';
+  trigger: 'manual' | 'command' | 'auto';
 }
 
 /**

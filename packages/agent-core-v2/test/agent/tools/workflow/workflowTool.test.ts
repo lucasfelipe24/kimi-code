@@ -38,11 +38,13 @@ describe('WorkflowTool', () => {
   let ix: TestInstantiationService;
   let flagEnabled: boolean;
   let started: StartWorkflowRunInput[];
+  let catalogEntries: readonly WorkflowDefinition[];
 
   beforeEach(() => {
     disposables = new DisposableStore();
     flagEnabled = true;
     started = [];
+    catalogEntries = [];
     ix = createServices(disposables, {
       additionalServices: (reg) => {
         reg.definePartialInstance(IWorkflowRunService, {
@@ -53,8 +55,9 @@ describe('WorkflowTool', () => {
         });
         reg.definePartialInstance(IWorkflowCatalogService, {
           ready: Promise.resolve(),
-          list: () => [] as readonly WorkflowDefinition[],
-          get: () => undefined,
+          list: () => catalogEntries,
+          get: (name: string) =>
+            catalogEntries.find((entry) => entry.meta.name === name),
         });
         reg.definePartialInstance(IFlagService, { enabled: () => flagEnabled });
         reg.definePartialInstance(IConfigService, {
@@ -67,6 +70,24 @@ describe('WorkflowTool', () => {
     });
   });
   afterEach(() =>{  disposables.dispose(); });
+
+  it('lists the live catalog workflows in the tool description', () => {
+    catalogEntries = [
+      {
+        meta: {
+          name: 'deep-research',
+          description: 'Fan out research across sources.',
+          phases: [{ title: 'Research' }],
+        },
+        script: "return 'done';",
+        path: '',
+        source: 'builtin',
+      },
+    ];
+    const tool = ix.get(IWorkflowTool);
+    expect(tool.description).toContain('deep-research');
+    expect(tool.description).toContain('Fan out research across sources.');
+  });
 
   it('is gated by the dynamic-workflows flag through the contribution when-predicate', () => {
     const contribution = getAgentToolContributions().find(

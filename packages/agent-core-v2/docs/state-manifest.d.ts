@@ -1633,7 +1633,7 @@ export interface AgentStateSnapshot {
   'workflow.wasActive': boolean;
   // src/agent/workflow/workflowModeOps.ts
   // replayable · durable — folds: WorkflowModeEnter, WorkflowModeExit
-  'workflowMode': 'manual' | 'command' | null;
+  'workflowMode': 'manual' | 'auto' | 'command' | null;
   // src/features/dateChange/dateChangeService.ts
   'dateChange.seed': /* DateDisclosure — packages/agent-core-v2/src/features/dateChange/dateChangeService.ts */ {
     readonly localDate: string;

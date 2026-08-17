@@ -27,12 +27,12 @@ import { ContextSpliced } from '#/agent/contextMemory/contextEvents';
 import { IAgentSystemReminderService } from '#/agent/systemReminder/systemReminder';
 import { IAgentStateService } from '#/agent/state/agentState';
 import { IEventBus } from '#/app/event/eventBus';
+import { IWorkflowCatalogService } from '#/app/workflow/workflowCatalog';
 import { IEventDispatcher } from '#/state/eventDispatcher';
-import ENTER_REMINDER from './enter-reminder.md?raw';
 import EXIT_REMINDER from './exit-reminder.md?raw';
 import { IWorkflowModeService, type WorkflowModeTrigger } from './workflowMode';
 import { WorkflowModeEnter, WorkflowModeExit, workflowModeKey } from './workflowModeOps';
-import { WorkflowModeInjection } from './workflowModeInjector';
+import { WorkflowModeInjection, buildWorkflowEnterReminder } from './workflowModeInjector';
 
 export class WorkflowModeService extends Disposable implements IWorkflowModeService {
   declare readonly _serviceBrand: undefined;
@@ -44,16 +44,17 @@ export class WorkflowModeService extends Disposable implements IWorkflowModeServ
     @IEventBus private readonly eventBus: IEventBus,
     @IAgentContextInjectorService dynamicInjector: IAgentContextInjectorService,
     @IAgentStateService private readonly agentState: IAgentStateService,
+    @IWorkflowCatalogService private readonly catalog: IWorkflowCatalogService,
   ) {
     super();
     this.agentState.contributeState(workflowModeKey);
-    this._register(new WorkflowModeInjection(dynamicInjector, this, this.agentState));
+    this._register(new WorkflowModeInjection(dynamicInjector, this.context, this, this.catalog, this.agentState));
   }
 
   enter(trigger: WorkflowModeTrigger): void {
     if (this.agentState.get(workflowModeKey) !== null) return;
     void this.dispatcher.dispatch(new WorkflowModeEnter({ trigger }));
-    this.reminders.appendSystemReminder(ENTER_REMINDER, {
+    this.reminders.appendSystemReminder(buildWorkflowEnterReminder(this.catalog), {
       kind: 'injection',
       variant: 'workflow_mode',
     });
