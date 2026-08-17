@@ -4814,11 +4814,15 @@ describe('v1↔v2 event & interaction parity', () => {
       // fails before the first step exists, and the trailing `error` event
       // carries the same code but different message wording (v1: the
       // login-guided 'LLM not set' text; v2: 'Model not set' — the same
-      // pinned wording family as setModel / generateAgentsMd).
+      // pinned wording family as setModel / generateAgentsMd). The fork's
+      // volatile `run.ended` signal — v2-only, engine-internal (it drives
+      // automatic memory extraction) and intentionally absent from v1 — also
+      // lands on the v2 stream, so it is projected out as well.
       const projectFailure = (events: readonly Event[]): unknown[] =>
         projectEventStream(events, input.sessionId).flatMap((projected) => {
           const entry = projected as { type: string; code?: string };
           if (entry.type === 'turn.step.interrupted') return [];
+          if (entry.type === 'run.ended') return [];
           if (entry.type === 'error') return { type: entry.type, code: entry.code };
           return entry;
         });

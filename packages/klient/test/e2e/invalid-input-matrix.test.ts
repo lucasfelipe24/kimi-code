@@ -1007,8 +1007,12 @@ describe('tool exchange structure', () => {
 
     await promptAndWait(ctx, [{ type: 'text', text: 'second message' }]);
 
-    expect(requests).toHaveLength(2);
-    const userMessages = openAiMessages(1).filter((message) => message['role'] === 'user');
+    // The fork's native memory auto-extraction fires one extra provider
+    // request when the aborted run drains (extracting from the interrupted
+    // transcript), so the wire carries three requests: the hung first prompt,
+    // the extraction pass, and the second prompt.
+    expect(requests).toHaveLength(3);
+    const userMessages = openAiMessages(2).filter((message) => message['role'] === 'user');
     // A deliberate user cancel injects an interruption reminder between the
     // aborted turn's prompt and the next user message, so the two prompts no
     // longer merge into one wire message.

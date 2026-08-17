@@ -353,8 +353,33 @@ export class McpConnectionManager {
    *    An unknown name is connected straight from the resolver result, which
    *    covers servers added to a config file while the session was live.
    */
-  async reconnect(name: string, config?: McpServerConfig): Promise<void> {
-    let entry = this.entries.get(name);
+  reconnect(name: string, config?: McpServerConfig): Promise<void> {
+    // Join an in-flight attempt: manual, RPC, OAuth, and tool-recovery
+    // callers all share one attempt per server, so a second call while a
+    // reconnect is running returns the same promise instead of starting a
+    // competing one (see `reconnectAndJoin`).
+    const existing = this.inFlightReconnects.get(name);
+    if (existing !== undefined) return existing;
+    const work = this.performReconnect(name, config)
+      .then(() => {
+        const current = this.entries.get(name);
+        if (current?.status === 'connected') return;
+        throw new KimiError(
+          ErrorCodes.MCP_STARTUP_FAILED,
+          current?.error ?? `MCP server failed to reconnect: ${name}`,
+        );
+      })
+      .finally(() => {
+        if (this.inFlightReconnects.get(name) === work) {
+          this.inFlightReconnects.delete(name);
+        }
+      });
+    this.inFlightReconnects.set(name, work);
+    return work;
+  }
+
+  private async performReconnect(name: string, config?: McpServerConfig): Promise<void> {
+    const entry = this.entries.get(name);
     if (entry === undefined) {
       const resolved = await this.options.configResolver?.(name);
       if (resolved === undefined || resolved.config.enabled === false) {
@@ -395,26 +420,9 @@ export class McpConnectionManager {
       }
     }
     if (entry.config.enabled === false) {
-      return Promise.reject(
-        new KimiError(ErrorCodes.MCP_SERVER_DISABLED, `MCP server is disabled: ${name}`),
-      );
+      throw new KimiError(ErrorCodes.MCP_SERVER_DISABLED, `MCP server is disabled: ${name}`);
     }
-    const work = this.reconnectEntry(entry)
-      .then(() => {
-        const current = this.entries.get(name);
-        if (current?.status === 'connected') return;
-        throw new KimiError(
-          ErrorCodes.MCP_STARTUP_FAILED,
-          current?.error ?? `MCP server failed to reconnect: ${name}`,
-        );
-      })
-      .finally(() => {
-        if (this.inFlightReconnects.get(name) === work) {
-          this.inFlightReconnects.delete(name);
-        }
-      });
-    this.inFlightReconnects.set(name, work);
-    return work;
+    await this.reconnectEntry(entry);
   }
 
   private async reconnectEntry(entry: InternalEntry): Promise<void> {
