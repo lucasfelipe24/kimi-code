@@ -295,13 +295,6 @@ describe('goal command resolution', () => {
 });
 
 describe('workflow command resolution', () => {
-  beforeEach(() => {
-    setExperimentalFeatures([{ id: 'dynamic-workflows', enabled: true }]);
-  });
-  afterEach(() => {
-    setExperimentalFeatures([]);
-  });
-
   it('blocks workflow mode toggles while streaming and compacting', () => {
     expect(resolve('/workflow on', { isStreaming: true })).toEqual({
       kind: 'blocked',

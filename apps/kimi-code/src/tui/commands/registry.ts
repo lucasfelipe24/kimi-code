@@ -347,7 +347,6 @@ export const BUILTIN_SLASH_COMMANDS = [
       const subcommand = args.trim().split(/\s+/, 1)[0];
       return subcommand === 'on' || subcommand === 'off' ? 'idle-only' : 'always';
     },
-    experimentalFlag: 'dynamic-workflows',
   },
   {
     name: 'mcp',

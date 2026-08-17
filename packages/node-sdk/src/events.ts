@@ -107,8 +107,7 @@ export type {
 
 export type { CronFiredEvent } from '@moonshot-ai/agent-core';
 
-// Dynamic-workflow run lifecycle events (require the 'dynamic-workflows'
-// experimental flag).
+// Dynamic-workflow run lifecycle events.
 export type {
   WorkflowRunStartedEvent,
   WorkflowRunPhaseEvent,

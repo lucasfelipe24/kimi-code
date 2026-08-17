@@ -1,6 +1,6 @@
 /**
  * Scenario: public SDK dynamic-workflow surface.
- * Responsibilities: flag gating, listing/saving workflows, running an inline
+ * Responsibilities: listing/saving workflows, running an inline
  * script (no `agent()` calls, so no model provider is needed), run inspection,
  * and receiving `workflow.run.*` events through `session.onEvent`.
  * Wiring: the in-process core and filesystem are real; nothing is mocked.
@@ -10,24 +10,16 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { createKimiHarness, type Event, type KimiError, type Session } from '#/index';
+import { createKimiHarness, type Event, type Session } from '#/index';
 
 import { makeTempDir, removeTempDirs, waitForSDKEvent } from './session-runtime-helpers';
 import { TEST_IDENTITY } from './test-identity';
 
-const FLAG_ENV = 'KIMI_CODE_EXPERIMENTAL_DYNAMIC_WORKFLOWS';
-
 const tempDirs: string[] = [];
 
-beforeEach(() => {
-  vi.stubEnv('KIMI_CODE_EXPERIMENTAL_FLAG', '');
-  vi.stubEnv(FLAG_ENV, '1');
-});
-
 afterEach(async () => {
-  vi.unstubAllEnvs();
   await removeTempDirs(tempDirs);
 });
 
@@ -45,23 +37,6 @@ return { name: '${name}', args };
 }
 
 describe('Session workflows', () => {
-  it('rejects workflow methods when the flag is disabled', async () => {
-    vi.stubEnv(FLAG_ENV, '');
-    const homeDir = await makeTempDir(tempDirs, 'kimi-sdk-wf-home-');
-    const workDir = await makeTempDir(tempDirs, 'kimi-sdk-wf-work-');
-    const harness = createKimiHarness({ homeDir, identity: TEST_IDENTITY });
-
-    try {
-      const session = await harness.createSession({ id: 'ses_sdk_wf_flag_off', workDir });
-      await expect(session.listWorkflows()).rejects.toMatchObject({
-        name: 'KimiError',
-        code: 'request.invalid',
-      } satisfies Partial<KimiError>);
-    } finally {
-      await harness.close();
-    }
-  });
-
   it('lists project workflows and inspects their script', async () => {
     const homeDir = await makeTempDir(tempDirs, 'kimi-sdk-wf-home-');
     const workDir = await makeTempDir(tempDirs, 'kimi-sdk-wf-work-');

@@ -243,14 +243,7 @@ async function resolveRunId(
 }
 
 function showWorkflowError(host: SlashCommandHost, error: unknown): void {
-  const message = formatErrorMessage(error);
-  if (message.includes('request.invalid') || message.includes('dynamic-workflows')) {
-    host.showError(
-      `Dynamic workflows are experimental — enable them with KIMI_CODE_EXPERIMENTAL_DYNAMIC_WORKFLOWS=1 or /experiments. (${message})`,
-    );
-    return;
-  }
-  host.showError(message);
+  host.showError(formatErrorMessage(error));
 }
 
 async function toggleWorkflowMode(

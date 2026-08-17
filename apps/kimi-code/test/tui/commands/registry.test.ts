@@ -236,7 +236,6 @@ describe('isSlashCommandVisible', () => {
 describe('sanitizeSlashInputForHistory', () => {
   it('strips arguments from gated commands', () => {
     expect(sanitizeSlashInputForHistory('/memory list secret-api-key')).toBe('/memory');
-    expect(sanitizeSlashInputForHistory('/workflow run demo-flow')).toBe('/workflow');
   });
 
   it('keeps gated commands without arguments verbatim', () => {
@@ -245,6 +244,9 @@ describe('sanitizeSlashInputForHistory', () => {
 
   it('keeps ungated commands and non-commands verbatim', () => {
     expect(sanitizeSlashInputForHistory('/title My secret title')).toBe('/title My secret title');
+    expect(sanitizeSlashInputForHistory('/workflow run demo-flow')).toBe(
+      '/workflow run demo-flow',
+    );
     expect(sanitizeSlashInputForHistory('/does-not-exist arg')).toBe('/does-not-exist arg');
     expect(sanitizeSlashInputForHistory('hello world')).toBe('hello world');
   });
