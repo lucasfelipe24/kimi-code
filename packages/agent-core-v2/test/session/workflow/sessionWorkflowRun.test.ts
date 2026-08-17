@@ -14,7 +14,9 @@ import type { AgentTask, AgentTaskSettlement, AgentTaskSink } from '#/agent/task
 import { IAgentUserToolService } from '#/agent/userTool/userTool';
 import type { AgentProfile } from '#/app/agentProfileCatalog/agentProfileCatalog';
 import { IConfigService } from '#/app/config/config';
-import { IEventBus, type DomainEvent } from '#/app/event/eventBus';
+import type { Event2, Event2Class } from '#/app/event/event2';
+import { IEventBus } from '#/app/event/eventBus';
+import { IEventDispatcher } from '#/state/eventDispatcher';
 import { IFlagService } from '#/app/flag/flag';
 import { DEFAULT_WORKFLOWS_CONFIG, WORKFLOWS_SECTION } from '#/app/workflow/configSection';
 import { WorkflowErrors } from '#/app/workflow/errors';
@@ -36,6 +38,7 @@ import {
 } from '#/session/subagent/subagent';
 import {
   IWorkflowRunService,
+  type WorkflowRunCompletedEvent,
   type WorkflowRunRecord,
 } from '#/session/workflow/sessionWorkflowRun';
 import { WorkflowRunService } from '#/session/workflow/sessionWorkflowRunService';
@@ -136,7 +139,7 @@ describe('WorkflowRunService', () => {
   let disposables: DisposableStore;
   let ix: TestInstantiationService;
   let taskService: TestAgentTaskService;
-  let events: DomainEvent[];
+  let events: Event2<any>[];
   let subagentRuns: { agentId: string; request: AgentRunRequest }[];
   let subagentCompletion: (opts: RunAgentOptions) => Promise<{ summary: string }>;
 
@@ -148,8 +151,21 @@ describe('WorkflowRunService', () => {
     subagentCompletion = () => Promise.resolve({ summary: 'agent answer' });
 
     const eventBus = {
-      publish: (event: DomainEvent) => events.push(event),
+      publish: (event: Event2<any>) => events.push(event),
       subscribe: () => ({ dispose: () => {} }),
+    };
+    const dispatcher: IEventDispatcher = {
+      _serviceBrand: undefined,
+      hooks: {} as IEventDispatcher['hooks'],
+      dispatch: (event) => {
+        if ((event.constructor as Event2Class).observable) eventBus.publish(event);
+        return Promise.resolve();
+      },
+      history: () => [],
+      checkpointDepth: () => 0,
+      undo: () => {},
+      restore: async () => {},
+      flush: async () => {},
     };
     const permissionMode = { mode: 'manual' as const, setMode: () => {} };
     const userTools = { inheritUserTools: () => {} };
@@ -159,6 +175,7 @@ describe('WorkflowRunService', () => {
       [IAgentPermissionModeService as ServiceIdentifier<unknown>, permissionMode],
       [IAgentUserToolService as ServiceIdentifier<unknown>, userTools],
       [IEventBus as ServiceIdentifier<unknown>, eventBus],
+      [IEventDispatcher as ServiceIdentifier<unknown>, dispatcher],
     ]);
 
     const lifecycle = {
@@ -360,7 +377,9 @@ describe('WorkflowRunService', () => {
     // assert presence rather than last position.
     expect(
       events.some(
-        (event) => event.type === 'workflow.run.completed' && event.status === 'cancelled',
+        (event) =>
+          event.type === 'workflow.run.completed' &&
+          (event as unknown as WorkflowRunCompletedEvent).status === 'cancelled',
       ),
     ).toBe(true);
 

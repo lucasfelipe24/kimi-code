@@ -54,6 +54,8 @@ import {
   type AgentLLMRequestOverrides,
 } from '#/agent/llmRequester/llmRequester';
 import { IAgentScopeContext, makeAgentScopeContext } from '#/agent/scopeContext/scopeContext';
+import { RunEnded } from '#/agent/loop/turnEvents';
+import { TurnEnded } from '#/agent/loop/turnOps';
 import { IConfigService } from '#/app/config/config';
 import { IEventBus } from '#/app/event/eventBus';
 import {
@@ -309,11 +311,11 @@ describe('AgentMemoryExtractService', () => {
   }
 
   function endTurn(reason: 'completed' | 'cancelled' | 'failed' | 'blocked' = 'completed'): void {
-    eventBus.publish({ type: 'turn.ended', turnId: 1, reason });
+    eventBus.publish(new TurnEnded({ turnId: 1, reason }));
   }
 
   function runEnded(): void {
-    eventBus.publish({ type: 'run.ended' });
+    eventBus.publish(new RunEnded({}));
   }
 
   function extractEvents(): TrackedEvent[] {

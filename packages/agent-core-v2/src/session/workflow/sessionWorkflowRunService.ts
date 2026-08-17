@@ -28,6 +28,7 @@ import { ILogService } from '#/_base/log/log';
 import { IAgentTaskService } from '#/agent/task/task';
 import type { AgentTaskSink } from '#/agent/task/types';
 import { IConfigService } from '#/app/config/config';
+import type { Event2 } from '#/app/event/event2';
 import { IEventBus } from '#/app/event/eventBus';
 import { IFlagService } from '#/app/flag/flag';
 import { WORKFLOWS_SECTION, type WorkflowsConfig } from '#/app/workflow/configSection';
@@ -228,7 +229,7 @@ export class WorkflowRunService extends Disposable implements IWorkflowRunServic
   private publish(caller: IAgentScopeHandle, event: WorkflowRunBusEvent): void {
     // The event bus is Agent-scoped: publish on the caller agent's bus through
     // a scope-handle borrow, same as the swarm's subagent.* facts.
-    caller.accessor.get(IEventBus)?.publish(event);
+    caller.accessor.get(IEventBus)?.publish(event as unknown as Event2<any>);
   }
 
   private async runToCompletion(

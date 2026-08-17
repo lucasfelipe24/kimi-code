@@ -44,10 +44,13 @@ import { IAtomicDocumentStore } from '#/persistence/interface/atomicDocumentStor
 import { IFileSystemStorageService } from '#/persistence/interface/storage';
 import { ITelemetryService } from '#/app/telemetry/telemetry';
 import { IAgentToolRegistryService } from '#/agent/toolRegistry/toolRegistry';
-import { createHooks } from '#/hooks';
-import { IWireService, type WireHooks } from '#/wire/wire';
+import { IWireService } from '#/wire/wire';
 import { IEventBus } from '#/app/event/eventBus';
 import { EventBusService } from '#/app/event/eventBusService';
+import { IAgentBlobService } from '#/agent/blob/agentBlobService';
+import { ContextSpliced } from '#/agent/contextMemory/contextEvents';
+import { IEventDispatcher } from '#/state/eventDispatcher';
+import { EventDispatcherService } from '#/state/eventDispatcherService';
 import { ITaskService } from '#/app/task/task';
 import { InMemoryStorageService } from '#/persistence/backends/memory/inMemoryStorageService';
 
@@ -66,21 +69,23 @@ function fakeProcessTask(): AgentTask {
   };
 }
 
-type RestoreHook = IWireService['hooks']['onDidRestore'];
+type RestoreHook = IEventDispatcher['hooks']['onDidRestore'];
 
-function stubWireService(captureRestoreHook?: (hook: RestoreHook) => void): IWireService {
-  const hooks = createHooks<WireHooks, keyof WireHooks>(['onDidRestore']);
-  captureRestoreHook?.(hooks.onDidRestore);
+const noopBlob: IAgentBlobService = {
+  _serviceBrand: undefined,
+  offloadParts: async (parts) => parts,
+  loadParts: async (parts) => parts,
+  isBlobRef: () => false,
+};
+
+function stubWireService(): IWireService {
   return {
     _serviceBrand: undefined,
-    hooks,
-    dispatch: () => {},
     seal: async () => {},
-    restore: async () => {},
+    appendRecord: () => {},
+    readJournal: async function* () {},
     flush: async () => {},
-    getModel: (model) => model.initial() as never,
-    subscribe: () => toDisposable(() => {}),
-  } as IWireService;
+  };
 }
 
 describe('AgentTaskService', () => {
@@ -161,7 +166,9 @@ describe('AgentTaskService', () => {
       flush: async () => {},
       close: async () => {},
     });
+    ix.stub(IAgentBlobService, noopBlob);
     ix.set(IAgentStateService, new AgentStateService());
+    ix.set(IEventDispatcher, new SyncDescriptor(EventDispatcherService));
     ix.set(IAgentTaskService, new SyncDescriptor(AgentTaskService));
   });
   afterEach(() => {
@@ -292,15 +299,15 @@ describe('AgentTaskService', () => {
     await expect(waited).resolves.toMatchObject({ taskId });
   });
 
-  function capturingWire(): { dispatched: { type: string; payload: unknown }[] } {
-    const dispatched: { type: string; payload: unknown }[] = [];
+  function capturingWire(): { records: Record<string, unknown>[] } {
+    const records: Record<string, unknown>[] = [];
     ix.stub(IWireService, {
       ...stubWireService(),
-      dispatch: (...ops: { type: string; payload: unknown }[]) => {
-        dispatched.push(...ops);
+      appendRecord: (record: Record<string, unknown>) => {
+        records.push(record);
       },
     } as IWireService);
-    return { dispatched };
+    return { records };
   }
 
   function outputtingTask(output: string): AgentTask {
@@ -314,34 +321,33 @@ describe('AgentTaskService', () => {
   }
 
   it('task.terminated dispatch carries the retained output tail as outputTail', async () => {
-    const { dispatched } = capturingWire();
+    const { records } = capturingWire();
     const svc = ix.get(IAgentTaskService);
     const taskId = svc.registerTask(outputtingTask('line one\nline two\n'));
 
     await svc.wait(taskId, 1000);
 
-    const terminated = dispatched.filter((op) => op.type === 'task.terminated');
+    const terminated = records.filter((record) => record['type'] === 'task.terminated');
     expect(terminated).toHaveLength(1);
-    expect(terminated[0]?.payload).toMatchObject({
+    expect(terminated[0]).toMatchObject({
       info: { taskId, status: 'completed' },
       outputTail: 'line one\nline two\n',
     });
   });
 
   it('task.terminated outputTail is bounded to the last 4 KiB of retained output', async () => {
-    const { dispatched } = capturingWire();
+    const { records } = capturingWire();
     const svc = ix.get(IAgentTaskService);
     const taskId = svc.registerTask(outputtingTask('x'.repeat(8 * 1024)));
 
     await svc.wait(taskId, 1000);
 
-    const terminated = dispatched.find((op) => op.type === 'task.terminated');
-    const payload = terminated?.payload as { outputTail?: string };
-    expect(payload.outputTail).toBe('x'.repeat(4 * 1024));
+    const terminated = records.find((record) => record['type'] === 'task.terminated');
+    expect(terminated?.['outputTail']).toBe('x'.repeat(4 * 1024));
   });
 
   it('task.terminated dispatch omits outputTail when the task produced no output', async () => {
-    const { dispatched } = capturingWire();
+    const { records } = capturingWire();
     const svc = ix.get(IAgentTaskService);
     const taskId = svc.registerTask({
       ...fakeProcessTask(),
@@ -352,9 +358,8 @@ describe('AgentTaskService', () => {
 
     await svc.wait(taskId, 1000);
 
-    const terminated = dispatched.find((op) => op.type === 'task.terminated');
-    const payload = terminated?.payload as { outputTail?: string };
-    expect(payload.outputTail).toBeUndefined();
+    const terminated = records.find((record) => record['type'] === 'task.terminated');
+    expect(terminated?.['outputTail']).toBeUndefined();
   });
 
   function stubTaskConfig(value: unknown): void {
@@ -584,7 +589,6 @@ describe('AgentTaskService', () => {
     agentId: string,
     docs: IAtomicDocumentStore,
     bytes: IFileSystemStorageService,
-    captureRestoreHook?: (hook: RestoreHook) => void,
   ): TestInstantiationService {
     const ix = disposables.add(new TestInstantiationService());
     ix.stub(ILogService, stubLog());
@@ -592,7 +596,7 @@ describe('AgentTaskService', () => {
       register: () => toDisposable(() => {}),
       list: () => [],
     });
-    ix.stub(IWireService, stubWireService(captureRestoreHook));
+    ix.stub(IWireService, stubWireService());
     ix.stub(IEventBus, disposables.add(new EventBusService()));
     ix.stub(IAgentContextInjectorService, {
       register: () => toDisposable(() => {}),
@@ -630,7 +634,9 @@ describe('AgentTaskService', () => {
     );
     ix.stub(IAtomicDocumentStore, docs);
     ix.stub(IFileSystemStorageService, bytes);
+    ix.stub(IAgentBlobService, noopBlob);
     ix.set(IAgentStateService, new AgentStateService());
+    ix.set(IEventDispatcher, new SyncDescriptor(EventDispatcherService));
     ix.set(IAgentTaskService, new SyncDescriptor(AgentTaskService));
     return ix;
   }
@@ -698,9 +704,9 @@ describe('AgentTaskService', () => {
       new TextEncoder().encode('legacy output'),
     );
     let restoreHook!: RestoreHook;
-    const main = buildAgentIx('main', docs, bytes, (hook) => {
-      restoreHook = hook;
-    }).get(IAgentTaskService);
+    const mainIx = buildAgentIx('main', docs, bytes);
+    const main = mainIx.get(IAgentTaskService);
+    restoreHook = mainIx.get(IEventDispatcher).hooks.onDidRestore;
 
     await restoreHook.run({});
 
@@ -735,9 +741,9 @@ describe('AgentTaskService', () => {
       detached: true,
     });
     let restoreHook!: RestoreHook;
-    const subagent = buildAgentIx('agent-1', docs, bytes, (hook) => {
-      restoreHook = hook;
-    }).get(IAgentTaskService);
+    const subIx = buildAgentIx('agent-1', docs, bytes);
+    const subagent = subIx.get(IAgentTaskService);
+    restoreHook = subIx.get(IEventDispatcher).hooks.onDidRestore;
 
     await restoreHook.run({});
 
@@ -754,12 +760,11 @@ describe('AgentTaskService', () => {
   }
 
   function publishCompactionSplice(): void {
-    eventBus.publish({
-      type: 'context.spliced',
+    eventBus.publish(new ContextSpliced({
       start: 0,
       deleteCount: 2,
       messages: [compactionSummary('Compacted summary.')],
-    });
+    }));
   }
 
   async function backgroundTaskReminder(

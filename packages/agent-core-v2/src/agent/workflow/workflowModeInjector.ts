@@ -11,7 +11,7 @@
  */
 
 import { Disposable } from '#/_base/di/lifecycle';
-import { defineState } from '#/_base/state/stateRegistry';
+import { defineState } from '#/state/state';
 import { IAgentContextInjectorService } from '#/agent/contextInjector/contextInjector';
 import { IAgentStateService } from '#/agent/state/agentState';
 import { IWorkflowModeService } from '#/agent/workflow/workflowMode';
@@ -29,7 +29,7 @@ export class WorkflowModeInjection extends Disposable {
     @IAgentStateService private readonly states: IAgentStateService,
   ) {
     super();
-    this.states.register(workflowWasActiveKey);
+    this.states.contributeState(workflowWasActiveKey);
 
     this._register(
       dynamicInjector.register(WORKFLOW_MODE_INJECTION_VARIANT, () => {

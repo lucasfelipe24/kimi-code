@@ -35,7 +35,8 @@ import { IAuthLegacyService } from '#/app/authLegacy/authLegacy';
 import { AuthLegacyService } from '#/app/authLegacy/authLegacyService';
 import { IConfigService } from '#/app/config/config';
 import { ConfigRegistry } from '#/app/config/configService';
-import { type DomainEvent, IEventService } from '#/app/event/event';
+import { IEventService } from '#/app/event/event';
+import type { Event2 } from '#/app/event/event2';
 import { IFlagService } from '#/app/flag/flag';
 import { ILogService } from '#/_base/log/log';
 import { IAgentIdentity } from '#/app/agentIdentity/agentIdentity';
@@ -101,7 +102,7 @@ describe('OAuthService', () => {
   let providerSet: ReturnType<typeof vi.fn>;
   let configSet: ReturnType<typeof vi.fn>;
   let configReplace: ReturnType<typeof vi.fn>;
-  let events: DomainEvent[];
+  let events: Event2[];
   let providerChangedEmitter: Emitter<ProvidersChangedEvent>;
 
   beforeEach(() => {
@@ -195,7 +196,7 @@ describe('OAuthService', () => {
           error: vi.fn(),
         });
         reg.definePartialInstance(IEventService, {
-          publish: (event: DomainEvent) => events.push(event),
+          publish: (event: Event2) => events.push(event),
           subscribe: () => ({ dispose: () => {} }),
         });
         reg.defineInstance(IOAuthToolkit, toolkit as unknown as IOAuthToolkit);
@@ -780,10 +781,10 @@ describe('OAuthService', () => {
     expect(configReplace).toHaveBeenCalledWith('defaultModel', 'kimi-code/kimi-k2');
     expect(configReplace).toHaveBeenCalledWith('thinking', { enabled: true });
     expect(events).toEqual([
-      {
+      expect.objectContaining({
         type: 'event.model_catalog.changed',
         payload: result,
-      },
+      }),
     ]);
   });
 

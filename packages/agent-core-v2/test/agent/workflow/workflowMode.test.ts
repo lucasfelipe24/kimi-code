@@ -5,20 +5,26 @@ import { TestInstantiationService } from '#/_base/di/test';
 import { IAgentContextInjectorService } from '#/agent/contextInjector/contextInjector';
 import { IAgentContextMemoryService } from '#/agent/contextMemory/contextMemory';
 import { IAgentStateService } from '#/agent/state/agentState';
-import { AgentStateService } from '#/agent/state/agentStateService';
 import { IAgentSystemReminderService } from '#/agent/systemReminder/systemReminder';
 import { AgentSystemReminderService } from '#/agent/systemReminder/systemReminderService';
 import { IWorkflowModeService } from '#/agent/workflow/workflowMode';
 import { WorkflowModeService } from '#/agent/workflow/workflowModeService';
-import { WorkflowModel } from '#/agent/workflow/workflowModeOps';
+import { workflowModeKey } from '#/agent/workflow/workflowModeOps';
 import { IAppendLogStore } from '#/persistence/interface/appendLogStore';
 import { IFileSystemStorageService } from '#/persistence/interface/storage';
 import { AppendLogStore } from '#/persistence/backends/node-fs/appendLogStore';
 import { InMemoryStorageService } from '#/persistence/backends/memory/inMemoryStorageService';
-import { type DomainEvent, IEventBus } from '#/app/event/eventBus';
+import { IEventBus } from '#/app/event/eventBus';
 import { EventBusService } from '#/app/event/eventBusService';
+import { AgentStatusUpdated } from '#/agent/usage/usageEvents';
+import { ContextSpliced } from '#/agent/contextMemory/contextEvents';
 import { stubContextMemory } from '../contextMemory/stubs';
-import { registerTestAgentWire, restoreTestAgentWire, testWireScope } from '../../wire/stubs';
+import {
+  registerTestAgentWire,
+  registerTestEventDispatcher,
+  restoreTestEventDispatcher,
+  testWireScope,
+} from '../../wire/stubs';
 import { AGENT_WIRE_RECORD_KEY, type WireRecord } from '#/wire/record';
 
 describe('WorkflowModeService', () => {
@@ -36,8 +42,8 @@ describe('WorkflowModeService', () => {
       log: ix.get(IAppendLogStore),
       eventBus: ix.get(IEventBus),
     });
+    registerTestEventDispatcher(ix);
     ix.set(IAgentSystemReminderService, new SyncDescriptor(AgentSystemReminderService));
-    ix.set(IAgentStateService, new AgentStateService());
     ix.stub(IAgentContextInjectorService, {
       register: () => ({ dispose: () => {} }),
       reconcileWhenIdle: async () => {},
@@ -49,8 +55,28 @@ describe('WorkflowModeService', () => {
 
   it('enter / exit toggle isActive and emit agent.status.updated via wire', () => {
     const workflow = ix.get(IWorkflowModeService);
-    const events: DomainEvent[] = [];
-    disposables.add(ix.get(IEventBus).subscribe((e) => events.push(e)));
+    const events: {
+      readonly type: string;
+      readonly workflowMode?: boolean;
+      readonly start?: number;
+      readonly deleteCount?: number;
+      readonly messages?: readonly unknown[];
+    }[] = [];
+    disposables.add(
+      ix.get(IEventBus).subscribe((e) => {
+        if (e.type === 'agent.status.updated') {
+          events.push({ type: e.type, workflowMode: (e as AgentStatusUpdated).workflowMode });
+        } else if (e.type === 'context.spliced') {
+          const spliced = e as ContextSpliced;
+          events.push({
+            type: e.type,
+            start: spliced.start,
+            deleteCount: spliced.deleteCount,
+            messages: spliced.messages,
+          });
+        }
+      }),
+    );
 
     expect(workflow.isActive).toBe(false);
     workflow.enter('manual');
@@ -100,15 +126,18 @@ describe('WorkflowModeService', () => {
     const ix2 = disposables.add(new TestInstantiationService());
     ix2.stub(IFileSystemStorageService, new InMemoryStorageService());
     ix2.set(IAppendLogStore, new SyncDescriptor(AppendLogStore));
-    const fresh = registerTestAgentWire(ix2, testWireScope('wire', 'workflow-replay'), {
+    registerTestAgentWire(ix2, testWireScope('wire', 'workflow-replay'), {
       log: ix2.get(IAppendLogStore),
     });
-    await restoreTestAgentWire(
+    const fresh = registerTestEventDispatcher(ix2);
+    const freshState = ix2.get(IAgentStateService);
+    freshState.contributeState(workflowModeKey);
+    await restoreTestEventDispatcher(
       fresh,
       ix2.get(IAppendLogStore),
       testWireScope('wire', 'workflow-replay'),
       records,
     );
-    expect(fresh.getModel(WorkflowModel)).toBe('manual');
+    expect(freshState.get(workflowModeKey)).toBe('manual');
   });
 });

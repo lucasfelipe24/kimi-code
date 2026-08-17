@@ -36,11 +36,14 @@ import { errorInfo } from '#/_base/errors/codes';
 import { ILogService } from '#/_base/log/log';
 
 import { IAgentContextMemoryService } from '#/agent/contextMemory/contextMemory';
+import { ContextSpliced } from '#/agent/contextMemory/contextEvents';
 import {
   IAgentLLMRequesterService,
   type AgentLLMRequestFinish,
   type AgentLLMRequestOverrides,
 } from '#/agent/llmRequester/llmRequester';
+import { RunEnded } from '#/agent/loop/turnEvents';
+import { TurnEnded } from '#/agent/loop/turnOps';
 import { IConfigService } from '#/app/config/config';
 import { IEventBus } from '#/app/event/eventBus';
 import {
@@ -173,14 +176,14 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
     // `user` and `normalizeAutoExtractScope` never emits `user` from
     // extraction, so relaxing the main-agent gate adds no escalation path.
     this._register(
-      eventBus.subscribe('turn.ended', (event) => {
+      eventBus.subscribe(TurnEnded, (event) => {
         // Only mine COMPLETED turns: a cancelled/failed/blocked turn may be
         // half-finished or error state, not a clean unit to extract from.
         if (event.reason === 'completed') this.onTurnEnded();
       }),
     );
     this._register(
-      eventBus.subscribe('run.ended', () => {
+      eventBus.subscribe(RunEnded, () => {
         // The loop drained: mine whatever the last turn left behind (including
         // a cancelled/failed turn's tail) that no completed turn covered.
         this.onRunEnded();
@@ -190,7 +193,7 @@ export class AgentMemoryExtractService extends Disposable implements IAgentMemor
     // mutations (clear/undo/compaction), so a shrink+append during a request
     // cannot make the completion write back a stale cursor.
     this._register(
-      eventBus.subscribe('context.spliced', (event) => {
+      eventBus.subscribe(ContextSpliced, (event) => {
         const splice = {
           start: event.start,
           deleteCount: event.deleteCount,

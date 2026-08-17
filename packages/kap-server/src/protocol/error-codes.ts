@@ -134,12 +134,14 @@ export const ErrorCode = {
   CAPABILITY_UNSUPPORTED: 40925,
   /** runtime 当前不可用（未注册 / 不支持） */
   RUNTIME_UNAVAILABLE: 40926,
-  /** memory 写入需要受信任的 workspace（project scope） */
-  MEMORY_TRUST_REQUIRED: 40930,
+  /** prompt_id 已在该 agent 的历史中使用 */
+  PROMPT_ID_CONFLICT: 40927,
   /** memory 内容被拒绝（疑似凭证 / 敏感信息） */
-  MEMORY_CONTENT_REJECTED: 40927,
+  MEMORY_CONTENT_REJECTED: 40928,
   /** memory scope 已达容量上限 */
   MEMORY_SCOPE_FULL: 40929,
+  /** memory 写入需要受信任的 workspace（project scope） */
+  MEMORY_TRUST_REQUIRED: 40930,
 
   /** approval 60s 超时 */
   APPROVAL_EXPIRED: 41001,
