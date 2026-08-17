@@ -157,16 +157,14 @@ export class SessionAPIImpl implements PromisableMethods<SessionAPI> {
     return this.session.addAdditionalDir(payload.path, payload.persist);
   }
 
-  // ─── Dynamic workflows (gated by the 'dynamic-workflows' flag) ───────────
+  // ─── Dynamic workflows ───────────────────────────────────────────────────
 
   async listWorkflows(_payload: EmptyPayload): Promise<ListWorkflowsResult> {
-    this.requireWorkflowsEnabled();
     await this.session.workflows.load();
     return this.workflowListResult();
   }
 
   async getWorkflow(payload: GetWorkflowPayload): Promise<GetWorkflowResult> {
-    this.requireWorkflowsEnabled();
     await this.session.workflows.load();
     const workflow = this.session.workflows.get(payload.name);
     if (workflow === undefined) return { workflow: null };
@@ -174,7 +172,6 @@ export class SessionAPIImpl implements PromisableMethods<SessionAPI> {
   }
 
   async reloadWorkflows(_payload: EmptyPayload): Promise<ListWorkflowsResult> {
-    this.requireWorkflowsEnabled();
     await this.session.reloadWorkflows();
     return this.workflowListResult();
   }
@@ -187,7 +184,6 @@ export class SessionAPIImpl implements PromisableMethods<SessionAPI> {
    * the model/tool path carries its own approval flow).
    */
   async runWorkflow(payload: RunWorkflowPayload): Promise<RunWorkflowResult> {
-    this.requireWorkflowsEnabled();
     const limits = resolveWorkflowLimits(this.session.options.config?.workflows);
     let definition: WorkflowDefinition;
     if (payload.name !== undefined) {
@@ -225,26 +221,22 @@ export class SessionAPIImpl implements PromisableMethods<SessionAPI> {
   }
 
   listWorkflowRuns(_payload: EmptyPayload): ListWorkflowRunsResult {
-    this.requireWorkflowsEnabled();
     return {
       runs: this.session.workflowRuns.list().map((record) => snapshotWorkflowRun(record, 50)),
     };
   }
 
   getWorkflowRun(payload: GetWorkflowRunPayload): GetWorkflowRunResult {
-    this.requireWorkflowsEnabled();
     const record = this.session.workflowRuns.get(payload.runId);
     if (record === undefined) return { run: null };
     return { run: { ...snapshotWorkflowRun(record), script: record.script } };
   }
 
   cancelWorkflowRun(payload: CancelWorkflowRunPayload): CancelWorkflowRunResult {
-    this.requireWorkflowsEnabled();
     return { cancelled: this.session.workflowRuns.cancel(payload.runId) };
   }
 
   async saveWorkflow(payload: SaveWorkflowPayload): Promise<SaveWorkflowResult> {
-    this.requireWorkflowsEnabled();
     const limits = resolveWorkflowLimits(this.session.options.config?.workflows);
     let saved: { path: string };
     try {
@@ -268,15 +260,6 @@ export class SessionAPIImpl implements PromisableMethods<SessionAPI> {
     }).name;
     await this.session.reloadWorkflows();
     return { path: saved.path, name };
-  }
-
-  private requireWorkflowsEnabled(): void {
-    if (!this.session.experimentalFlags.enabled('dynamic-workflows')) {
-      throw new KimiError(
-        ErrorCodes.REQUEST_INVALID,
-        'Dynamic workflows are disabled. Enable the "dynamic-workflows" experimental flag (KIMI_CODE_EXPERIMENTAL_DYNAMIC_WORKFLOWS=1) first.',
-      );
-    }
   }
 
   private workflowListResult(): ListWorkflowsResult {
@@ -363,12 +346,10 @@ export class SessionAPIImpl implements PromisableMethods<SessionAPI> {
   }
 
   async enterWorkflowMode({ agentId, ...payload }: AgentScopedPayload<EnterWorkflowModePayload>) {
-    this.requireWorkflowsEnabled();
     return (await this.getAgent(agentId)).enterWorkflowMode(payload);
   }
 
   async exitWorkflowMode({ agentId, ...payload }: AgentScopedPayload<EmptyPayload>) {
-    this.requireWorkflowsEnabled();
     return (await this.getAgent(agentId)).exitWorkflowMode(payload);
   }
 

@@ -1,6 +1,6 @@
 /**
  * Scenario: dynamic-workflow RPC surface (SessionAPI via KimiCore).
- * Responsibilities: flag gating, discovery/list/get/reload, inline runs,
+ * Responsibilities: discovery/list/get/reload, inline runs,
  * run snapshots, cancel semantics, and saveWorkflow persistence.
  * Wiring: real in-process core + filesystem; no model provider is needed
  * because the workflow scripts under test never call `agent()`.
@@ -22,8 +22,6 @@ import {
   type Event,
   type SDKAPI,
 } from '../../src';
-
-const FLAG_ENV = 'KIMI_CODE_EXPERIMENTAL_DYNAMIC_WORKFLOWS';
 
 function workflowScript(name: string): string {
   return `export const meta = {
@@ -50,34 +48,11 @@ describe('workflow RPC surface', () => {
     homeDir = join(tmp, 'home');
     workDir = join(tmp, 'work');
     await mkdir(workDir, { recursive: true });
-    vi.stubEnv('KIMI_CODE_EXPERIMENTAL_FLAG', '');
-    vi.stubEnv(FLAG_ENV, '1');
   });
 
   afterEach(async () => {
     vi.unstubAllEnvs();
     await rm(tmp, { recursive: true, force: true });
-  });
-
-  it('rejects every workflow method when the flag is disabled', async () => {
-    vi.stubEnv(FLAG_ENV, '');
-    const { rpc } = await createTestRpc();
-    const created = await rpc.createSession({ id: 'ses_wf_flag_off', workDir });
-    const sessionId = created.id;
-
-    await expect(rpc.listWorkflows({ sessionId })).rejects.toMatchObject({
-      code: 'request.invalid',
-      message: expect.stringContaining('dynamic-workflows'),
-    });
-    await expect(rpc.runWorkflow({ sessionId, script: workflowScript('x') })).rejects.toMatchObject(
-      { code: 'request.invalid' },
-    );
-    await expect(rpc.listWorkflowRuns({ sessionId })).rejects.toMatchObject({
-      code: 'request.invalid',
-    });
-    await expect(
-      rpc.saveWorkflow({ sessionId, script: workflowScript('x'), scope: 'project' }),
-    ).rejects.toMatchObject({ code: 'request.invalid' });
   });
 
   it('lists, gets, and reloads project workflows', async () => {

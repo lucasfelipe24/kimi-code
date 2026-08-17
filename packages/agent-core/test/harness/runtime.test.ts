@@ -379,9 +379,6 @@ custom_headers = { "X-Test" = "1" }
     await writeFile(
       join(homeDir, 'config.toml'),
       `${baseModelConfig()}
-[experimental]
-langsearch-web-search = true
-
 [services]
 active_search_provider = "langsearch"
 
@@ -436,9 +433,6 @@ api_key = "sk-rerank-test"
     await writeFile(
       join(homeDir, 'config.toml'),
       `${baseModelConfig()}
-[experimental]
-langsearch-web-search = true
-
 [services.langsearch]
 api_key = "sk-test"
 tier = "tier1"
@@ -505,9 +499,6 @@ count = 5
     await writeFile(
       join(homeDir, 'config.toml'),
       `${baseModelConfig()}
-[experimental]
-langsearch-web-search = true
-
 [services.moonshot_search]
 base_url = "https://moonshot.example.test/search"
 api_key = "sk-moonshot-test"
