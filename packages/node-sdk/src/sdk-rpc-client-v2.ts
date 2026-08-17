@@ -132,6 +132,19 @@
  *   `ISessionBtwService`; `setSwarmMode` / `swarm` → the agent scope's
  *   `IAgentSwarmService` (the v2 port of v1's `SwarmMode`), with `swarm()`
  *   recomposed over the `setSwarmMode` + `prompt` overrides.
+ * - `listWorkflows` / `getWorkflow` / `reloadWorkflows` / `saveWorkflow` /
+ *   `runWorkflow` / `listWorkflowRuns` / `getWorkflowRun` /
+ *   `cancelWorkflowRun` → the App-scope `IWorkflowCatalogService` and the
+ *   Session-scope `IWorkflowRunService` (the engine services behind the
+ *   klient facade's `session(id).workflow()` — the facade's dispatcher does
+ *   not map the workflow services yet, see the section header);
+ *   `setWorkflowMode` → the agent scope's `IWorkflowModeService` (the v2
+ *   port of v1's `WorkflowMode`) with the same `reconcileWhenIdle('workflow_mode')`
+ *   pattern as swarm. The v1 shapes are restored by the pure mapping layer
+ *   in `src/v2/workflow-mapper.ts`, and `runWorkflow`'s `workflowName` /
+ *   `saveWorkflow`'s `name` are derived from the input name or the started
+ *   run's record / from the saved script's meta — both mirroring v1's
+ *   semantics.
  *   `createSessionWithKaos` / `resumeSessionWithKaos` deliberately keep the
  *   base class's kaos-ignoring degradation (the v2 engine has no kaos
  *   injection point — see the session-lifecycle section header), and
@@ -174,6 +187,7 @@ import {
   drainSessionIndexMirror,
   ensureKimiHome,
   ensureMainAgent,
+  extractWorkflowMeta,
   IAgentActivityView,
   IAgentContextInjectorService,
   IAgentContextMemoryService,
@@ -213,6 +227,9 @@ import {
   ISessionSkillCatalog,
   ISessionWorkspaceContext,
   ITelemetryService,
+  IWorkflowCatalogService,
+  IWorkflowModeService,
+  IWorkflowRunService,
   IWorkspaceAliases,
   ISessionActivityView,
   IWorkspaceMemoryCatalog,
@@ -225,6 +242,7 @@ import {
   programForSession,
   resumeSessionById,
   sessionDirOf,
+  WORKFLOWS_SECTION,
   workspacePersistenceScope,
   logSeed,
   MAIN_AGENT_ID,
@@ -238,6 +256,7 @@ import {
   resolveKimiHome,
   resolveLoggingConfig,
   resolvePrintBackgroundMode,
+  resolveWorkflowLimits,
   summarizeSkill,
   type IAgentScopeHandle,
   type IDisposable,
@@ -245,6 +264,7 @@ import {
   type Scope,
   type ServicesAccessor,
   type SessionSummary as V2SessionSummary,
+  type WorkflowsConfig,
 } from '@moonshot-ai/agent-core-v2';
 import type { AgentHandle, Klient } from '@moonshot-ai/klient';
 import { createKlient } from '@moonshot-ai/klient/memory';
@@ -270,6 +290,7 @@ import {
   type SetSessionPlanModeRpcInput,
   type SetSessionSwarmModeRpcInput,
   type SetSessionThinkingRpcInput,
+  type SetSessionWorkflowModeRpcInput,
   type UpdateSessionMetadataRpcInput,
 } from '#/rpc';
 import type {
@@ -363,6 +384,22 @@ import {
   v2SummaryToSessionSummary,
 } from '#/v2/session-mapper';
 import { SessionEventWiring } from '#/v2/session-wiring';
+import {
+  workflowCancelToV1,
+  workflowGetToV1,
+  workflowListToV1,
+  workflowRunGetToV1,
+  workflowRunListToV1,
+  workflowRunStartedToV1,
+  workflowSaveToV1,
+  type WorkflowCancelResultV1,
+  type WorkflowGetResultV1,
+  type WorkflowListResultV1,
+  type WorkflowRunGetResultV1,
+  type WorkflowRunListResultV1,
+  type WorkflowRunStartedResultV1,
+  type WorkflowSaveResultV1,
+} from '#/v2/workflow-mapper';
 
 export interface SDKRpcClientV2Options {
   readonly homeDir?: string;
@@ -2187,6 +2224,147 @@ export class SDKRpcClientV2 extends SDKRpcClientBase {
   override async swarm(input: SessionPromptRpcInput): Promise<void> {
     await this.setSwarmMode({ sessionId: input.sessionId, enabled: true, trigger: 'task' });
     return this.prompt(input);
+  }
+
+  // -----------------------------------------------------------------------
+  // Dynamic workflows
+  //
+  // The v2 engine splits the domain across the App-scope
+  // `IWorkflowCatalogService` (discovery/persistence) and the Session-scope
+  // `IWorkflowRunService` (run lifecycle); the klient facade surfaces both as
+  // `session(id).workflow()`. These overrides go through the engine services
+  // directly, not the facade: the klient dispatcher's service registry does
+  // not map the workflow services yet, so every facade call on the memory
+  // transport would fail with `unknown service` (tracked as a klient-side
+  // follow-up; the facade becomes the route once its registry covers them).
+  // The v1 shapes are restored by the pure mapping layer in
+  // `src/v2/workflow-mapper.ts`, and `runWorkflow`'s `workflowName` /
+  // `saveWorkflow`'s `name` are derived here — from the input name or the
+  // started run's record, and from the saved script's meta with the same
+  // config-resolved script-size limit the save validated under — both
+  // mirroring v1's semantics.
+  // -----------------------------------------------------------------------
+
+  /**
+   * Through the agent scope (`IWorkflowModeService.enter` / `.exit`) — no
+   * klient facade exists. The v2 service is the port of v1's `WorkflowMode`:
+   * enter is idempotent and injects the byte-identical enter reminder,
+   * exit pops that reminder when it is the last message (appending the
+   * byte-identical exit reminder otherwise). One reminder-lifecycle nuance,
+   * pinned in the migration tracker: on the pop path v1 removes the enter
+   * reminder and adds nothing, while v2's injector then emits the exit
+   * reminder — the mode-off notice lands in the context on v2 where v1
+   * leaves it empty.
+   */
+  override async setWorkflowMode(input: SetSessionWorkflowModeRpcInput): Promise<void> {
+    const agent = await this.agentScope(input.sessionId);
+    const workflow = agent.accessor.get(IWorkflowModeService);
+    if (input.enabled) {
+      workflow.enter(input.trigger);
+    } else {
+      workflow.exit();
+    }
+    await agent.accessor.get(IAgentContextInjectorService).reconcileWhenIdle('workflow_mode');
+  }
+
+  /**
+   * The App-scope `IWorkflowCatalogService` — the same instance the klient
+   * dispatcher would address. `list()` is synchronous over state that only
+   * exists once the first discovery pass settles, so `ready` is awaited
+   * first (the same readiness pattern as the config reads).
+   */
+  override async listWorkflows(input: SessionIdRpcInput): Promise<WorkflowListResultV1> {
+    const catalog = this.engineAccessor.get(IWorkflowCatalogService);
+    this.requireLiveSession(input.sessionId);
+    await catalog.ready;
+    return workflowListToV1(catalog.list(), catalog.skipped());
+  }
+
+  override async getWorkflow(
+    input: SessionIdRpcInput & { name: string },
+  ): Promise<WorkflowGetResultV1> {
+    const catalog = this.engineAccessor.get(IWorkflowCatalogService);
+    this.requireLiveSession(input.sessionId);
+    await catalog.ready;
+    return workflowGetToV1(catalog.get(input.name));
+  }
+
+  /**
+   * `reload()` re-runs discovery and resolves when the scan settles, so the
+   * listing below is the fresh `{workflows, skipped}` v1 returns.
+   */
+  override async reloadWorkflows(input: SessionIdRpcInput): Promise<WorkflowListResultV1> {
+    const catalog = this.engineAccessor.get(IWorkflowCatalogService);
+    this.requireLiveSession(input.sessionId);
+    await catalog.reload();
+    return workflowListToV1(catalog.list(), catalog.skipped());
+  }
+
+  /**
+   * Through the Session-scope `IWorkflowRunService.start`, with the caller
+   * set to the interactive agent — the run's subagents mirror onto it and
+   * its task service tracks the run. The `workflowName` mirrors v1's
+   * `definition.meta.name`: the input name for a catalog run (the catalog
+   * resolves by meta name), else the started run's record — which the run
+   * service stores before `start` resolves, so the fallback is unreachable
+   * by construction.
+   */
+  override async runWorkflow(
+    input: SessionIdRpcInput & { name?: string; script?: string; args?: string },
+  ): Promise<WorkflowRunStartedResultV1> {
+    const session = this.requireLiveSession(input.sessionId);
+    // Materialize the caller first: the run service borrows the caller's
+    // scope (task service, subagent host, event bus) and rejects a caller it
+    // does not know — the same ensure-exists step `prompt`/`startBtw` take.
+    await this.agentScope(input.sessionId);
+    const runs = session.accessor.get(IWorkflowRunService);
+    const started = await runs.start({
+      name: input.name,
+      script: input.script,
+      args: input.args ?? '',
+      callerAgentId: this.interactiveAgentId,
+    });
+    const record = runs.get(started.runId);
+    return workflowRunStartedToV1(started, input.name ?? record?.workflowName ?? '');
+  }
+
+  override async listWorkflowRuns(input: SessionIdRpcInput): Promise<WorkflowRunListResultV1> {
+    const session = this.requireLiveSession(input.sessionId);
+    return workflowRunListToV1(session.accessor.get(IWorkflowRunService).list());
+  }
+
+  override async getWorkflowRun(
+    input: SessionIdRpcInput & { runId: string },
+  ): Promise<WorkflowRunGetResultV1> {
+    const session = this.requireLiveSession(input.sessionId);
+    return workflowRunGetToV1(session.accessor.get(IWorkflowRunService).get(input.runId));
+  }
+
+  override async cancelWorkflowRun(
+    input: SessionIdRpcInput & { runId: string },
+  ): Promise<WorkflowCancelResultV1> {
+    const session = this.requireLiveSession(input.sessionId);
+    return workflowCancelToV1(session.accessor.get(IWorkflowRunService).cancel(input.runId));
+  }
+
+  override async saveWorkflow(
+    input: SessionIdRpcInput & { script: string; scope: 'project' | 'user'; overwrite?: boolean },
+  ): Promise<WorkflowSaveResultV1> {
+    const catalog = this.engineAccessor.get(IWorkflowCatalogService);
+    this.requireLiveSession(input.sessionId);
+    const saved = await catalog.save({
+      script: input.script,
+      scope: input.scope,
+      overwrite: input.overwrite,
+    });
+    // v1 derives the returned name from the saved script's meta, under the
+    // same config-resolved script-size limit the save itself validated.
+    const name = extractWorkflowMeta(input.script, {
+      maxScriptBytes: resolveWorkflowLimits(
+        this.engineAccessor.get(IConfigService).get<WorkflowsConfig>(WORKFLOWS_SECTION),
+      ).maxScriptBytes,
+    }).name;
+    return workflowSaveToV1(saved, name);
   }
 
   // -----------------------------------------------------------------------
