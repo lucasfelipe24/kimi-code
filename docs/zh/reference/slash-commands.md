@@ -98,7 +98,7 @@ Prompt 模式在目标完成时以退出码 `0` 退出，在目标阻塞时以 `
 
 ## Dynamic Workflows
 
-`/workflow`（别名 `/workflows`）用于管理 [Dynamic Workflow](../customization/workflows.md) —— 一项实验功能，运行经用户批准、用于编排子 Agent 的 JavaScript 脚本。在 **CLI** 中这些命令需要启用 `dynamic-workflows` 实验 flag；在 **Web UI** 中则始终可从聊天输入框中使用。每次运行在执行任何内容之前都会要求确认。
+`/workflow`（别名 `/workflows`）用于管理 [Dynamic Workflow](../customization/workflows.md) —— 一项实验功能，运行用于编排子 Agent 的 JavaScript 脚本。在 **CLI** 中这些命令需要启用 `dynamic-workflows` 实验 flag；在 **Web UI** 中则始终可从聊天输入框中使用。在 `manual` 权限模式下，模型发起的运行需要你的批准；在 `yolo` 和 `auto` 权限模式下会自动获得批准。
 
 | 命令 | 说明 |
 | --- | --- |
@@ -109,7 +109,7 @@ Prompt 模式在目标完成时以退出码 `0` 退出，在目标阻塞时以 `
 | `/workflow cancel <runId>` | 取消正在运行的 Workflow |
 | `/workflow save <runId> [--user]` | 把某次运行的脚本保存到项目 Workflow 目录（`.kimi-code/workflows/`）；加 `--user` 则保存到用户目录（`~/.kimi-code/workflows/`） |
 | `/workflow reload` | 重新扫描 Workflow 目录 |
-| `/workflow on` | 启用 Dynamic Workflow 模式：模型先分析任务，对大型多阶段任务主动创建动态 Workflow 脚本提交审批 |
+| `/workflow on` | 手动启用 Dynamic Workflow 模式：模型先分析任务，对大型多阶段任务主动创建动态 Workflow 脚本提交审批（flag 开启时该模式也会自动进入） |
 | `/workflow off` | 禁用 Dynamic Workflow 模式 |
 
 ## 信息与状态

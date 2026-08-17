@@ -126,6 +126,16 @@ Memory 还有固定的硬限制：每条 body 最多 4096 个 UTF-8 字节，nam
 
 **`Skill`** 允许 Agent 主动调用已注册的 inline 类型 Skill。接受 `skill`（Skill 名称）和可选的 `args`（附加参数文本）。只有 `type = "inline"` 的 Skill 能通过此工具调用；`disableModelInvocation: true` 的 Skill 会被拒绝。嵌套调用深度上限 3 层。Skill 体系细节见 [Agent Skills](../customization/skills.md)。
 
+## Workflows
+
+`Workflow` 工具用于启动 [Dynamic Workflow](../customization/workflows.md) —— 一个由用户编写的、按阶段编排 subagent 的 JavaScript 脚本。该功能属于实验特性，由 `dynamic-workflows` flag 控制（默认关闭）：flag 开启时，main agent 获得该工具，并会对大型、多阶段任务自动进入 Dynamic Workflow 模式；`coder`、`explore` 等 subagent profile 永远不包含它，因此委派任务无法嵌套 workflow 运行。
+
+| 工具 | 默认审批 | 说明 |
+| --- | --- | --- |
+| `Workflow` | 自动放行（manual 模式下需 review） | 按目录 `name` 或内联 `script` 启动 Dynamic Workflow |
+
+**`Workflow`** 接受 `name`（目录中的 workflow，例如 `deep-research`）与 `script`（内联 workflow 脚本）二者之一，外加一个可选的 `args` 字符串，作为脚本的 `args` 值传入。工具立即返回 run 和 task ID；运行在后台执行，完成后会在后续轮次自动收到通知。每次调用都会附带 workflow meta、阶段、完整脚本、已解析限制和 token 消耗警告的展示。在 `manual` 权限模式下，每次调用在执行前都会经过审批 review；在 `yolo` 和 `auto` 模式下，工具自动获得批准。脚本 API、运行限制和监控见 [Dynamic Workflows](../customization/workflows.md)。
+
 ## 后台任务
 
 后台任务工具用于管理通过 `Bash`、`Agent` 或 `AskUserQuestion` 启动的后台任务。任务进入终止状态时会自动把状态和已保存的输出路径送回 Agent；如需提前检查进度，使用 `TaskOutput`。
