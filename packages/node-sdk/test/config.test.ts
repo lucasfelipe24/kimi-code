@@ -518,28 +518,6 @@ base_url = "https://api.search.brave.com/res/v1"
         source: 'default',
       },
       {
-        id: 'dynamic-workflows',
-        title: 'Dynamic workflows',
-        description:
-          'User-approved JS workflow scripts that orchestrate subagents in phases with parallel fan-out, pipelines, and JSON-schema structured output.',
-        surface: 'core',
-        env: 'KIMI_CODE_EXPERIMENTAL_DYNAMIC_WORKFLOWS',
-        defaultEnabled: false,
-        enabled: false,
-        source: 'default',
-      },
-      {
-        id: 'langsearch-web-search',
-        title: 'LangSearch web search',
-        description:
-          'Use LangSearch as a configurable WebSearch backend and optionally rerank search results with its semantic reranker.',
-        surface: 'both',
-        env: 'KIMI_CODE_EXPERIMENTAL_LANGSEARCH_WEB_SEARCH',
-        defaultEnabled: false,
-        enabled: false,
-        source: 'default',
-      },
-      {
         id: 'secondary-model',
         title: 'Secondary model for subagents',
         description:

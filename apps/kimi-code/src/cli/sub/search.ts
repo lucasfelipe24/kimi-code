@@ -56,9 +56,6 @@ type LangSearchTier = (typeof LANGSEARCH_TIERS)[number];
 const RERANK_PROVIDERS = ['langsearch'] as const;
 type RerankProvider = (typeof RERANK_PROVIDERS)[number];
 
-const LANGSEARCH_EXPERIMENTAL_FLAG = 'langsearch-web-search';
-const LANGSEARCH_EXPERIMENTAL_MESSAGE =
-  'LangSearch web search is experimental. Enable it in Settings → Experiments or set [experimental].langsearch-web-search = true.\n';
 const V2_SELECTION_MESSAGE =
   'Brave Search and explicit provider selection require engine v2. No configuration was changed.\n';
 
@@ -87,17 +84,11 @@ function isRerankProvider(value: string): value is RerankProvider {
 export async function handleSearchStatus(deps: SearchDeps): Promise<void> {
   const harness = deps.getHarness();
   await harness.ensureConfigFile();
-  const [config, features] = await Promise.all([
-    harness.getConfig(),
-    harness.getExperimentalFeatures(),
-  ]);
+  const config = await harness.getConfig();
   const services = config.services ?? {};
-  const langSearchEnabled = isExperimentalEnabled(features, LANGSEARCH_EXPERIMENTAL_FLAG);
   const selected = services.activeSearchProvider;
   deps.stdout.write(`Selected web search provider: ${selected ?? 'not selected'}\n`);
-  deps.stdout.write(
-    `Active web search provider: ${activeBackend(services, langSearchEnabled)}\n`,
-  );
+  deps.stdout.write(`Active web search provider: ${activeBackend(services)}\n`);
 
   if (services.brave !== undefined) {
     deps.stdout.write(
@@ -107,7 +98,7 @@ export async function handleSearchStatus(deps: SearchDeps): Promise<void> {
   const langsearch = services.langsearch;
   if (langsearch !== undefined) {
     deps.stdout.write(
-      `LangSearch: tier=${langsearch.tier ?? 'free'}  count=${String(langsearch.count ?? 10)}  status=${providerStatus(hasValue(langsearch.apiKey), selected === 'langsearch', langSearchEnabled)}\n`,
+      `LangSearch: tier=${langsearch.tier ?? 'free'}  count=${String(langsearch.count ?? 10)}  status=${providerStatus(hasValue(langsearch.apiKey), selected === 'langsearch')}\n`,
     );
   }
   if (services.moonshotSearch !== undefined) {
@@ -119,13 +110,11 @@ export async function handleSearchStatus(deps: SearchDeps): Promise<void> {
   const rerank = services.rerank;
   if (rerank?.provider !== undefined) {
     const hasApiKey = hasValue(rerank.apiKey) || hasValue(services.langsearch?.apiKey);
-    const status = !langSearchEnabled
-      ? 'experimental feature disabled'
-      : rerank.enabled === false
-        ? 'disabled'
-        : hasApiKey
-          ? 'enabled'
-          : 'missing API key';
+    const status = rerank.enabled === false
+      ? 'disabled'
+      : hasApiKey
+        ? 'enabled'
+        : 'missing API key';
     deps.stdout.write(`Rerank: ${status} (provider: ${rerank.provider})\n`);
   } else {
     deps.stdout.write('Rerank: not configured\n');
@@ -155,7 +144,6 @@ export async function handleSearchSetLangSearch(
 
   const harness = deps.getHarness();
   await harness.ensureConfigFile();
-  await requireLangSearchExperimental(harness, deps);
   const config = await requireAtomicSelection(harness, deps);
   await replaceServices(harness, config, {
     langsearch: { apiKey, tier, count },
@@ -194,9 +182,6 @@ export async function handleSearchUse(deps: SearchDeps, provider: string): Promi
 
   const harness = deps.getHarness();
   await harness.ensureConfigFile();
-  if (provider === 'langsearch') {
-    await requireLangSearchExperimental(harness, deps);
-  }
   const config = await requireAtomicSelection(harness, deps);
   if (!isProviderComplete(config.services ?? {}, provider)) {
     deps.stderr.write(`${searchProviderLabel(provider)} is not completely configured.\n`);
@@ -225,7 +210,6 @@ export async function handleSearchSetRerank(
 
   const harness = deps.getHarness();
   await harness.ensureConfigFile();
-  await requireLangSearchExperimental(harness, deps);
   const config = await harness.getConfig();
   if (enabled && !hasValue(apiKey) && !hasValue(config.services?.langsearch?.apiKey)) {
     deps.stderr.write(
@@ -301,61 +285,21 @@ export function handleSearchLimits(deps: SearchDeps): void {
   }
 }
 
-function activeBackend(
-  services: NonNullable<KimiConfig['services']>,
-  langSearchEnabled: boolean,
-): string {
+function activeBackend(services: NonNullable<KimiConfig['services']>): string {
   const selected = services.activeSearchProvider;
   if (selected === undefined) {
-    if (langSearchEnabled && hasValue(services.langsearch?.apiKey)) return 'LangSearch (legacy fallback)';
+    if (hasValue(services.langsearch?.apiKey)) return 'LangSearch (legacy fallback)';
     if (hasMoonshotConfig(services)) return 'Moonshot (legacy fallback)';
     return 'not configured';
-  }
-  if (selected === 'langsearch' && !langSearchEnabled) {
-    return 'unavailable (experimental feature disabled)';
   }
   return isProviderComplete(services, selected)
     ? searchProviderLabel(selected)
     : 'unavailable (incomplete configuration)';
 }
 
-function providerStatus(configured: boolean, selected: boolean, experimentalEnabled = true): string {
-  const state = !configured
-    ? 'incomplete configuration'
-    : !experimentalEnabled
-      ? 'experimental feature disabled'
-      : 'configured';
+function providerStatus(configured: boolean, selected: boolean): string {
+  const state = !configured ? 'incomplete configuration' : 'configured';
   return `${state}${selected ? ', selected' : ''}`;
-}
-
-function isExperimentalEnabled(
-  features: Awaited<ReturnType<KimiHarness['getExperimentalFeatures']>>,
-  flag: string,
-): boolean {
-  return features.some((feature) => feature.id === flag && feature.enabled);
-}
-
-async function requireLangSearchExperimental(
-  harness: KimiHarness,
-  deps: SearchDeps,
-): Promise<void> {
-  return requireExperimental(
-    harness,
-    deps,
-    LANGSEARCH_EXPERIMENTAL_FLAG,
-    LANGSEARCH_EXPERIMENTAL_MESSAGE,
-  );
-}
-
-async function requireExperimental(
-  harness: KimiHarness,
-  deps: SearchDeps,
-  flag: string,
-  message: string,
-): Promise<void> {
-  if (isExperimentalEnabled(await harness.getExperimentalFeatures(), flag)) return;
-  deps.stderr.write(message);
-  deps.exit(1);
 }
 
 async function requireAtomicSelection(

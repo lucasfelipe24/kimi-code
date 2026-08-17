@@ -16,14 +16,12 @@ import {
 } from '../components/dialogs/choice-picker';
 import { formatErrorMessage } from '../utils/event-payload';
 import type { SlashCommandHost } from './dispatch';
-import { isExperimentalFlagEnabled } from './experimental-flags';
 import { promptApiKey, promptBaseUrl } from './prompts';
 
 // ---------------------------------------------------------------------------
 // /settings → Web Search — search and rerank provider configuration
 // ---------------------------------------------------------------------------
 
-const LANGSEARCH_EXPERIMENTAL_FLAG = 'langsearch-web-search';
 const ROOT_SEARCH_PROVIDER = 'search-provider';
 const ROOT_ACTIVE_PROVIDER = 'active-provider';
 const ROOT_RERANK_PROVIDER = 'rerank-provider';
@@ -111,9 +109,7 @@ async function showSearchProviderMenu(host: SlashCommandHost): Promise<void> {
       {
         value: 'langsearch',
         label: 'LangSearch',
-        description: isExperimentalFlagEnabled(LANGSEARCH_EXPERIMENTAL_FLAG)
-          ? 'Use the LangSearch Web Search API.'
-          : 'Enable LangSearch web search under Settings → Experiments first.',
+        description: 'Use the LangSearch Web Search API.',
       },
       {
         value: 'brave',
@@ -123,10 +119,6 @@ async function showSearchProviderMenu(host: SlashCommandHost): Promise<void> {
     ],
   });
   if (!isSearchProviderChoice(selected)) return;
-  if (selected === 'langsearch' && !isExperimentalFlagEnabled(LANGSEARCH_EXPERIMENTAL_FLAG)) {
-    showSearchExperimentalNotice(host);
-    return;
-  }
   if (!requireAtomicSelection(host)) return;
 
   if (isProviderComplete(services, selected)) {
@@ -149,10 +141,6 @@ async function showActiveProviderMenu(host: SlashCommandHost): Promise<void> {
     })),
   });
   if (!isSearchProviderChoice(provider) || provider === services.activeSearchProvider) return;
-  if (provider === 'langsearch' && !isExperimentalFlagEnabled(LANGSEARCH_EXPERIMENTAL_FLAG)) {
-    showSearchExperimentalNotice(host);
-    return;
-  }
   if (!isProviderComplete(services, provider)) {
     host.showError(`${searchProviderLabel(provider)} is not completely configured.`);
     return;
@@ -345,10 +333,6 @@ async function removeSearchProvider(
 }
 
 async function showRerankProviderMenu(host: SlashCommandHost): Promise<void> {
-  if (!isExperimentalFlagEnabled(LANGSEARCH_EXPERIMENTAL_FLAG)) {
-    showSearchExperimentalNotice(host);
-    return;
-  }
   const config = await host.harness.getConfig();
   const rerank = config.services?.rerank;
   const selected = await pickChoice(host, {
@@ -627,7 +611,6 @@ function currentProviderSummary(services: ServicesConfig): {
   readonly rerank: string;
   readonly hasWarning: boolean;
 } {
-  const langSearchEnabled = isExperimentalFlagEnabled(LANGSEARCH_EXPERIMENTAL_FLAG);
   const selected = services.activeSearchProvider;
   const searchUnavailable = selected === undefined || !isProviderComplete(services, selected);
   const search = searchSummaryLine(services, selected);
@@ -641,13 +624,6 @@ function currentProviderSummary(services: ServicesConfig): {
     };
   }
   const rerankLabel = rerankProviderLabel(rerank.provider);
-  if (!langSearchEnabled) {
-    return {
-      search,
-      rerank: `Current rerank: ${rerankLabel} configured, experimental feature disabled`,
-      hasWarning: true,
-    };
-  }
   if (rerank.enabled === false) {
     return {
       search,
@@ -670,9 +646,6 @@ function searchSummaryLine(
 ): string {
   if (selected === undefined) return 'Current web search: not configured';
   const label = searchProviderLabel(selected);
-  if (selected === 'langsearch' && !isExperimentalFlagEnabled(LANGSEARCH_EXPERIMENTAL_FLAG)) {
-    return `Current web search: ${label} selected, experimental feature disabled`;
-  }
   if (!isProviderComplete(services, selected)) {
     return `Current web search: ${label} selected, incomplete configuration`;
   }
@@ -700,9 +673,6 @@ function providerAvailabilityDescription(
   services: ServicesConfig,
   provider: SearchProviderChoice,
 ): string {
-  if (provider === 'langsearch' && !isExperimentalFlagEnabled(LANGSEARCH_EXPERIMENTAL_FLAG)) {
-    return 'Experimental feature disabled.';
-  }
   if (!isProviderComplete(services, provider)) return 'Not completely configured.';
   return 'Configured and available.';
 }
@@ -719,12 +689,6 @@ function searchProviderLabel(provider: SearchProvider): string {
 
 function rerankProviderLabel(provider: RerankProviderChoice): string {
   return provider === 'langsearch' ? 'LangSearch' : provider;
-}
-
-function showSearchExperimentalNotice(host: SlashCommandHost): void {
-  host.showNotice(
-    'Enable “LangSearch web search” under Settings → Experiments before configuring LangSearch or rerank.',
-  );
 }
 
 function searchUrlFromBaseUrl(baseUrl: string): string {

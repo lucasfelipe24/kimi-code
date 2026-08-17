@@ -427,7 +427,7 @@ export class Session {
     return this.rpc.listPluginCommands({ sessionId: this.id });
   }
 
-  // ─── Dynamic workflows (require the 'dynamic-workflows' experimental flag) ─
+  // ─── Dynamic workflows ─
 
   async listWorkflows(): Promise<{
     workflows: readonly WorkflowSummary[];

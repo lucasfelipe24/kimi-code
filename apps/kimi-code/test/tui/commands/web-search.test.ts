@@ -1,8 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { showWebSearchConfig } from '#/tui/commands/web-search';
 import type { SlashCommandHost } from '#/tui/commands/dispatch';
-import { setExperimentalFeatures } from '#/tui/commands/experimental-flags';
 
 type MountedPanel = {
   render: (width: number) => string[];
@@ -87,10 +86,6 @@ async function type(panel: MountedPanel, value: string): Promise<void> {
 }
 
 describe('showWebSearchConfig', () => {
-  beforeEach(() => {
-    setExperimentalFeatures([{ id: 'langsearch-web-search', enabled: true }]);
-  });
-
   it('shows current provider state and configuration, activation, and rerank menus', async () => {
     const { host, getMounted } = makeHost({
       services: {
@@ -177,7 +172,7 @@ describe('showWebSearchConfig', () => {
     await pending;
   });
 
-  it('configures Brave without an experimental feature entry', async () => {
+  it('configures Brave from the provider menu', async () => {
     const { host, getMounted } = makeHost();
     const pending = showWebSearchConfig(host);
     await settle();
@@ -230,7 +225,7 @@ describe('showWebSearchConfig', () => {
         brave: { apiKey: 'brave-test', baseUrl: undefined },
       },
     });
-    // Only the [services] section is rewritten — experimental flags are untouched.
+    // Only the [services] section is rewritten.
     expect(Object.keys(host.harness.replaceConfigSections.mock.calls[0]![0])).toEqual([
       'services',
     ]);

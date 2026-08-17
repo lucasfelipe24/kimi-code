@@ -16,7 +16,6 @@ interface TestContext {
   readonly deps: SearchDeps;
   readonly ensureConfigFile: ReturnType<typeof vi.fn>;
   readonly getConfig: ReturnType<typeof vi.fn>;
-  readonly getExperimentalFeatures: ReturnType<typeof vi.fn>;
   readonly supportsAtomicSectionReplace: ReturnType<typeof vi.fn>;
   readonly replaceConfigSections: ReturnType<typeof vi.fn>;
   readonly replaceService: ReturnType<typeof vi.fn>;
@@ -33,9 +32,6 @@ function makeContext(config?: KimiConfig): TestContext {
   const resolvedConfig = config ?? { providers: {} };
   const ensureConfigFile = vi.fn(async () => {});
   const getConfig = vi.fn(async () => resolvedConfig);
-  const getExperimentalFeatures = vi.fn(async () => [
-    { id: 'langsearch-web-search', enabled: true },
-  ]);
   const supportsAtomicSectionReplace = vi.fn(() => true);
   const replaceConfigSections = vi.fn(async () => {});
   const replaceService = vi.fn(async () => resolvedConfig);
@@ -45,7 +41,6 @@ function makeContext(config?: KimiConfig): TestContext {
   const harness = {
     ensureConfigFile,
     getConfig,
-    getExperimentalFeatures,
     supportsAtomicSectionReplace,
     replaceConfigSections,
     replaceService,
@@ -76,7 +71,6 @@ function makeContext(config?: KimiConfig): TestContext {
     },
     ensureConfigFile,
     getConfig,
-    getExperimentalFeatures,
     supportsAtomicSectionReplace,
     replaceConfigSections,
     replaceService,
@@ -149,7 +143,7 @@ describe('kimi search', () => {
     expect(context.stdout()).toContain('LangSearch web search cleared.');
   });
 
-  it('configures and selects Brave without a Brave experimental feature entry', async () => {
+  it('configures and selects Brave without touching inactive providers', async () => {
     const context = makeContext({
       providers: {},
       services: {
@@ -208,7 +202,7 @@ describe('kimi search', () => {
     expect(context.replaceService).not.toHaveBeenCalled();
   });
 
-  it('reports Brave as configured without an experimental feature entry', async () => {
+  it('reports Brave and LangSearch as configured', async () => {
     const context = makeContext({
       providers: {},
       services: {
@@ -217,9 +211,6 @@ describe('kimi search', () => {
         langsearch: { apiKey: 'sk-langsearch', tier: 'tier2' },
       },
     });
-    context.getExperimentalFeatures.mockResolvedValue([
-      { id: 'langsearch-web-search', enabled: true },
-    ]);
 
     await handleSearchStatus(context.deps);
 
@@ -227,7 +218,6 @@ describe('kimi search', () => {
     expect(context.stdout()).toContain('Active web search provider: Brave');
     expect(context.stdout()).toContain('Brave: configured, selected');
     expect(context.stdout()).toContain('LangSearch: tier=tier2  count=10  status=configured');
-    expect(context.stdout()).not.toContain('experimental feature disabled');
   });
 
   it('uses legacy LangSearch precedence when no provider is selected', async () => {
