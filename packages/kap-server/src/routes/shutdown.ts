@@ -1,12 +1,3 @@
-/**
- * `POST /shutdown` route handler.
- *
- * Gracefully terminates the server. The actual `close()` + scope disposal is
- * supplied by `start.ts` via `onShutdown` so it stays next to the bootstrap
- * (and remains overridable in tests). The handler replies before triggering
- * shutdown so callers receive a clean 200 instead of a dropped connection.
- */
-
 import { z } from 'zod';
 
 import { okEnvelope } from '../envelope';
@@ -46,8 +37,7 @@ export function registerShutdownRoutes(
         'shutdown requested',
       );
       reply.send(okEnvelope({ ok: true }, req.id));
-      // Let the response flush before tearing the server down.
-      setImmediate(() =>{  opts.onShutdown(); });
+      setImmediate(() => opts.onShutdown());
     },
   );
   app.post(

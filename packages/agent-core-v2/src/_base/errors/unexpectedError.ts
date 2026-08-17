@@ -1,12 +1,6 @@
-/**
- * Unexpected-error reporting hook (`onUnexpectedError`) — surfaces exceptions
- * thrown by listener callbacks.
- */
-
 export type UnexpectedErrorHandler = (err: unknown) => void;
 
 const defaultHandler: UnexpectedErrorHandler = (err) => {
-  // eslint-disable-next-line no-console
   console.error('[unexpected]', err);
 };
 
@@ -23,9 +17,8 @@ export function resetUnexpectedErrorHandler(): void {
 export function onUnexpectedError(err: unknown): void {
   try {
     currentHandler(err);
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('[unexpected] handler threw', error, 'while reporting', err);
+  } catch (handlerErr) {
+    console.error('[unexpected] handler threw', handlerErr, 'while reporting', err);
   }
 }
 

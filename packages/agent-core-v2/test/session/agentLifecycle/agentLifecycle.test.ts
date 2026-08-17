@@ -1,12 +1,3 @@
-/**
- * Scenario: session-owned agent creation, persistence, and MCP wiring.
- *
- * Exercises `AgentLifecycleService` through its DI contract with controlled
- * persistence and MCP boundaries, including completion ordering.
- * Run: `pnpm --filter @moonshot-ai/agent-core-v2 exec vitest run
- * test/session/agentLifecycle/agentLifecycle.test.ts`.
- */
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SyncDescriptor } from '#/_base/di/descriptors';
@@ -174,7 +165,6 @@ function recordingAppendLog(initial: readonly WireRecord[] = []): {
     store,
   };
 }
-
 
 function stubBlobPassThrough(ix: TestInstantiationService): void {
   ix.stub(IAgentBlobService, {

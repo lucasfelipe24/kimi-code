@@ -1,42 +1,3 @@
-/**
- * Media tool production registration — the Agent-scope service that keeps
- * `ReadMediaFile` in the tool registry in sync with the bound model.
- *
- * Media tools cannot ride the module-level `registerAgentToolService(...)`
- * contribution table: its activation runs when the Agent is created, and at
- * that point no model is bound yet — the capabilities are still
- * `UNKNOWN_CAPABILITY`, so a capability gate would permanently skip the
- * tool. Registration instead re-runs whenever the resolved model changes:
- * every profile/model update publishes `agent.status.updated`, and this
- * service re-invokes {@link registerMediaTools} when the model alias or its
- * media capabilities differ from what it last registered (rebinding the
- * video uploader to the new model, and dropping the tool when the model
- * loses media input). The `inlineVideoSupported` flag rides the same
- * refresh: it is derived from the model's protocol because only the OpenAI
- * family drops inline video on the wire — every other protocol that
- * converts `video_url` takes the inline fallback when no upload hook
- * exists.
- *
- * The plain-data state (`registeredKey`) is registered into `agentState`
- * (`IAgentStateService`) and read/written through it; `registration` stays an
- * instance field (the live `IDisposable` tool-registration handle, not plain
- * data).
- *
- * Visual-companion binding: when `[visual_model]` is configured and the bound
- * caller model is text-only (no `image_in` / `video_in`), the tool is
- * registered against the visual model's capabilities and requester instead, so
- * `ReadMediaFile` stays available and delegates inspection to the visual model
- * (returning text to the caller). A vision-capable caller always wins; a
- * dangling visual pointer falls back to the caller model with a logged warning
- * (the Session-scope validation backstop surfaces the config error at session
- * creation). The registration key includes the visual alias and its capability
- * signature, so a `[visual_model]` change re-runs registration via the config
- * change subscription.
- *
- * Agent scope creation instantiates this service before any `opts.binding`
- * bind runs, so the first `agent.status.updated` is always observed.
- */
-
 import { toDisposable, type IDisposable } from '#/_base/di/lifecycle';
 import { Service } from '#/_base/di/service';
 import { LifecycleScope } from '#/app/scopes';
@@ -174,8 +135,13 @@ export class AgentMediaToolsRegistrar extends Service implements IAgentMediaTool
     let requester: ModelRequester | undefined;
     let model: Model | undefined;
     if (modelAlias !== '') {
-      requester = this.modelCatalog.getRequester(modelAlias);
-      model = requester.model;
+      try {
+        requester = this.modelCatalog.getRequester(modelAlias);
+        model = requester.model;
+      } catch {
+        requester = undefined;
+        model = undefined;
+      }
     }
     const boundRequester = useVisual ? visualRequester : requester;
     const boundModel = useVisual ? visualModel : model;

@@ -1,73 +1,3 @@
-/**
- * `tools` domain — `ReadMediaFileTool` implementation.
- *
- * Reads image/video files as multi-modal content.
- *
- * Returns a 3-part wrap as `output`:
- * `[TextPart('<image|video path="…">'), ImageContent|VideoContent,
- *   TextPart('</image|video>')]`
- * plus a `note` side channel (rendered to the model, never to UIs), and
- * adapts its description and per-call behavior to the model's
- * `image_in` / `video_in` capability.
- *
- * The note — this tool wraps it in a `<system>` block as its own wording
- * choice — summarizes mime type, byte size and (for images) original pixel
- * dimensions, states exactly how the image was delivered (untouched,
- * downsampled, cropped, or native resolution) so compression is never
- * silent, guides the model to derive absolute coordinates from the original
- * size, and reminds it to re-read any media it generates or edits.
- *
- * Delegated reads (a `visualInspector` is bound) deliver the media to the
- * visual model at the full model byte budget (`IMAGE_BYTE_BUDGET`) and a
- * larger longest-edge ceiling (`MAX_VISUAL_MODEL_EDGE_PX`) instead of the
- * 256KB / 2000px defaults that gate the non-delegated path, so native
- * resolution survives whenever the file fits the model budget. The same
- * branch appends real pixel statistics (`extractPixelStats`: sampled
- * dimensions, distinct color count, dominant color in RGB + hex, flat/solid
- * detection, alpha usage) to the note and to the inspection description, so
- * both the visual model and the caller can report exact values instead of
- * approximations.
- *
- * Images support two opt-in delivery controls: `region` cuts a rectangle
- * (original-image pixel coordinates) out of the file so fine detail survives
- * at full fidelity, and `full_resolution` skips the default downscale when
- * the payload fits the per-image byte budget (refusing explicitly when it
- * does not, instead of silently degrading). Explicit region/native reads
- * refuse before loading a source that exceeds the safe decode allocation.
- * Default image reads also fail closed when compression cannot meet the
- * configured byte and longest-edge delivery budgets: the original bytes are
- * not emitted, and the tool result tells the model to create and re-read a
- * smaller copy.
- *
- * Path safety: goes through the shared path access resolver used by
- * Read/Write/Edit.
- *
- * Videos are delivered through the provider's upload channel when one is
- * bound, falling back to an inline base64 part when the channel exists but
- * fails at runtime (no files endpoint, network/server failure) — a failed
- * upload must not turn the whole read into an error. The same fallback
- * covers providers with no upload hook at all, as long as their protocol
- * converts `video_url` (`inlineVideoSupported`, computed from the model's
- * protocol at registration); when the wire would drop the inline payload
- * anyway (the OpenAI family), the by-design no-hook error
- * (`VideoUploadUnsupportedError`) surfaces instead. Auth rejections
- * (`provider.auth_error` / 401 / 403) always surface, because they drive
- * credential refresh rather than mask a bad token.
- *
- * Registration is capability-gated: this tool is
- * only registered when a model that can consume the media is bound — normally
- * the active (caller) model, or the configured visual model when the caller is
- * text-only and a `[visual_model]` is set, in which case reads are delegated
- * to the visual model and the caller receives the inspection as text.
- *
- * This tool is a deliberate exception to the `registerAgentToolService` contribution
- * table: its constructor depends on runtime model capabilities (capability
- * profile, video uploader, protocol flags), so it cannot be a static
- * Agent-scope Service and is instead instantiated
- * whenever the bound model changes. It still satisfies the `AgentTool`
- * contract.
- */
-
 import type { ModelCapability } from '#/kosong/contract/capability';
 import type { ContentPart } from '#/kosong/contract/message';
 import { VideoUploadUnsupportedError } from '#/kosong/contract/errors';
@@ -158,7 +88,6 @@ function buildDescription(capabilities: ModelCapability, delegated?: boolean): s
   }
   return lines.join('\n');
 }
-
 
 interface ImageDelivery {
   readonly kind: 'untouched' | 'downsampled' | 'crop' | 'full';

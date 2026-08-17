@@ -1,15 +1,3 @@
-/**
- * `contextInjector` domain — `IAgentContextInjectorService` implementation.
- *
- * Reconciles registered model-context providers against `contextMemory` at the
- * head of every loop step (before the step's request is built), so every LLM
- * request sees the freshest injections. A compaction splice re-arms the
- * new-turn flag for the next step. `reconcileWhenIdle` lets out-of-loop
- * callers (SDK RPC surfaces) refresh one provider immediately while the loop
- * is quiet. Writes reminders through `systemReminder` and reports provider
- * failures through `log`. Bound at Agent scope.
- */
-
 import { toDisposable, type IDisposable } from "#/_base/di/lifecycle";
 import { Service } from "#/_base/di/service";
 import { LifecycleScope } from '#/app/scopes';

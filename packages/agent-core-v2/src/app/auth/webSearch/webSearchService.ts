@@ -1,18 +1,3 @@
-/**
- * `auth` domain (cross-cutting) — `IWebSearchProviderService` implementation.
- *
- * Resolves an explicitly selected Brave, LangSearch, or Moonshot backend from
- * the `services` config without fallback when that selection is unavailable.
- * Without a selector it preserves the legacy LangSearch → configured Moonshot
- * → managed OAuth precedence. Brave availability is determined by its
- * configuration, and optional reranking remains independent of provider
- * choice.
- * Moonshot OAuth references are resolved through `auth`, managed provider data
- * through `provider`, config through `config`, host headers through `bootstrap`
- * and `agentIdentity`, and rerank providers through `auth/webSearch`. Bound at
- * App scope.
- */
-
 import {
   KIMI_CODE_PROVIDER_NAME,
   kimiCodeBaseUrl,

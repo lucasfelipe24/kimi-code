@@ -1,47 +1,3 @@
-/**
- * `media` domain — image compression for model ingestion.
- *
- * Shrink oversized images before they reach the model.
- *
- * A multimodal request carries each image as a base64 data URL; an unbounded
- * screenshot or photo wastes context tokens and can blow past the provider's
- * per-image byte ceiling. This module downsamples and re-encodes such images
- * so they fit a pixel + byte budget, while leaving already-small images
- * untouched — the common case is a fast, codec-free pass-through.
- *
- * Design notes:
- *  - Pure JS (jimp + a wasm WebP decoder), imported lazily so the codecs are
- *    only paid for when an image actually needs work; startup and the fast
- *    path stay cheap.
- *  - Best effort: any decode/encode failure returns the original bytes
- *    unchanged (`changed: false`). Callers must verify that this unchanged
- *    result satisfies their delivery limits before forwarding it.
- *  - Format gate first: content-part lists pass through
- *    {@link gateImageFormatParts} before any compression, so images outside
- *    the provider-accepted set are never decoded or forwarded — one
- *    unsupported image in the session history would make every subsequent
- *    request fail.
- *  - PNG, JPEG, and (non-animated) WebP are re-encoded; WebP re-encodes
- *    through the PNG/JPEG ladder after a wasm decode. GIF and animated WebP
- *    are passed through to preserve animation. Formats outside the
- *    provider-accepted set never reach this module from the content-part
- *    paths (the format gate drops them first); direct callers get a
- *    passthrough.
- *  - Compression must never be silent to the model: results carry the
- *    original dimensions, {@link buildImageCompressionCaption} renders the
- *    shared "what was compressed, where is the original" note every ingestion
- *    point can place next to the image, and {@link cropImageForModel} lets a
- *    caller read a region of the original back at full fidelity.
- *  - Delegated visual-model reads (`ReadMediaFile` bound to `[visual_model]`)
- *    deliver at the full model budget instead of the 256KB read default: the
- *    `MAX_VISUAL_MODEL_EDGE_PX` edge ceiling and `IMAGE_BYTE_BUDGET` byte
- *    budget are applied per-call by the tool, leaving the non-delegated path's
- *    `READ_IMAGE_BYTE_BUDGET` / `MAX_IMAGE_EDGE_PX` defaults untouched. The
- *    jimp decode (`decodeToJimp`) and the `MAX_DECODE_PIXELS` /
- *    `MAX_IMAGE_DECODE_BYTES` guardrails are shared with the pixel-statistics
- *    helper (`extractPixelStats` in `pixel-stats`).
- */
-
 import type { ContentPart } from '#/kosong/contract/message';
 
 import { sniffImageDimensions } from './file-type';
@@ -426,7 +382,6 @@ export interface CompressAnnotateOptions {
   readonly persistOriginal?: (bytes: Uint8Array, mimeType: string) => Promise<string | null>;
 }
 
-
 export interface ImageCropRegion {
   readonly x: number;
   readonly y: number;
@@ -587,7 +542,6 @@ export async function cropImageForModel(
   }
 }
 
-
 export interface ImageVariantDescription {
   readonly width: number;
   readonly height: number;
@@ -652,8 +606,7 @@ export function formatByteSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-
-export type JimpImage = Awaited<ReturnType<(typeof import('jimp'))['Jimp']['fromBuffer']>>;
+type JimpImage = Awaited<ReturnType<(typeof import('jimp'))['Jimp']['fromBuffer']>>;
 
 interface EncodedImage {
   readonly data: Buffer;
@@ -747,7 +700,6 @@ function fitWithinEdge(image: JimpImage, edge: number): boolean {
   });
   return true;
 }
-
 
 type CropErrorKind =
   | 'empty'
