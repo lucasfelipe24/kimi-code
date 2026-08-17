@@ -107,6 +107,8 @@ describe('inspectMediaWithRequester', () => {
     const call = requester.captured[0]!;
     expect(call.params?.thinkingEffort).toBe('high');
     expect(call.input.systemPrompt).toContain('visual inspection assistant');
+    expect(call.input.systemPrompt).toContain('#RRGGBB');
+    expect(call.input.systemPrompt).toContain('Never invent details');
     expect(call.input.tools).toEqual([]);
     const user = call.input.messages.at(-1) as Message;
     expect(user.role).toBe('user');
