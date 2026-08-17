@@ -4,16 +4,13 @@ import { SyncDescriptor } from '#/_base/di/descriptors';
 import { DisposableStore } from '#/_base/di/lifecycle';
 import { TestInstantiationService } from '#/_base/di/test';
 import { IConfigService } from '#/app/config/config';
-import { IFlagService } from '#/app/flag/flag';
 import { ErrorCodes, Error2, isError2 } from '#/errors';
 import { IModelCatalog, type Model } from '#/kosong/model/catalog';
 import { VISUAL_MODEL_SECTION } from '#/session/visual/configSection';
-import { VISUAL_MODEL_FLAG_ID } from '#/session/visual/flag';
 import { ISessionVisualModelsValidationService } from '#/session/visual/visualModelsValidation';
 import { SessionVisualModelsValidationService } from '#/session/visual/visualModelsValidationService';
 
 import { StubConfigService } from '../../kosong/stubs';
-import { stubFlag } from '../../app/flag/stubs';
 
 describe('SessionVisualModelsValidationService', () => {
   let disposables: DisposableStore;
@@ -29,9 +26,8 @@ describe('SessionVisualModelsValidationService', () => {
     disposables.dispose();
   });
 
-  function setup(configValues: Record<string, unknown>, flagEnabled = true): void {
+  function setup(configValues: Record<string, unknown>): void {
     ix.stub(IConfigService, new StubConfigService(configValues));
-    ix.stub(IFlagService, stubFlag((id) => flagEnabled && id === VISUAL_MODEL_FLAG_ID));
     ix.stub(IModelCatalog, {
       _serviceBrand: undefined,
       get: (id: string) => {
@@ -65,11 +61,6 @@ describe('SessionVisualModelsValidationService', () => {
 
   it('is a no-op when no visual_model section is configured', () => {
     setup({});
-    expect(resolve()).toBeUndefined();
-  });
-
-  it('is a no-op for a broken pointer while the visual-model flag is off', () => {
-    setup({ [VISUAL_MODEL_SECTION]: { model: 'provider/typo' } }, false);
     expect(resolve()).toBeUndefined();
   });
 

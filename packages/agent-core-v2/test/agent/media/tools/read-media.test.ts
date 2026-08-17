@@ -53,7 +53,6 @@ import type { IConfigService, ConfigSectionChangedEvent } from '#/app/config/con
 import type { ILogService } from '#/_base/log/log';
 import { toDisposable } from '#/_base/di/lifecycle';
 import type { VisualMediaInspector } from '#/agent/media/visualInspection';
-import { stubFlag } from '../../../app/flag/stubs';
 
 const WORKSPACE: WorkspaceConfig = { workspaceDir: '/workspace', additionalDirs: [] };
 
@@ -953,7 +952,6 @@ describe('AgentMediaToolsRegistrar', () => {
   interface RegistrarHarnessOptions {
     readonly visualModel?: string;
     readonly visualCapabilities?: ModelCapability;
-    readonly flagEnabled?: boolean;
   }
 
   function createRegistrarHarness(options: RegistrarHarnessOptions = {}) {
@@ -992,7 +990,6 @@ describe('AgentMediaToolsRegistrar', () => {
         return toDisposable(() => {});
       },
     } as unknown as IConfigService;
-    const flags = stubFlag(options.flagEnabled ?? true);
     const modelCatalog = {
       getRequester: (id: string) => {
         if (id === 'dangling-model') throw new Error(`unknown model: ${id}`);
@@ -1036,7 +1033,6 @@ describe('AgentMediaToolsRegistrar', () => {
       recordingTelemetry([]),
       new AgentStateService(),
       config,
-      flags,
       log,
     );
     const bindModel = (alias: string, caps: ModelCapability): void => {
@@ -1142,15 +1138,6 @@ describe('AgentMediaToolsRegistrar', () => {
 
   it('does not register media tools for a text-only caller without a visual model', () => {
     const { registry, bindModel } = createRegistrarHarness();
-    bindModel('text-model', capabilities({ image_in: false, video_in: false }));
-    expect(registry.resolve('ReadMediaFile')).toBeUndefined();
-  });
-
-  it('does not register media tools for a text-only caller when the visual-model flag is off', () => {
-    const { registry, bindModel } = createRegistrarHarness({
-      visualModel: 'visual-model',
-      flagEnabled: false,
-    });
     bindModel('text-model', capabilities({ image_in: false, video_in: false }));
     expect(registry.resolve('ReadMediaFile')).toBeUndefined();
   });

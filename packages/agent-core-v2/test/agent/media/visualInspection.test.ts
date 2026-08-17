@@ -6,7 +6,7 @@
  * fallback, empty-output failure), binding resolution through
  * `resolveVisualBinding`, and dangling-pointer fallback to the caller's
  * requester. Wiring: real `inspectMediaWithRequester` / `createVisualInspector`
- * with stubbed config, flags, and model catalog. Run:
+ * with stubbed config and model catalog. Run:
  * pnpm test -- test/agent/media/visualInspection.test.ts
  */
 
@@ -25,7 +25,6 @@ import {
   createVisualInspector,
   inspectMediaWithRequester,
 } from '#/agent/media/visualInspection';
-import { stubFlag } from '../../app/flag/stubs';
 
 const textOnlyCapabilities: ModelCapability = {
   image_in: false,
@@ -154,7 +153,6 @@ describe('createVisualInspector', () => {
     const visualRequester = requesterWith(['visual-model answer']);
     const inspector = createVisualInspector({
       config: configWith('visual-model'),
-      flags: stubFlag(true),
       modelCatalog: catalogWith('visual-model', visualRequester),
       callerModelAlias,
       callerThinkingLevel: 'off',
@@ -167,7 +165,6 @@ describe('createVisualInspector', () => {
   it('uses the caller model when no visual model is configured', async () => {
     const inspector = createVisualInspector({
       config: configWith(undefined),
-      flags: stubFlag(true),
       modelCatalog: catalogWith(undefined, undefined),
       callerModelAlias,
       callerThinkingLevel: 'off',
@@ -180,7 +177,6 @@ describe('createVisualInspector', () => {
   it('falls back to the caller requester when the configured visual alias dangles', async () => {
     const inspector = createVisualInspector({
       config: configWith('ghost-model'),
-      flags: stubFlag(true),
       modelCatalog: catalogWith('ghost-model', undefined),
       callerModelAlias,
       callerThinkingLevel: 'off',
@@ -193,7 +189,6 @@ describe('createVisualInspector', () => {
   it('propagates the error when the bound caller requester itself dangles', async () => {
     const inspector = createVisualInspector({
       config: configWith(undefined),
-      flags: stubFlag(true),
       modelCatalog: {
         getRequester: () => {
           throw new Error('no requester at all');
@@ -229,7 +224,6 @@ describe('createVisualInspector', () => {
     };
     const inspector = createVisualInspector({
       config: configWith('visual-model'),
-      flags: stubFlag(true),
       modelCatalog: catalogWith('visual-model', failingRequester),
       callerModelAlias,
       callerThinkingLevel: 'off',

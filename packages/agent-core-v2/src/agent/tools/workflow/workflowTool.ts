@@ -16,9 +16,7 @@
  * description lists the workflows currently in the App-scope catalog.
  *
  * Registered via the module-level `registerAgentToolService(IWorkflowTool,
- * WorkflowTool)` at the bottom of this file, gated by the `dynamic-workflows`
- * experimental flag through the contribution's `when` predicate. Bound at
- * Agent scope.
+ * WorkflowTool)` at the bottom of this file. Bound at Agent scope.
  */
 
 import { IAgentScopeContext } from '#/agent/scopeContext/scopeContext';
@@ -32,9 +30,7 @@ import {
 } from '#/tool/toolContract';
 import type { ToolInputDisplay } from '#/tool/toolInputDisplay';
 import { IConfigService } from '#/app/config/config';
-import { IFlagService } from '#/app/flag/flag';
 import { WORKFLOWS_SECTION, type WorkflowsConfig } from '#/app/workflow/configSection';
-import { DYNAMIC_WORKFLOWS_FLAG_ID } from '#/app/workflow/flag';
 import { extractWorkflowMeta } from '#/app/workflow/runtime/script';
 import {
   resolveWorkflowLimits,
@@ -64,7 +60,6 @@ export class WorkflowTool implements IWorkflowTool {
   constructor(
     @IWorkflowRunService private readonly runs: IWorkflowRunService,
     @IWorkflowCatalogService private readonly catalog: IWorkflowCatalogService,
-    @IFlagService private readonly flags: IFlagService,
     @IConfigService private readonly config: IConfigService,
     @IAgentScopeContext scopeContext: IAgentScopeContext,
   ) {
@@ -131,13 +126,6 @@ export class WorkflowTool implements IWorkflowTool {
   ): Promise<ExecutableToolResult> {
     try {
       signal.throwIfAborted();
-      if (!this.flags.enabled(DYNAMIC_WORKFLOWS_FLAG_ID)) {
-        return {
-          output:
-            'Dynamic workflows are experimental and currently disabled. Enable the dynamic-workflows experiment to use this tool.',
-          isError: true,
-        };
-      }
       const name = args.name?.trim();
       const { runId, taskId } = await this.runs.start({
         name: name !== undefined && name.length > 0 ? name : undefined,
@@ -167,7 +155,6 @@ export class WorkflowTool implements IWorkflowTool {
 registerAgentToolService(IWorkflowTool, WorkflowTool, {
   name: WORKFLOW_TOOL_NAME,
   domain: 'workflow',
-  when: (accessor) => accessor.get(IFlagService).enabled(DYNAMIC_WORKFLOWS_FLAG_ID),
 });
 
 function workflowRunDisplay(

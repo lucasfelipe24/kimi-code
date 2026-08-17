@@ -58,7 +58,6 @@ import { IAgentToolSelectService } from '#/agent/toolSelect/toolSelect';
 import { IAgentMediaResolverService } from '#/agent/media/mediaResolver';
 import { IAgentUsageService } from '#/agent/usage/usage';
 import { IConfigService } from '#/app/config/config';
-import { IFlagService } from '#/app/flag/flag';
 import {
   APIRequestTooLargeError,
   APIStatusError,
@@ -290,7 +289,6 @@ export class AgentLLMRequesterService implements IAgentLLMRequesterService {
     @IAgentProfileService private readonly profile: IAgentProfileService,
     @IAgentUsageService private readonly usage: IAgentUsageService,
     @IConfigService private readonly config: IConfigService,
-    @IFlagService private readonly flags: IFlagService,
     @IModelService private readonly modelService: IModelService,
     @IModelCatalog private readonly modelCatalog: IModelCatalog,
     @ILogService private readonly log: ILogService,
@@ -599,7 +597,7 @@ export class AgentLLMRequesterService implements IAgentLLMRequesterService {
     return replaceUnsupportedMediaParts(
       messages,
       request.model.capabilities,
-      resolveVisualModel(this.config, this.flags)?.model !== undefined,
+      resolveVisualModel(this.config)?.model !== undefined,
     );
   }
 

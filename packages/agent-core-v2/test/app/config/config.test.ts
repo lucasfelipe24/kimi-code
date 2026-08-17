@@ -109,7 +109,6 @@ import {
   VISUAL_MODEL_SECTION,
   type VisualModelConfig,
 } from '#/session/visual/configSection';
-import { VISUAL_MODEL_FLAG_ID } from '#/session/visual/flag';
 import {
   BRAVE_API_KEY_ENV,
   BRAVE_BASE_URL_ENV,
@@ -2204,34 +2203,15 @@ describe('visual model config section', () => {
       {},
       '[visual_model]\nmodel = "provider/vision"\n',
     );
-    const flags = stubFlag((id) => id === VISUAL_MODEL_FLAG_ID);
     const own = { modelAlias: 'provider/main', thinkingLevel: 'medium' };
 
-    expect(resolveVisualModel(config, flags)).toEqual({ model: 'provider/vision' });
-    expect(resolveVisualBinding(config, flags, own)).toEqual({
+    expect(resolveVisualModel(config)).toEqual({ model: 'provider/vision' });
+    expect(resolveVisualBinding(config, own)).toEqual({
       model: 'provider/vision',
       thinking: undefined,
       displayModel: 'provider/vision',
     });
-    expect(resolveVisualBinding(config, flags, own, 'primary')).toEqual({
-      model: own.modelAlias,
-      thinking: own.thinkingLevel,
-      displayModel: own.modelAlias,
-    });
-
-    disposables.dispose();
-  });
-
-  it('ignores [visual_model] while the visual-model flag is off', async () => {
-    const { config, disposables } = await createConfig(
-      {},
-      '[visual_model]\nmodel = "provider/vision"\n',
-    );
-    const flags = stubFlag((id) => id === SECONDARY_MODEL_FLAG_ID);
-    const own = { modelAlias: 'provider/main', thinkingLevel: 'medium' };
-
-    expect(resolveVisualModel(config, flags)).toBeUndefined();
-    expect(resolveVisualBinding(config, flags, own)).toEqual({
+    expect(resolveVisualBinding(config, own, 'primary')).toEqual({
       model: own.modelAlias,
       thinking: own.thinkingLevel,
       displayModel: own.modelAlias,

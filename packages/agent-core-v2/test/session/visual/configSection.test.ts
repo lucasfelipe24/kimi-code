@@ -1,12 +1,8 @@
 /**
  * `session/visual` resolver tests — covers the `[visual_model]` config-section
  * resolver family: `resolveVisualModel`, `resolveVisualBinding` (unset
- * fallback, flag-off, configured recipe, explicit `primary` override), the
- * parameter strip, and error wrapping.
- *
- * The visual-model flag is NATIVE (default on), so the flag-enabled path is
- * the default here; `stubFlag` with an explicit predicate covers the
- * flag-off no-op paths. Mirrors the shape of the subagent resolver tests.
+ * fallback, configured recipe, explicit `primary` override), the parameter
+ * strip, and error wrapping. Mirrors the shape of the subagent resolver tests.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -22,46 +18,27 @@ import {
   visualDisplayModel,
   wrapVisualModelError,
 } from '#/session/visual/configSection';
-import { VISUAL_MODEL_FLAG_ENV, VISUAL_MODEL_FLAG_ID, visualModelFlag } from '#/session/visual/flag';
 
-import { stubFlag } from '../../app/flag/stubs';
 import { StubConfigService } from '../../kosong/stubs';
 
-function makeServices(configValues: Record<string, unknown>, flagEnabled = true) {
+function makeServices(configValues: Record<string, unknown>) {
   const config = new StubConfigService(configValues);
-  const flags = stubFlag((id) => flagEnabled && id === VISUAL_MODEL_FLAG_ID);
-  return { config, flags };
+  return { config };
 }
 
 const own = { modelAlias: 'caller/kimi-coder', thinkingLevel: 'medium' };
 
-describe('visualModelFlag (native)', () => {
-  it('is on by default — zero env vars needed for the feature to work', () => {
-    expect(visualModelFlag.default).toBe(true);
-    expect(visualModelFlag.id).toBe(VISUAL_MODEL_FLAG_ID);
-    expect(visualModelFlag.env).toBe(VISUAL_MODEL_FLAG_ENV);
-  });
-});
-
 describe('resolveVisualModel', () => {
-  it('returns undefined when the visual-model flag is disabled', () => {
-    const { config, flags } = makeServices(
-      { [VISUAL_MODEL_SECTION]: { model: 'kimi/vision' } },
-      false,
-    );
-    expect(resolveVisualModel(config, flags)).toBeUndefined();
-  });
-
   it('returns undefined when [visual_model] is unset (no behavior change)', () => {
-    const { config, flags } = makeServices({});
-    expect(resolveVisualModel(config, flags)).toBeUndefined();
+    const { config } = makeServices({});
+    expect(resolveVisualModel(config)).toBeUndefined();
   });
 
-  it('returns the configured recipe when set and the flag is on (native default)', () => {
-    const { config, flags } = makeServices({
+  it('returns the configured recipe when set', () => {
+    const { config } = makeServices({
       [VISUAL_MODEL_SECTION]: { model: 'kimi/vision', defaultEffort: 'low' },
     });
-    expect(resolveVisualModel(config, flags)).toEqual({
+    expect(resolveVisualModel(config)).toEqual({
       model: 'kimi/vision',
       defaultEffort: 'low',
     });
@@ -70,17 +47,8 @@ describe('resolveVisualModel', () => {
 
 describe('resolveVisualBinding', () => {
   it('inherits the caller model when the visual model is unset (no behavior change)', () => {
-    const { config, flags } = makeServices({});
-    expect(resolveVisualBinding(config, flags, own)).toEqual({
-      model: own.modelAlias,
-      thinking: own.thinkingLevel,
-      displayModel: own.modelAlias,
-    });
-  });
-
-  it('inherits the caller model when the flag is disabled even if the recipe is set', () => {
-    const { config, flags } = makeServices({ [VISUAL_MODEL_SECTION]: { model: 'kimi/vision' } }, false);
-    expect(resolveVisualBinding(config, flags, own)).toEqual({
+    const { config } = makeServices({});
+    expect(resolveVisualBinding(config, own)).toEqual({
       model: own.modelAlias,
       thinking: own.thinkingLevel,
       displayModel: own.modelAlias,
@@ -88,10 +56,10 @@ describe('resolveVisualBinding', () => {
   });
 
   it('binds the visual model when set (pointer-only recipe, no derived entry)', () => {
-    const { config, flags } = makeServices({
+    const { config } = makeServices({
       [VISUAL_MODEL_SECTION]: { model: 'kimi/vision' },
     });
-    expect(resolveVisualBinding(config, flags, own)).toEqual({
+    expect(resolveVisualBinding(config, own)).toEqual({
       model: 'kimi/vision',
       thinking: undefined,
       displayModel: 'kimi/vision',
@@ -99,10 +67,10 @@ describe('resolveVisualBinding', () => {
   });
 
   it('binds the visual model with default_effort as the thinking level', () => {
-    const { config, flags } = makeServices({
+    const { config } = makeServices({
       [VISUAL_MODEL_SECTION]: { model: 'kimi/vision', defaultEffort: 'low', maxOutputSize: 4096 },
     });
-    expect(resolveVisualBinding(config, flags, own)).toEqual({
+    expect(resolveVisualBinding(config, own)).toEqual({
       model: 'kimi/vision',
       thinking: 'low',
       displayModel: 'kimi/vision',
@@ -110,10 +78,10 @@ describe('resolveVisualBinding', () => {
   });
 
   it('forces the caller model on explicit "primary" even when a visual model is configured', () => {
-    const { config, flags } = makeServices({
+    const { config } = makeServices({
       [VISUAL_MODEL_SECTION]: { model: 'kimi/vision' },
     });
-    expect(resolveVisualBinding(config, flags, own, 'primary')).toEqual({
+    expect(resolveVisualBinding(config, own, 'primary')).toEqual({
       model: own.modelAlias,
       thinking: own.thinkingLevel,
       displayModel: own.modelAlias,
@@ -121,10 +89,10 @@ describe('resolveVisualBinding', () => {
   });
 
   it('accepts explicit "visual" and binds the visual model when configured', () => {
-    const { config, flags } = makeServices({
+    const { config } = makeServices({
       [VISUAL_MODEL_SECTION]: { model: 'kimi/vision' },
     });
-    expect(resolveVisualBinding(config, flags, own, 'visual')).toEqual({
+    expect(resolveVisualBinding(config, own, 'visual')).toEqual({
       model: 'kimi/vision',
       thinking: undefined,
       displayModel: 'kimi/vision',
@@ -132,8 +100,8 @@ describe('resolveVisualBinding', () => {
   });
 
   it('falls back to the caller model for explicit "visual" when no visual model is configured', () => {
-    const { config, flags } = makeServices({});
-    expect(resolveVisualBinding(config, flags, own, 'visual')).toEqual({
+    const { config } = makeServices({});
+    expect(resolveVisualBinding(config, own, 'visual')).toEqual({
       model: own.modelAlias,
       thinking: own.thinkingLevel,
       displayModel: own.modelAlias,
@@ -181,17 +149,17 @@ describe('buildVisualModelDescriptions', () => {
   }
 
   it('returns undefined when no visual model is configured', () => {
-    const { config, flags } = makeServices({});
-    expect(buildVisualModelDescriptions(config, flags, own.modelAlias, modelCatalogWith({}))).toBeUndefined();
+    const { config } = makeServices({});
+    expect(buildVisualModelDescriptions(config, own.modelAlias, modelCatalogWith({}))).toBeUndefined();
   });
 
   it('returns undefined when the caller model alias is not bound yet', () => {
-    const { config, flags } = makeServices({ [VISUAL_MODEL_SECTION]: { model: 'kimi/vision' } });
-    expect(buildVisualModelDescriptions(config, flags, undefined, modelCatalogWith({}))).toBeUndefined();
+    const { config } = makeServices({ [VISUAL_MODEL_SECTION]: { model: 'kimi/vision' } });
+    expect(buildVisualModelDescriptions(config, undefined, modelCatalogWith({}))).toBeUndefined();
   });
 
   it('lists the visual model (default) and the caller model with capability suffixes', () => {
-    const { config, flags } = makeServices({
+    const { config } = makeServices({
       [VISUAL_MODEL_SECTION]: { model: 'kimi/vision' },
     });
     const catalog = modelCatalogWith({
@@ -216,7 +184,7 @@ describe('buildVisualModelDescriptions', () => {
         },
       },
     });
-    const description = buildVisualModelDescriptions(config, flags, own.modelAlias, catalog);
+    const description = buildVisualModelDescriptions(config, own.modelAlias, catalog);
     expect(description).toContain('- visual: kimi/vision (default)');
     expect(description).toContain('capabilities: image_in, thinking, tool_use');
     expect(description).toContain(`- primary: ${own.modelAlias}`);
@@ -224,12 +192,11 @@ describe('buildVisualModelDescriptions', () => {
   });
 
   it('omits the capability suffix for an unresolvable model', () => {
-    const { config, flags } = makeServices({
+    const { config } = makeServices({
       [VISUAL_MODEL_SECTION]: { model: 'kimi/vision' },
     });
     const description = buildVisualModelDescriptions(
       config,
-      flags,
       own.modelAlias,
       modelCatalogWith({}),
     );

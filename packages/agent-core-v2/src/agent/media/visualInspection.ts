@@ -23,7 +23,6 @@
  */
 
 import type { IConfigService } from '#/app/config/config';
-import type { IFlagService } from '#/app/flag/flag';
 import { Error2, ErrorCodes } from '#/errors';
 import type { ContentPart, Message } from '#/kosong/contract/message';
 import type { ThinkingEffort } from '#/kosong/contract/provider';
@@ -50,7 +49,6 @@ export type VisualMediaInspector = (
 
 export interface VisualInspectorContext {
   readonly config: IConfigService;
-  readonly flags: IFlagService;
   readonly modelCatalog: IModelCatalog;
   readonly callerModelAlias: string;
   readonly callerThinkingLevel: string;
@@ -73,7 +71,7 @@ const DEFAULT_VISUAL_INSPECTION_SYSTEM_PROMPT =
 
 export function createVisualInspector(context: VisualInspectorContext): VisualMediaInspector {
   return async (inspection, signal) => {
-    const binding = resolveVisualBinding(context.config, context.flags, {
+    const binding = resolveVisualBinding(context.config, {
       modelAlias: context.callerModelAlias,
       thinkingLevel: context.callerThinkingLevel,
     });

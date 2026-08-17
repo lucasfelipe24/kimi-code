@@ -12,10 +12,8 @@
 import { LifecycleScope } from '#/app/scopes';
 import { ScopeActivation, registerScopedService } from '#/_base/di/scope';
 import { IConfigService } from '#/app/config/config';
-import { IFlagService } from '#/app/flag/flag';
 
 import { SERVICES_SECTION, type ServicesConfig } from '../configSection';
-import { LANGSEARCH_WEB_SEARCH_FLAG_ID } from './flag';
 import { IRerankService } from './rerank';
 import { LangSearchRerankProvider } from './providers/langsearch-rerank';
 import type { RateLimiter } from './providers/rateLimiter';
@@ -25,11 +23,9 @@ export class RerankService implements IRerankService {
 
   constructor(
     @IConfigService private readonly config: IConfigService,
-    @IFlagService private readonly flags: IFlagService,
   ) {}
 
   getRerankProvider(limiter?: RateLimiter) {
-    if (!this.flags.enabled(LANGSEARCH_WEB_SEARCH_FLAG_ID)) return undefined;
     const cfg = this.config.get<ServicesConfig>(SERVICES_SECTION);
     if (cfg?.rerank?.enabled === false || cfg?.rerank?.provider !== 'langsearch') {
       return undefined;
