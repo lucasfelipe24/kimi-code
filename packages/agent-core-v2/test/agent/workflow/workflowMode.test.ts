@@ -229,12 +229,14 @@ describe('WorkflowModeInjection dedup', () => {
     state = {};
     providers = [];
     context = stubContextMemory();
-    new WorkflowModeInjection(
-      injector as never,
-      context as never,
-      workflow as never,
-      catalog as never,
-      states as never,
+    disposables.add(
+      new WorkflowModeInjection(
+        injector as never,
+        context as never,
+        workflow as never,
+        catalog as never,
+        states as never,
+      ),
     );
   });
 

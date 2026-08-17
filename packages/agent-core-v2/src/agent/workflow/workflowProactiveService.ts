@@ -41,7 +41,11 @@ export class WorkflowProactiveService extends Disposable implements IWorkflowPro
   ) {
     super();
     if (scopeContext.agentId === MAIN_AGENT_ID) {
-      this._register(eventBus.subscribe(TurnStarted, (event) => this.onTurnStarted(event.prompt)));
+      this._register(
+        eventBus.subscribe(TurnStarted, (event) => {
+          this.onTurnStarted(event.prompt);
+        }),
+      );
     }
   }
 

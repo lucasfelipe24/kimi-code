@@ -78,6 +78,7 @@ describe('DefaultToolApprovePermissionPolicyService', () => {
     ['GetGoal', {}],
     ['SetGoalBudget', { tokenBudget: 1000 }],
     ['UpdateGoal', { status: 'complete' }],
+    ['Workflow', { name: 'deep-research', args: 'auth token refresh' }],
   ] as const)('approves %s', (toolName, args) => {
     expect(policy.evaluate(policyContext(toolName, args))).toEqual({ kind: 'approve' });
   });

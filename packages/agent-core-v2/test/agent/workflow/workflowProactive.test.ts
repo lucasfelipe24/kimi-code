@@ -4,10 +4,7 @@ import { IEventBus } from '#/app/event/eventBus';
 import { IFlagService } from '#/app/flag/flag';
 import { DYNAMIC_WORKFLOWS_FLAG_ID } from '#/app/workflow/flag';
 import { WORKFLOW_TOOL_NAME } from '#/app/workflow/workflow.types';
-import {
-  IAgentScopeContext,
-  makeAgentScopeContext,
-} from '#/agent/scopeContext/scopeContext';
+import { makeAgentScopeContext } from '#/agent/scopeContext/scopeContext';
 import { IAgentToolRegistryService } from '#/agent/toolRegistry/toolRegistry';
 import { IWorkflowModeService } from '#/agent/workflow/workflowMode';
 import {
@@ -88,7 +85,7 @@ describe('WorkflowProactiveService', () => {
         modes as unknown as IWorkflowModeService,
         flags as unknown as IFlagService,
         tools as unknown as IAgentToolRegistryService,
-        makeAgentScopeContext({ agentId, agentScope: `agents/${agentId}` }) as IAgentScopeContext,
+        makeAgentScopeContext({ agentId, agentScope: `agents/${agentId}` }),
       ),
     );
   }

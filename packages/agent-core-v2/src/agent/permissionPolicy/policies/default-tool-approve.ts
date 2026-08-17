@@ -36,6 +36,7 @@ const DEFAULT_APPROVE_TOOLS = new Set([
   'GetGoal',
   'SetGoalBudget',
   'UpdateGoal',
+  'Workflow',
   'select_tools',
 ]);
 
