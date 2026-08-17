@@ -168,6 +168,7 @@ import {
   IAgentUsageService,
   ISessionWorkspaceContext,
   IWorkspaceStateService,
+  IWorkflowCatalogService,
   AgentLLMRequesterService,
   LifecycleScope,
   AgentMcpService,
@@ -1191,6 +1192,23 @@ export class AgentTestContext {
               ready: Promise.resolve(),
             } satisfies IHostEnvironment,
           );
+          // The Workflow tool's description lists the discovered catalog
+          // workflows, so the wire-visible tool table would otherwise depend
+          // on the async catalog reload racing the first request. Pin the
+          // catalog to an empty, already-ready stub — hermetic, and the
+          // builtin-workflow listing is exercised by the workflow suites with
+          // their own harnesses.
+          reg.defineInstance(IWorkflowCatalogService, {
+            _serviceBrand: undefined,
+            ready: Promise.resolve(),
+            list: () => [],
+            get: () => undefined,
+            skipped: () => [],
+            reload: async () => {},
+            save: async () => {
+              throw new Error('IWorkflowCatalogService.save is not supported in the test harness');
+            },
+          });
           reg.defineDescriptor(ICronTaskPersistence, new SyncDescriptor(CronTaskPersistenceService));
         },
       ],

@@ -12,8 +12,6 @@ import type {
 import { IAgentPermissionModeService } from '#/agent/permissionMode/permissionMode';
 import type { PermissionMode } from '#/agent/permissionPolicy/types';
 import { ToolAccesses } from '#/tool/toolContract';
-import { IFlagService } from '#/app/flag/flag';
-import { DYNAMIC_WORKFLOWS_FLAG_ID } from '#/app/workflow/flag';
 import { WORKFLOW_TOOL_NAME } from '#/app/workflow/workflow.types';
 
 import {
@@ -57,7 +55,6 @@ function makeEvent(toolName: string): BeforeToolExecuteEvent & {
 describe('AgentWorkflowReviewService', () => {
   let disposables: DisposableStore;
   let ix: TestInstantiationService;
-  let flagEnabled: boolean;
   let permissionMode: PermissionMode;
   let listener: ((event: BeforeToolExecuteEvent) => void) | undefined;
   let approvalCalls: { origin: string; kind: string }[];
@@ -65,7 +62,6 @@ describe('AgentWorkflowReviewService', () => {
 
   beforeEach(() => {
     disposables = new DisposableStore();
-    flagEnabled = true;
     permissionMode = 'manual';
     listener = undefined;
     approvalCalls = [];
@@ -84,7 +80,6 @@ describe('AgentWorkflowReviewService', () => {
             return Promise.resolve(approvalDecision);
           },
         });
-        reg.definePartialInstance(IFlagService, { enabled: () => flagEnabled });
         reg.definePartialInstance(IAgentPermissionModeService, {
           get mode(): PermissionMode {
             return permissionMode;
@@ -103,7 +98,7 @@ describe('AgentWorkflowReviewService', () => {
     expect(listener).toBeDefined();
   });
 
-  it('asks for approval on every Workflow call when the flag is on', async () => {
+  it('asks for approval on every Workflow call', async () => {
     ix.get(IAgentWorkflowReviewService);
     const event = makeEvent(WORKFLOW_TOOL_NAME);
     listener!(event);
@@ -140,16 +135,6 @@ describe('AgentWorkflowReviewService', () => {
   it('ignores other tools', () => {
     ix.get(IAgentWorkflowReviewService);
     const event = makeEvent('Bash');
-    listener!(event);
-
-    expect(event.waitUntilFactories).toEqual([]);
-    expect(approvalCalls).toEqual([]);
-  });
-
-  it('does not review when the dynamic-workflows flag is off', () => {
-    flagEnabled = false;
-    ix.get(IAgentWorkflowReviewService);
-    const event = makeEvent(WORKFLOW_TOOL_NAME);
     listener!(event);
 
     expect(event.waitUntilFactories).toEqual([]);

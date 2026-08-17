@@ -305,7 +305,6 @@ export * from '#/workspace/workspaceInstructions/workspaceInstructionsService';
 export * from '#/app/workflow/workflow.types';
 export * from '#/app/workflow/configSection';
 export * from '#/app/workflow/errors';
-export * from '#/app/workflow/flag';
 export * from '#/app/workflow/workflowCatalog';
 import '#/app/workflow/workflowCatalogService';
 export * from '#/app/workflow/runtime/types';
@@ -496,15 +495,9 @@ export * from '#/agent/tools/agent/subagent-task';
 export { AGENT_RUN_PROMPT_ORIGIN } from '#/session/subagent/runAgentTurn';
 export * from '#/session/subagent/mirrorAgentRun';
 import '#/session/subagent/configSection';
-import '#/session/visual/flag';
 import '#/session/visual/configSection';
 export * from '#/session/visual/visualModelsValidation';
 import '#/session/visual/visualModelsValidationService';
-export {
-  VISUAL_MODEL_FLAG_ID,
-  VISUAL_MODEL_FLAG_ENV,
-  visualModelFlag,
-} from '#/session/visual/flag';
 export {
   VISUAL_MODEL_SECTION,
   VISUAL_MODEL_ENV,
@@ -604,14 +597,12 @@ export * from '#/persistence/backends/node-fs/projectLocalConfigService';
 import '#/persistence/backends/minidb/flag';
 export * from '#/persistence/backends/minidb/miniDbQueryStore';
 export * from '#/persistence/backends/memory/inMemoryStorageService';
-import '#/app/auth/webSearch/flag';
 export * from '#/agent/tools/web-search/web-search';
 import '#/agent/tools/web-search/webSearchTool';
 export * from '#/app/auth/auth';
 export * from '#/app/auth/authService';
 export * from '#/app/auth/brave/braveClient';
 export * from '#/app/auth/configSection';
-export * from '#/app/auth/webSearch/flag';
 export * from '#/app/auth/webSearch/webSearch';
 export * from '#/app/auth/webSearch/webSearchService';
 export * from '#/app/auth/webSearch/rerank';

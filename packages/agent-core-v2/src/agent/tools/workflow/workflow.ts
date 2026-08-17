@@ -1,14 +1,12 @@
 /**
  * `tools` domain (L7) — `IWorkflowTool` contract (the `Workflow` tool).
  *
- * Public contract of the experimental `Workflow` tool that lets the LLM start
- * a Dynamic Workflow run by catalog `name` or inline `script`: the
- * model-facing `WorkflowToolInputSchema` / `WorkflowToolInput`, and the
- * `IWorkflowTool` DI decorator that the implementation (`workflowTool.ts`)
- * registers against via `registerAgentToolService`, gated by the
- * `dynamic-workflows` experimental flag. The shared tool-name constant lives
- * in the owning `workflow` domain (`WORKFLOW_TOOL_NAME`). Bound at Agent
- * scope.
+ * Public contract of the `Workflow` tool that lets the LLM start a Dynamic
+ * Workflow run by catalog `name` or inline `script`: the model-facing
+ * `WorkflowToolInputSchema` / `WorkflowToolInput`, and the `IWorkflowTool` DI
+ * decorator that the implementation (`workflowTool.ts`) registers against via
+ * `registerAgentToolService`. The shared tool-name constant lives in the
+ * owning `workflow` domain (`WORKFLOW_TOOL_NAME`). Bound at Agent scope.
  */
 
 import { z } from 'zod';

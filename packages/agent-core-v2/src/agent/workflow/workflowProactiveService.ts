@@ -4,11 +4,11 @@
  * Hooks `TurnStarted` (mirroring the step-retry service) and enters workflow
  * mode with the `auto` trigger when the turn's prompt matches the conservative
  * large / multi-phase heuristic, so the main agent adopts workflows
- * proactively. Guards: the `dynamic-workflows` experiment must be enabled, the
- * agent must be the main agent (the `Workflow` tool is main-agent-only via the
- * builtin `agent` profile allowlist), the `Workflow` tool must actually be
- * registered for the agent (custom profiles may remove it), and workflow mode
- * must not already be active. Bound at Agent scope.
+ * proactively. Guards: the agent must be the main agent (the `Workflow` tool
+ * is main-agent-only via the builtin `agent` profile allowlist), the
+ * `Workflow` tool must actually be registered for the agent (custom profiles
+ * may remove it), and workflow mode must not already be active. Bound at
+ * Agent scope.
  */
 
 import { Disposable } from '#/_base/di/lifecycle';
@@ -18,8 +18,6 @@ import { IAgentScopeContext } from '#/agent/scopeContext/scopeContext';
 import { IAgentToolRegistryService } from '#/agent/toolRegistry/toolRegistry';
 import { IEventBus } from '#/app/event/eventBus';
 import { TurnStarted } from '#/agent/loop/turnEvents';
-import { IFlagService } from '#/app/flag/flag';
-import { DYNAMIC_WORKFLOWS_FLAG_ID } from '#/app/workflow/flag';
 import { WORKFLOW_TOOL_NAME } from '#/app/workflow/workflow.types';
 import { IWorkflowModeService } from '#/agent/workflow/workflowMode';
 import { MAIN_AGENT_ID } from '#/session/agentLifecycle/agentLifecycle';
@@ -35,7 +33,6 @@ export class WorkflowProactiveService extends Disposable implements IWorkflowPro
   constructor(
     @IEventBus eventBus: IEventBus,
     @IWorkflowModeService private readonly modes: IWorkflowModeService,
-    @IFlagService private readonly flags: IFlagService,
     @IAgentToolRegistryService private readonly tools: IAgentToolRegistryService,
     @IAgentScopeContext scopeContext: IAgentScopeContext,
   ) {
@@ -51,7 +48,6 @@ export class WorkflowProactiveService extends Disposable implements IWorkflowPro
 
   private onTurnStarted(prompt: string | undefined): void {
     if (this.modes.isActive) return;
-    if (!this.flags.enabled(DYNAMIC_WORKFLOWS_FLAG_ID)) return;
     if (this.tools.resolve(WORKFLOW_TOOL_NAME) === undefined) return;
     if (!promptSuggestsWorkflow(prompt)) return;
     this.modes.enter('auto');

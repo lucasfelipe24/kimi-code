@@ -46,7 +46,6 @@ import { IAgentStateService } from '#/agent/state/agentState';
 import { IConfigService } from '#/app/config/config';
 import { IEventBus } from '#/app/event/eventBus';
 import { AgentStatusUpdated } from '#/agent/usage/usageEvents';
-import { IFlagService } from '#/app/flag/flag';
 import { ITelemetryService } from '#/app/telemetry/telemetry';
 import { IModelCatalog, type Model } from '#/kosong/model/catalog';
 import { type ModelRequester } from '#/kosong/model/modelRequester';
@@ -83,7 +82,6 @@ export class AgentMediaToolsRegistrar extends Service implements IAgentMediaTool
     @ITelemetryService private readonly telemetry: ITelemetryService,
     @IAgentStateService private readonly states: IAgentStateService,
     @IConfigService private readonly appConfig: IConfigService,
-    @IFlagService private readonly flags: IFlagService,
     @ILogService private readonly log: ILogService,
     @ISessionSkillCatalog private readonly skillCatalog?: ISessionSkillCatalog,
   ) {
@@ -130,7 +128,7 @@ export class AgentMediaToolsRegistrar extends Service implements IAgentMediaTool
       inspected.identity.runtimeId,
       inspected.identity.generation,
     ].join('|');
-    const visualRecipe = resolveVisualModel(this.appConfig, this.flags);
+    const visualRecipe = resolveVisualModel(this.appConfig);
     const visualAlias = visualRecipe?.model;
     let visualRequester: ModelRequester | undefined;
     let visualModel: Model | undefined;
@@ -212,7 +210,6 @@ export class AgentMediaToolsRegistrar extends Service implements IAgentMediaTool
         useVisual && modelAlias !== ''
           ? createVisualInspector({
               config: this.appConfig,
-              flags: this.flags,
               modelCatalog: this.modelCatalog,
               callerModelAlias: modelAlias,
               callerThinkingLevel: this.profile.getEffectiveThinkingLevel(),

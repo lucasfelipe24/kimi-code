@@ -1,15 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { ServicesAccessor } from '#/_base/di/instantiation';
 import { DisposableStore } from '#/_base/di/lifecycle';
 import { createServices, type TestInstantiationService } from '#/_base/di/test';
 import { IAgentScopeContext, makeAgentScopeContext } from '#/agent/scopeContext/scopeContext';
-import { getAgentToolContributions } from '#/agent/toolRegistry/toolContribution';
 import type { ExecutableToolContext, RunnableToolExecution } from '#/tool/toolContract';
 import { IConfigService } from '#/app/config/config';
 import { DEFAULT_WORKFLOWS_CONFIG, WORKFLOWS_SECTION } from '#/app/workflow/configSection';
-import { IFlagService } from '#/app/flag/flag';
-import { DYNAMIC_WORKFLOWS_FLAG_ID } from '#/app/workflow/flag';
 import { WORKFLOW_TOOL_NAME } from '#/app/workflow/workflow.types';
 import type { WorkflowDefinition } from '#/app/workflow/runtime/types';
 import { IWorkflowCatalogService } from '#/app/workflow/workflowCatalog';
@@ -36,13 +32,11 @@ function ctx(): ExecutableToolContext {
 describe('WorkflowTool', () => {
   let disposables: DisposableStore;
   let ix: TestInstantiationService;
-  let flagEnabled: boolean;
   let started: StartWorkflowRunInput[];
   let catalogEntries: readonly WorkflowDefinition[];
 
   beforeEach(() => {
     disposables = new DisposableStore();
-    flagEnabled = true;
     started = [];
     catalogEntries = [];
     ix = createServices(disposables, {
@@ -59,7 +53,6 @@ describe('WorkflowTool', () => {
           get: (name: string) =>
             catalogEntries.find((entry) => entry.meta.name === name),
         });
-        reg.definePartialInstance(IFlagService, { enabled: () => flagEnabled });
         reg.definePartialInstance(IConfigService, {
           get: <T = unknown>(domain: string): T =>
             (domain === WORKFLOWS_SECTION ? DEFAULT_WORKFLOWS_CONFIG : undefined) as T,
@@ -87,20 +80,6 @@ describe('WorkflowTool', () => {
     const tool = ix.get(IWorkflowTool);
     expect(tool.description).toContain('deep-research');
     expect(tool.description).toContain('Fan out research across sources.');
-  });
-
-  it('is gated by the dynamic-workflows flag through the contribution when-predicate', () => {
-    const contribution = getAgentToolContributions().find(
-      (entry) => entry.options.name === WORKFLOW_TOOL_NAME,
-    );
-    expect(contribution).toBeDefined();
-    const accessor = {
-      get: () => ({ enabled: (id: string) => id === DYNAMIC_WORKFLOWS_FLAG_ID && flagEnabled }),
-    } as unknown as ServicesAccessor;
-    flagEnabled = false;
-    expect(contribution!.options.when?.(accessor)).toBe(false);
-    flagEnabled = true;
-    expect(contribution!.options.when?.(accessor)).toBe(true);
   });
 
   it('rejects input with both or neither of name and script', async () => {
@@ -141,17 +120,6 @@ describe('WorkflowTool', () => {
     expect(result.isError).toBeUndefined();
     expect(started[0]?.script).toBe(INLINE_SCRIPT);
     expect(started[0]?.name).toBeUndefined();
-  });
-
-  it('refuses to run when the flag is off at execution time', async () => {
-    flagEnabled = false;
-    const tool = ix.get(IWorkflowTool);
-    const execution = await tool.resolveExecution({ name: 'deep-research' });
-    const result = await (execution as RunnableToolExecution).execute(ctx());
-
-    expect(result.isError).toBe(true);
-    expect(result.output).toContain('disabled');
-    expect(started).toEqual([]);
   });
 
   it('surfaces run-service errors as tool errors', async () => {

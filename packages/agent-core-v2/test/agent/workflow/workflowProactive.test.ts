@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DisposableStore } from '#/_base/di/lifecycle';
 import { IEventBus } from '#/app/event/eventBus';
-import { IFlagService } from '#/app/flag/flag';
-import { DYNAMIC_WORKFLOWS_FLAG_ID } from '#/app/workflow/flag';
 import { WORKFLOW_TOOL_NAME } from '#/app/workflow/workflow.types';
 import { makeAgentScopeContext } from '#/agent/scopeContext/scopeContext';
 import { IAgentToolRegistryService } from '#/agent/toolRegistry/toolRegistry';
@@ -50,7 +48,6 @@ describe('promptSuggestsWorkflow', () => {
 describe('WorkflowProactiveService', () => {
   let disposables: DisposableStore;
   let onTurnStarted: ((event: { readonly prompt?: string }) => void) | undefined;
-  let flagEnabled: boolean;
   let modeActive: boolean;
   let toolAvailable: boolean;
   let enters: string[];
@@ -71,9 +68,6 @@ describe('WorkflowProactiveService', () => {
     },
     exit: () => {},
   };
-  const flags = {
-    enabled: (id: string) => id === DYNAMIC_WORKFLOWS_FLAG_ID && flagEnabled,
-  };
   const tools = {
     resolve: (name: string) => (name === WORKFLOW_TOOL_NAME && toolAvailable ? {} : undefined),
   };
@@ -83,7 +77,6 @@ describe('WorkflowProactiveService', () => {
       new WorkflowProactiveService(
         eventBus as unknown as IEventBus,
         modes as unknown as IWorkflowModeService,
-        flags as unknown as IFlagService,
         tools as unknown as IAgentToolRegistryService,
         makeAgentScopeContext({ agentId, agentScope: `agents/${agentId}` }),
       ),
@@ -93,7 +86,6 @@ describe('WorkflowProactiveService', () => {
   beforeEach(() => {
     disposables = new DisposableStore();
     onTurnStarted = undefined;
-    flagEnabled = true;
     modeActive = false;
     toolAvailable = true;
     enters = [];
@@ -119,13 +111,6 @@ describe('WorkflowProactiveService', () => {
 
   it('does not enter when workflow mode is already active', () => {
     modeActive = true;
-    build('main');
-    onTurnStarted!({ prompt: MULTI_PHASE_PROMPT });
-    expect(enters).toEqual([]);
-  });
-
-  it('does not enter when the dynamic-workflows flag is off', () => {
-    flagEnabled = false;
     build('main');
     onTurnStarted!({ prompt: MULTI_PHASE_PROMPT });
     expect(enters).toEqual([]);

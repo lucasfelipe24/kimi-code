@@ -19,7 +19,6 @@ import { Error2, ErrorCodes } from '#/errors';
 import { IAuthSummaryService, IOAuthService, IOAuthToolkit } from '#/app/auth/auth';
 import { AuthSummaryService, OAuthService } from '#/app/auth/authService';
 import { BraveClient } from '#/app/auth/brave/braveClient';
-import '#/app/auth/webSearch/flag';
 import {
   SERVICES_SECTION,
   servicesFromToml,
@@ -37,7 +36,6 @@ import { IConfigService } from '#/app/config/config';
 import { ConfigRegistry } from '#/app/config/configService';
 import { IEventService } from '#/app/event/event';
 import type { Event2 } from '#/app/event/event2';
-import { IFlagService } from '#/app/flag/flag';
 import { ILogService } from '#/_base/log/log';
 import { IAgentIdentity } from '#/app/agentIdentity/agentIdentity';
 import { IBootstrapService } from '#/app/bootstrap/bootstrap';
@@ -48,7 +46,6 @@ import { IProviderService, type ProviderConfig, type ProvidersChangedEvent } fro
 import '#/kosong/provider/providers/kimi/kimi.contrib';
 
 import { registerBootstrapServices } from '../bootstrap/stubs';
-import { stubFlag } from '../flag/stubs';
 import { registerTelemetryServices } from '../telemetry/stubs';
 import { stubAgentIdentity } from '../../app/agentIdentity/stubs';
 
@@ -826,13 +823,11 @@ describe('WebSearchProviderService', () => {
   let providers: Record<string, ProviderConfig>;
   let servicesConfig: ServicesConfig | undefined;
   let resolveTokenProvider: ReturnType<typeof vi.fn>;
-  let langSearchFlagEnabled: boolean;
 
   beforeEach(() => {
     disposables = new DisposableStore();
     providers = {};
     servicesConfig = undefined;
-    langSearchFlagEnabled = true;
     resolveTokenProvider = vi
       .fn()
       .mockReturnValue({ getAccessToken: async () => 'access-token' });
@@ -860,7 +855,6 @@ describe('WebSearchProviderService', () => {
           get: ((domain: string) =>
             domain === SERVICES_SECTION ? servicesConfig : undefined) as IConfigService['get'],
         });
-        reg.defineInstance(IFlagService, stubFlag(() => langSearchFlagEnabled));
         reg.define(IWebSearchProviderService, WebSearchProviderService);
         reg.define(IRerankService, RerankService);
       },
@@ -1349,7 +1343,6 @@ describe('WebSearchProviderService', () => {
         get: ((domain: string) =>
           domain === SERVICES_SECTION ? servicesConfig : undefined) as IConfigService['get'],
       } as IConfigService,
-      stubFlag(() => langSearchFlagEnabled),
       { getRerankProvider: () => undefined } as IRerankService,
       notFrozen,
     );

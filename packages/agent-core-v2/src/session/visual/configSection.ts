@@ -14,45 +14,40 @@
  * `stripEnvBoundFields` restores the env-free raw value before persistence
  * so the override never leaks into `config.toml`.
  *
- * The whole section is gated behind the `visual-model` flag (`flag.ts`),
- * which is ON by default (native — zero env vars needed); while the flag is
- * off the section is inert: bindings inherit the caller's model, the tools
- * strip the `model` parameter, and validation is skipped. Resolution goes
- * through {@link resolveVisualModel} (the configured recipe, `undefined` when
- * unset or flag-off) and {@link resolveVisualBinding} (which model handles a
- * visual task): the visual model when configured — unless an explicit
- * `"primary"` (`PRIMARY_VISUAL_MODEL_CHOICE`) request forces the caller's own
- * model and thinking level — and the caller's model otherwise. Binding the
- * visual model carries `default_effort` as the explicit visual-task thinking
- * effort; without it the visual task resolves thinking naturally (global
- * `[thinking]` config → the bound model's default effort) rather than
- * inheriting the caller's level. The `"visual"` choice is accepted by
- * visual-model-aware tools to force the visual model when configured (it
- * falls back to the caller's model when unset, so the symbolic choice never
- * fails). Tools advertise the pair via {@link buildVisualModelDescriptions}
- * (each line suffixed with the entry's resolved capability flags, so the
- * parent can route multimodal or thinking-heavy visual tasks instead of
- * guessing from the model id), and spawn failures are wrapped with
- * {@link wrapVisualModelError} so a missing visual-model alias points back at
- * `[visual_model].model` / `KIMI_VISUAL_MODEL`. Display-facing alias
- * resolution goes through {@link visualDisplayModel}. While the flag is off,
- * the no-op `model` parameter is stripped via
- * {@link stripVisualModelParameter}. Cross-field validation is NOT part of
- * the schema — it is enforced as `Error2(CONFIG_INVALID)` by
+ * The section is always live: when set, bindings use the visual model, the
+ * tools expose the `model` parameter (visual / primary choice), and
+ * validation runs. Resolution goes through {@link resolveVisualModel} (the
+ * configured recipe, `undefined` when unset) and {@link resolveVisualBinding}
+ * (which model handles a visual task): the visual model when configured —
+ * unless an explicit `"primary"` (`PRIMARY_VISUAL_MODEL_CHOICE`) request
+ * forces the caller's own model and thinking level — and the caller's model
+ * otherwise. Binding the visual model carries `default_effort` as the
+ * explicit visual-task thinking effort; without it the visual task resolves
+ * thinking naturally (global `[thinking]` config → the bound model's default
+ * effort) rather than inheriting the caller's level. The `"visual"` choice is
+ * accepted by visual-model-aware tools to force the visual model when
+ * configured (it falls back to the caller's model when unset, so the symbolic
+ * choice never fails). Tools advertise the pair via
+ * {@link buildVisualModelDescriptions} (each line suffixed with the entry's
+ * resolved capability flags, so the parent can route multimodal or
+ * thinking-heavy visual tasks instead of guessing from the model id), and
+ * spawn failures are wrapped with {@link wrapVisualModelError} so a missing
+ * visual-model alias points back at `[visual_model].model` /
+ * `KIMI_VISUAL_MODEL`. Display-facing alias resolution goes through
+ * {@link visualDisplayModel}. Cross-field validation is NOT part of the
+ * schema — it is enforced as `Error2(CONFIG_INVALID)` by
  * {@link assertValidVisualModelConfig} (run before session materialization by
  * the session lifecycle, with the Session-scope validation service in
  * `visualModelsValidationService.ts` as backstop): when `model` is set it
- * must resolve through the model catalog — a dangling pointer is inert only
- * while the flag is off, so validation runs unconditionally once the flag is
- * on, exactly like the subagent pool. Self-registered at module load via
- * `registerConfigSection`.
+ * must resolve through the model catalog — a dangling pointer fails session
+ * creation, exactly like the subagent pool. Self-registered at module load
+ * via `registerConfigSection`.
  */
 
 import { z } from 'zod';
 
 import { Error2, ErrorCodes, isError2 } from '#/errors';
 import { isPlainObject } from '#/app/config/toml';
-import type { IFlagService } from '#/app/flag/flag';
 import {
   type EnvBindings,
   envBindings,
@@ -62,8 +57,6 @@ import {
 import { registerConfigSection } from '#/app/config/configSectionContributions';
 import type { ModelCapability } from '#/kosong/contract/capability';
 import type { IModelCatalog } from '#/kosong/model/catalog';
-
-import { VISUAL_MODEL_FLAG_ID } from './flag';
 
 export const VISUAL_MODEL_SECTION = 'visualModel';
 
@@ -110,18 +103,14 @@ export type VisualModelChoice = z.infer<typeof VISUAL_MODEL_CHOICE_SCHEMA>;
 
 export const PRIMARY_VISUAL_MODEL_CHOICE = VISUAL_MODEL_CHOICE_SCHEMA.enum.primary;
 
-export function resolveVisualModel(
-  config: IConfigService,
-  flags: IFlagService,
-): VisualModelConfig | undefined {
-  if (!flags.enabled(VISUAL_MODEL_FLAG_ID)) return undefined;
+export function resolveVisualModel(config: IConfigService): VisualModelConfig | undefined {
   return config.get<VisualModelConfig | undefined>(VISUAL_MODEL_SECTION);
 }
 
 /**
  * Resolve which model handles a visual (image / screenshot / video)
  * inspection task. `own` is the caller's current model state, used when
- * inheriting (visual model unset, flag off, or explicit `primary` request).
+ * inheriting (visual model unset or explicit `primary` request).
  *
  * `requested` mirrors the subagent `model` parameter: `undefined` follows the
  * default (visual model when set, caller's model otherwise); `'primary'`
@@ -132,11 +121,10 @@ export function resolveVisualModel(
  */
 export function resolveVisualBinding(
   config: IConfigService,
-  flags: IFlagService,
   own: { modelAlias: string; thinkingLevel: string },
   requested?: VisualModelChoice,
 ): { model: string; thinking?: string; displayModel: string } {
-  const visual = resolveVisualModel(config, flags);
+  const visual = resolveVisualModel(config);
   if (requested !== PRIMARY_VISUAL_MODEL_CHOICE && visual?.model !== undefined) {
     return {
       model: visual.model,
@@ -167,11 +155,10 @@ export function visualDisplayModel(_config: IConfigService, boundAlias: string):
  */
 export function buildVisualModelDescriptions(
   config: IConfigService,
-  flags: IFlagService,
   callerModelAlias: string | undefined,
   modelCatalog: IModelCatalog,
 ): string | undefined {
-  const visual = resolveVisualModel(config, flags);
+  const visual = resolveVisualModel(config);
   const visualModel = visual?.model;
   if (visualModel === undefined || callerModelAlias === undefined) return undefined;
   return [
@@ -209,13 +196,9 @@ function resolvedCapabilities(
 
 /**
  * Strip the `model` property from a visual-task tool's advertised JSON schema.
- * While the `visual-model` flag is off the parameter is a silent no-op, so
- * the schema the model sees (and the args validator compiled from the same
- * advertised schema) drops it entirely — the visual-model concept never
- * enters the prompt, and a stray `model` argument is rejected instead of
- * silently inheriting the caller's model. Returns the input unchanged when
- * there is no `model` property; otherwise a shallow copy — the input is never
- * mutated, so callers can keep both variants as shared constants.
+ * Returns the input unchanged when there is no `model` property; otherwise a
+ * shallow copy — the input is never mutated, so callers can keep both
+ * variants as shared constants.
  */
 export function stripVisualModelParameter(
   parameters: Record<string, unknown>,
@@ -265,19 +248,17 @@ export function wrapVisualModelError(
 }
 
 /**
- * Fail-loud startup validation of the `[visual_model]` section: when the
- * flag is on and `model` is set, it must name a configured `[models]` entry.
- * A dangling pointer would otherwise silently disable the visual binding at
- * use time, so it fails session creation with `Error2(CONFIG_INVALID)`
- * instead — mirroring the subagent pool's validation convention. A session
- * with the flag off (or without `[visual_model]`) is a no-op.
+ * Fail-loud startup validation of the `[visual_model]` section: when `model`
+ * is set, it must name a configured `[models]` entry. A dangling pointer
+ * would otherwise silently disable the visual binding at use time, so it
+ * fails session creation with `Error2(CONFIG_INVALID)` instead — mirroring
+ * the subagent pool's validation convention. A session without
+ * `[visual_model]` is a no-op.
  */
 export function assertValidVisualModelConfig(
   config: IConfigService,
-  flags: IFlagService,
   modelCatalog: IModelCatalog,
 ): void {
-  if (!flags.enabled(VISUAL_MODEL_FLAG_ID)) return;
   const section = config.get<VisualModelConfig | undefined>(VISUAL_MODEL_SECTION);
   const model = section?.model;
   if (model === undefined) return;
