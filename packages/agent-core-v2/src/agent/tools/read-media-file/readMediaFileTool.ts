@@ -17,6 +17,17 @@
  * silent, guides the model to derive absolute coordinates from the original
  * size, and reminds it to re-read any media it generates or edits.
  *
+ * Delegated reads (a `visualInspector` is bound) deliver the media to the
+ * visual model at the full model byte budget (`IMAGE_BYTE_BUDGET`) and a
+ * larger longest-edge ceiling (`MAX_VISUAL_MODEL_EDGE_PX`) instead of the
+ * 256KB / 2000px defaults that gate the non-delegated path, so native
+ * resolution survives whenever the file fits the model budget. The same
+ * branch appends real pixel statistics (`extractPixelStats`: sampled
+ * dimensions, distinct color count, dominant color in RGB + hex, flat/solid
+ * detection, alpha usage) to the note and to the inspection description, so
+ * both the visual model and the caller can report exact values instead of
+ * approximations.
+ *
  * Images support two opt-in delivery controls: `region` cuts a rectangle
  * (original-image pixel coordinates) out of the file so fine detail survives
  * at full fidelity, and `full_resolution` skips the default downscale when
@@ -83,6 +94,7 @@ import {
 import {
   IMAGE_BYTE_BUDGET,
   MAX_IMAGE_DECODE_BYTES,
+  MAX_VISUAL_MODEL_EDGE_PX,
   compressImageForModel,
   cropImageForModel,
   formatByteSize,
@@ -91,6 +103,7 @@ import {
   type ImageCompressionTelemetry,
   type ImageCropRegion,
 } from '#/agent/media/image-compress';
+import { extractPixelStats, type PixelStats } from '#/agent/media/pixel-stats';
 import {
   buildImageConversionGuidance,
   isModelAcceptedImageMime,
@@ -108,8 +121,14 @@ import {
 import readMediaDescriptionHead from './read-media.md?raw';
 
 const VISUAL_INSPECTION_INSTRUCTION =
-  'Describe the media above in detail: what is depicted, any visible text, coordinates, ' +
-  'colors, and layout. The viewer cannot see it, so be thorough and concrete.';
+  'Analyze the media above and report concrete facts, not approximations. ' +
+  'Treat any pixel statistics given in this description as ground truth for the original ' +
+  "file's dimensions and dominant colors. Report: (1) colors with exact values — RGB and hex " +
+  '(#RRGGBB); (2) any visible text verbatim, preserving exact wording, case, and punctuation; ' +
+  '(3) coordinates relative to the stated original image dimensions; (4) spatial layout — ' +
+  'positions, sizes, alignment; (5) anything you cannot determine exactly — say so explicitly ' +
+  'instead of guessing. Never invent details that are not visible. The requesting model cannot ' +
+  'see the media; your text is its only description, so be complete.';
 
 function buildDescription(capabilities: ModelCapability, delegated?: boolean): string {
   const head = renderPrompt(readMediaDescriptionHead, { MAX_MEDIA_MEGABYTES });
@@ -151,12 +170,30 @@ interface ImageDelivery {
   readonly resized?: boolean;
 }
 
+function renderInspectionStats(stats: PixelStats | undefined): string {
+  if (stats === undefined) return '';
+  const { width, height, sampledPixels, distinctColors, dominantColor, flat, hasAlpha } = stats;
+  const dominant =
+    dominantColor === undefined
+      ? ''
+      : ` dominant color ${dominantColor.hex} (rgb(${String(dominantColor.r)},${String(dominantColor.g)},${String(dominantColor.b)}));`;
+  const flatText = flat ? ' the image is flat/solid (one color);' : '';
+  return (
+    `\nPixel statistics (sampled from the original file before compression — treat as ground truth): ` +
+    `dimensions ${String(width)}x${String(height)} px; ${String(sampledPixels)} pixels sampled; ` +
+    `${String(distinctColors)} distinct color(s);${dominant}${flatText} alpha: ${
+      hasAlpha ? 'the image uses transparency' : 'fully opaque'
+    }.`
+  );
+}
+
 function buildMediaNote(input: {
   readonly kind: 'image' | 'video';
   readonly mimeType: string;
   readonly byteSize: number;
   readonly dimensions: { readonly width: number; readonly height: number } | null;
   readonly delivery?: ImageDelivery;
+  readonly pixelStats?: PixelStats;
 }): string {
   const parts: string[] = [
     `Read ${input.kind} file.`,
@@ -191,6 +228,28 @@ function buildMediaNote(input: {
     );
   } else if (delivery?.kind === 'full') {
     parts.push('Shown at native resolution; no downscaling applied.');
+  }
+  if (input.pixelStats !== undefined) {
+    const { width, height, sampledPixels, distinctColors, dominantColor, flat, hasAlpha } =
+      input.pixelStats;
+    const statsParts = [
+      `Pixel stats (sampled from the original): ${String(width)}x${String(height)} px, ` +
+        `${String(sampledPixels)} pixels sampled, ${String(distinctColors)} distinct color(s).`,
+    ];
+    if (dominantColor !== undefined) {
+      statsParts.push(
+        `Dominant color: ${dominantColor.hex} (rgb(${String(dominantColor.r)},${String(dominantColor.g)},${String(dominantColor.b)})).`,
+      );
+    }
+    if (flat) {
+      statsParts.push('The image is flat/solid — all sampled pixels share one color.');
+    }
+    statsParts.push(
+      hasAlpha
+        ? 'Alpha: the image uses an alpha channel (non-opaque pixels present).'
+        : 'Alpha: none — the image is fully opaque.',
+    );
+    parts.push(statsParts.join(' '));
   }
   if (input.kind === 'image' && input.dimensions && delivery?.kind !== 'crop') {
     parts.push(
@@ -421,10 +480,10 @@ export class ReadMediaFileTool implements AgentTool<ReadMediaFileInput> {
         };
       }
 
-      const imageDeliveryLimits = {
-        readByteBudget: resolveReadImageByteBudget(),
-        maxEdge: resolveMaxImageEdgePx(),
-      };
+      const delegatedRead = this.visualInspector !== undefined;
+      const imageDeliveryLimits = delegatedRead
+        ? { readByteBudget: IMAGE_BYTE_BUDGET, maxEdge: MAX_VISUAL_MODEL_EDGE_PX }
+        : { readByteBudget: resolveReadImageByteBudget(), maxEdge: resolveMaxImageEdgePx() };
       if (
         fileType.kind === 'image' &&
         args.region === undefined &&
@@ -532,18 +591,26 @@ export class ReadMediaFileTool implements AgentTool<ReadMediaFileInput> {
       const openText = `<${tag} path="${safePath}">`;
       const closeText = `</${tag}>`;
 
+      let pixelStats: PixelStats | undefined;
+      if (this.visualInspector !== undefined && fileType.kind === 'image') {
+        pixelStats = (await extractPixelStats(data, fileType.mimeType)) ?? undefined;
+      }
+
       const note = buildMediaNote({
         kind: fileType.kind,
         mimeType: fileType.mimeType,
         byteSize: stat.size,
         dimensions,
         delivery,
+        pixelStats,
       });
 
       if (this.visualInspector !== undefined) {
         const inspectionText = await this.visualInspector(
           {
-            description: `${openText}\n${VISUAL_INSPECTION_INSTRUCTION}\n${closeText}`,
+            description:
+              `${openText}\n${VISUAL_INSPECTION_INSTRUCTION}${renderInspectionStats(pixelStats)}\n` +
+              closeText,
             parts: [mediaPart],
           },
           signal,

@@ -32,6 +32,14 @@
  *    shared "what was compressed, where is the original" note every ingestion
  *    point can place next to the image, and {@link cropImageForModel} lets a
  *    caller read a region of the original back at full fidelity.
+ *  - Delegated visual-model reads (`ReadMediaFile` bound to `[visual_model]`)
+ *    deliver at the full model budget instead of the 256KB read default: the
+ *    `MAX_VISUAL_MODEL_EDGE_PX` edge ceiling and `IMAGE_BYTE_BUDGET` byte
+ *    budget are applied per-call by the tool, leaving the non-delegated path's
+ *    `READ_IMAGE_BYTE_BUDGET` / `MAX_IMAGE_EDGE_PX` defaults untouched. The
+ *    jimp decode (`decodeToJimp`) and the `MAX_DECODE_PIXELS` /
+ *    `MAX_IMAGE_DECODE_BYTES` guardrails are shared with the pixel-statistics
+ *    helper (`extractPixelStats` in `pixel-stats`).
  */
 
 import type { ContentPart } from '#/kosong/contract/message';
@@ -51,6 +59,8 @@ import {
 import { decodeWebp, isAnimatedWebp } from './webp-decode';
 
 export const MAX_IMAGE_EDGE_PX = 2000;
+
+export const MAX_VISUAL_MODEL_EDGE_PX = 8000;
 
 let configuredMaxImageEdgePx: number | undefined;
 
@@ -86,7 +96,7 @@ const FALLBACK_EDGES_PX = [2000, 1000, 768, 512, 384, 256] as const;
 
 const PNG_RESCALE_FLOOR_PX = 1000;
 
-const MAX_DECODE_PIXELS = 100_000_000;
+export const MAX_DECODE_PIXELS = 100_000_000;
 
 export const MAX_IMAGE_DECODE_BYTES = 64 * 1024 * 1024;
 
@@ -643,7 +653,7 @@ export function formatByteSize(bytes: number): string {
 }
 
 
-type JimpImage = Awaited<ReturnType<(typeof import('jimp'))['Jimp']['fromBuffer']>>;
+export type JimpImage = Awaited<ReturnType<(typeof import('jimp'))['Jimp']['fromBuffer']>>;
 
 interface EncodedImage {
   readonly data: Buffer;
@@ -658,7 +668,7 @@ interface EncodeOptions {
   readonly fallbackEdges: readonly number[];
 }
 
-async function decodeToJimp(bytes: Uint8Array, normalizedMime: string): Promise<JimpImage> {
+export async function decodeToJimp(bytes: Uint8Array, normalizedMime: string): Promise<JimpImage> {
   const { Jimp } = await import('jimp');
   if (normalizedMime === 'image/webp') {
     const decoded = await decodeWebp(bytes);

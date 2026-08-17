@@ -65,9 +65,15 @@ export interface VisualInspectionCall {
 
 const DEFAULT_VISUAL_INSPECTION_SYSTEM_PROMPT =
   'You are a visual inspection assistant. Examine the image(s) / video(s) in the user ' +
-  'message and describe their content in detail: what is depicted, any visible text, ' +
-  'coordinates, colors, and layout. You have no tools and no history — answer only from ' +
-  'the attached media.';
+  'message and report exactly what is present, with concrete values instead of ' +
+  'approximate prose. You have no tools and no history — answer only from the attached ' +
+  'media. Report colors as exact RGB and hex (#RRGGBB) values; reproduce any visible ' +
+  'text verbatim (exact wording, case, and punctuation); give coordinates relative to ' +
+  'the stated original image dimensions; describe layout with positions, sizes, and ' +
+  'alignment. Treat pixel statistics included in the prompt as ground truth for the ' +
+  'original file. Never invent details that are not visible: if text is illegible, an ' +
+  'area is blurry or cut off, or a value cannot be determined, state that explicitly ' +
+  'instead of approximating.';
 
 export function createVisualInspector(context: VisualInspectorContext): VisualMediaInspector {
   return async (inspection, signal) => {

@@ -709,6 +709,40 @@ describe('ReadMediaFileTool', () => {
     expect(inspection.description).toContain('<image path="/workspace/sample.png">');
   });
 
+  it('delegates a flat image read with exact pixel statistics and native-resolution delivery', async () => {
+    const flatBlue = Buffer.from(
+      await new Jimp({ width: 3600, height: 1800, color: 0x3366ccff }).getBuffer('image/png'),
+    );
+    const inspector = vi.fn<VisualMediaInspector>().mockResolvedValue('A flat blue image.');
+    const tool = makeTool(
+      { '/workspace/flat.png': { data: flatBlue } },
+      capabilities({ image_in: true, video_in: true }),
+      undefined,
+      undefined,
+      undefined,
+      inspector,
+    );
+
+    const result = await execute(tool, { path: '/workspace/flat.png' });
+
+    expect(result.isError).toBe(false);
+    const systemText = noteText(result);
+    expect(systemText).toContain('Pixel stats');
+    expect(systemText).toContain('3600x1800');
+    expect(systemText).toContain('1 distinct color');
+    expect(systemText).toContain('#3366CC');
+    expect(systemText).toContain('rgb(51,102,204)');
+    expect(systemText).toContain('flat/solid');
+    expect(systemText).toContain('fully opaque');
+    expect(systemText).not.toMatch(/downsampled/i);
+
+    const inspection = inspector.mock.calls[0]![0];
+    expect(inspection.description).toContain('Pixel statistics');
+    expect(inspection.description).toContain('#3366CC');
+    const part = inspection.parts[0] as { imageUrl: { url: string } };
+    expect(part.imageUrl.url).toBe(`data:image/png;base64,${flatBlue.toString('base64')}`);
+  }, 15000);
+
   it('passes the bound video part to the inspector for a video read', async () => {
     const inspector = vi.fn<VisualMediaInspector>().mockResolvedValue('A short clip.');
     const tool = makeTool(
