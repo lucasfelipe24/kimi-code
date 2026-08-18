@@ -72,6 +72,7 @@ function makeHost(options: { hasSession?: boolean } = {}) {
       terminal: { rows: 24 },
       editor: {},
       transcriptContainer: { addChild: vi.fn() },
+      workflowModeEntry: undefined as 'manual' | 'agent' | undefined,
     },
     session: (options.hasSession ?? true) ? session : undefined,
     requireSession: () => session,
@@ -212,5 +213,28 @@ describe('handleWorkflowCommand', () => {
     const rendered = stripAnsi(marker.render(80).join('\n'));
     expect(rendered).toContain('Dynamic Workflow deactivated');
     expect(host.showStatus).not.toHaveBeenCalled();
+  });
+
+  it("marks workflowModeEntry as 'manual' before setWorkflowMode resolves", async () => {
+    const { host, session } = makeHost();
+    const state = host.state as unknown as { workflowModeEntry: 'manual' | 'agent' | undefined };
+    state.workflowModeEntry = 'agent';
+    let entryDuringCall: 'manual' | 'agent' | undefined;
+    (session.setWorkflowMode as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      entryDuringCall = state.workflowModeEntry;
+    });
+    await handleWorkflowCommand(host, 'off');
+    expect(entryDuringCall).toBe('manual');
+    expect(state.workflowModeEntry).toBe('manual');
+  });
+
+  it('restores the previous workflowModeEntry when the toggle fails', async () => {
+    const { host, session } = makeHost();
+    const state = host.state as unknown as { workflowModeEntry: 'manual' | 'agent' | undefined };
+    state.workflowModeEntry = 'agent';
+    (session.setWorkflowMode as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('boom'));
+    await handleWorkflowCommand(host, 'off');
+    expect(state.workflowModeEntry).toBe('agent');
+    expect(host.showError).toHaveBeenCalled();
   });
 });

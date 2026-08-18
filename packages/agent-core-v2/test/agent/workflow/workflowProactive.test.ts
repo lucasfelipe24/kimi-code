@@ -46,15 +46,19 @@ describe('promptSuggestsWorkflow', () => {
 });
 
 describe('WorkflowProactiveService', () => {
+  type TurnStartedEvent = { readonly origin: { readonly kind: string }; readonly prompt?: string };
+  const USER_ORIGIN = { kind: 'user' } as const;
+  const SKILL_ORIGIN = { kind: 'skill_activation' } as const;
+
   let disposables: DisposableStore;
-  let onTurnStarted: ((event: { readonly prompt?: string }) => void) | undefined;
+  let onTurnStarted: ((event: TurnStartedEvent) => void) | undefined;
   let modeActive: boolean;
   let toolAvailable: boolean;
   let enters: string[];
 
   const eventBus = {
     publish: () => {},
-    subscribe: (_cls: unknown, handler: (event: { readonly prompt?: string }) => void) => {
+    subscribe: (_cls: unknown, handler: (event: TurnStartedEvent) => void) => {
       onTurnStarted = handler;
       return { dispose: () => {} };
     },
@@ -98,28 +102,34 @@ describe('WorkflowProactiveService', () => {
   it('subscribes to TurnStarted and enters workflow mode with the auto trigger', () => {
     build('main');
     expect(onTurnStarted).toBeDefined();
-    onTurnStarted!({ prompt: MULTI_PHASE_PROMPT });
+    onTurnStarted!({ origin: USER_ORIGIN, prompt: MULTI_PHASE_PROMPT });
     expect(enters).toEqual(['auto']);
   });
 
   it('does not enter for prompts the heuristic rejects', () => {
     build('main');
-    onTurnStarted!({ prompt: LONG_SIMPLE_PROMPT });
-    onTurnStarted!({ prompt: 'Fix the bug.' });
+    onTurnStarted!({ origin: USER_ORIGIN, prompt: LONG_SIMPLE_PROMPT });
+    onTurnStarted!({ origin: USER_ORIGIN, prompt: 'Fix the bug.' });
+    expect(enters).toEqual([]);
+  });
+
+  it('does not enter for non-user origins even when the prompt matches', () => {
+    build('main');
+    onTurnStarted!({ origin: SKILL_ORIGIN, prompt: MULTI_PHASE_PROMPT });
     expect(enters).toEqual([]);
   });
 
   it('does not enter when workflow mode is already active', () => {
     modeActive = true;
     build('main');
-    onTurnStarted!({ prompt: MULTI_PHASE_PROMPT });
+    onTurnStarted!({ origin: USER_ORIGIN, prompt: MULTI_PHASE_PROMPT });
     expect(enters).toEqual([]);
   });
 
   it('does not enter when the Workflow tool is not registered for the agent', () => {
     toolAvailable = false;
     build('main');
-    onTurnStarted!({ prompt: MULTI_PHASE_PROMPT });
+    onTurnStarted!({ origin: USER_ORIGIN, prompt: MULTI_PHASE_PROMPT });
     expect(enters).toEqual([]);
   });
 

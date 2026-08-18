@@ -251,16 +251,18 @@ async function toggleWorkflowMode(
   client: WorkflowV2Client,
   enabled: boolean,
 ): Promise<void> {
+  const previousEntry = host.state.workflowModeEntry;
+  host.state.workflowModeEntry = 'manual';
   try {
     await client.setWorkflowMode(enabled, 'command');
     host.setAppState({ workflowMode: enabled });
-    host.state.workflowModeEntry = 'manual';
     const state = enabled ? 'active' : 'inactive';
     host.state.transcriptContainer.addChild(
       new ModeMarkerComponent(state, workflowMarkerLabel(state)),
     );
     host.state.ui.requestRender();
   } catch (error) {
+    host.state.workflowModeEntry = previousEntry;
     showWorkflowError(host, error);
   }
 }

@@ -4,16 +4,19 @@
  * Hooks `TurnStarted` (mirroring the step-retry service) and enters workflow
  * mode with the `auto` trigger when the turn's prompt matches the conservative
  * large / multi-phase heuristic, so the main agent adopts workflows
- * proactively. Guards: the agent must be the main agent (the `Workflow` tool
- * is main-agent-only via the builtin `agent` profile allowlist), the
- * `Workflow` tool must actually be registered for the agent (custom profiles
- * may remove it), and workflow mode must not already be active. Bound at
- * Agent scope.
+ * proactively. Guards: the turn must originate from a genuine user prompt
+ * (`origin.kind === 'user'`) — skill/plugin activations inject their own
+ * instruction body as the prompt text and must never trip the heuristic — the
+ * agent must be the main agent (the `Workflow` tool is main-agent-only via the
+ * builtin `agent` profile allowlist), the `Workflow` tool must actually be
+ * registered for the agent (custom profiles may remove it), and workflow mode
+ * must not already be active. Bound at Agent scope.
  */
 
 import { Disposable } from '#/_base/di/lifecycle';
 import { LifecycleScope } from '#/app/scopes';
 import { ScopeActivation, registerScopedService } from '#/_base/di/scope';
+import type { PromptOrigin } from '#/agent/contextMemory/types';
 import { IAgentScopeContext } from '#/agent/scopeContext/scopeContext';
 import { IAgentToolRegistryService } from '#/agent/toolRegistry/toolRegistry';
 import { IEventBus } from '#/app/event/eventBus';
@@ -40,13 +43,14 @@ export class WorkflowProactiveService extends Disposable implements IWorkflowPro
     if (scopeContext.agentId === MAIN_AGENT_ID) {
       this._register(
         eventBus.subscribe(TurnStarted, (event) => {
-          this.onTurnStarted(event.prompt);
+          this.onTurnStarted(event.origin, event.prompt);
         }),
       );
     }
   }
 
-  private onTurnStarted(prompt: string | undefined): void {
+  private onTurnStarted(origin: PromptOrigin, prompt: string | undefined): void {
+    if (origin.kind !== 'user') return;
     if (this.modes.isActive) return;
     if (this.tools.resolve(WORKFLOW_TOOL_NAME) === undefined) return;
     if (!promptSuggestsWorkflow(prompt)) return;
