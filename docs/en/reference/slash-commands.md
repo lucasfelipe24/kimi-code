@@ -19,6 +19,7 @@ Some commands are only available in the idle state. Executing these commands whi
 | `/secondary-model` | `/subagent-model` | Pick the default model for subagents (writes `[secondary_model] default_model`; see the [subagent model pool](../configuration/config-files.md#subagent-model-pool)). Visible when the subagent model pool experiment is enabled | Yes |
 | `/visual-model` | — | Pick the model used to inspect images / videos when the current model is text-only (writes `[visual_model] model`; see the [`visual_model` section](../configuration/config-files.md#visual_model)). Only models that declare image, video, or audio input are offered | Yes |
 | `/settings` | `/config` | Open the settings panel inside the TUI | Yes |
+| `/notify` | — | Show the current Telegram pairing status. `/notify setup` tells you to run `kimi notify setup` in a shell. See [Telegram notifications](../guides/telegram-notifications.md) | Yes |
 | `/experiments` | `/experimental` | Open the experimental feature panel | Yes |
 | `/permission` | — | Select a permission mode | Yes |
 | `/editor` | — | Configure the external editor launched by `Ctrl-G` | Yes |
