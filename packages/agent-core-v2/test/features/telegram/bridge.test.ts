@@ -328,6 +328,55 @@ describe('SessionTelegramBridge', () => {
     expect(lastCall.text).toContain('The answer is 4.');
   });
 
+  it('replies failure and cleans up when /btw prompt submit rejects', async () => {
+    const btwBus = new FakeEventBus();
+    const btwPromptSubmit = vi.fn().mockRejectedValue(new Error('submit failed'));
+    const btwHandle = {
+      id: 'agent-1',
+      kind: 'agent',
+      accessor: {
+        get: (id: unknown) =>
+          id === IEventBus ? btwBus : id === IAgentPromptService ? { submit: btwPromptSubmit } : undefined,
+      },
+      dispose: () => {},
+    } as unknown as IAgentScopeHandle;
+
+    btwStart.mockResolvedValue('agent-1');
+    ix.stub(IAgentLifecycleService, {
+      _serviceBrand: undefined,
+      onDidCreate: noOpEvent,
+      onDidDispose: noOpEvent,
+      create: vi.fn(),
+      fork: vi.fn().mockResolvedValue(btwHandle),
+      get: vi.fn((agentId: string) =>
+        agentId === MAIN_AGENT_ID ? handle : agentId === 'agent-1' ? btwHandle : undefined,
+      ),
+      list: vi.fn(() => [handle]),
+      broadcastPermissionMode: vi.fn(),
+      remove: vi.fn(),
+    } as unknown as IAgentLifecycleService);
+
+    ix.get(ISessionTelegramBridge);
+    const handler = (ix.get(ITelegramGatewayService) as unknown as { registerInbound: ReturnType<typeof vi.fn> }).registerInbound.mock.calls[0]![0] as (update: unknown) => void;
+
+    handler({
+      updateId: 8,
+      message: { messageId: 8, chat: { id: 42, type: 'private' }, text: '/btw what is 2+2?' },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(btwPromptSubmit).toHaveBeenCalled();
+    expect(gatewaySendMessage).toHaveBeenCalledWith(expect.objectContaining({ text: 'Failed to submit BTW question.' }));
+
+    const messageCountAfterFailure = gatewaySendMessage.mock.calls.length;
+    btwBus.publish(new TurnStarted({ turnId: 7, origin: USER_PROMPT_ORIGIN }));
+    btwBus.publish(new AssistantDelta({ turnId: 7, delta: 'ignored' }));
+    btwBus.publish(new TurnEnded({ turnId: 7, reason: 'completed', durationMs: 0 }));
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(gatewaySendMessage).toHaveBeenCalledTimes(messageCountAfterFailure);
+  });
+
   it('consumes /btw when btw.enabled is false without starting', async () => {
     ix.stub(IConfigService, {
       _serviceBrand: undefined,
