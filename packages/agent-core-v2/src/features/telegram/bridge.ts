@@ -1,5 +1,6 @@
 import { createDecorator, type ServiceIdentifier } from '#/_base/di/instantiation';
 import { Service } from '#/_base/di/service';
+import type { IDisposable } from '#/_base/di/lifecycle';
 import { ILogService } from '#/_base/log/log';
 import { IConfigService } from '#/app/config/config';
 import { IEventBus } from '#/app/event/eventBus';
@@ -58,6 +59,7 @@ export class SessionTelegramBridge extends Service implements ISessionTelegramBr
   declare readonly _serviceBrand: undefined;
 
   private readonly agentStreams = new Map<string, AgentStreamState>();
+  private readonly btwAgentIds = new Set<string>();
   private readonly sentQuestions = new Map<string, SentQuestion>();
   private telegramConfig: TelegramConfig = {};
 
@@ -88,6 +90,7 @@ export class SessionTelegramBridge extends Service implements ISessionTelegramBr
     this._register(
       this.lifecycle.onDidDispose((agentId) => {
         this.agentStreams.delete(agentId);
+        this.btwAgentIds.delete(agentId);
       }),
     );
     for (const agent of this.lifecycle.list()) {
@@ -118,6 +121,7 @@ export class SessionTelegramBridge extends Service implements ISessionTelegramBr
   }
 
   private onTurnStarted(agentId: string, event: TurnStarted): void {
+    if (this.btwAgentIds.has(agentId)) return;
     const state: AgentStreamState = {
       turnId: event.turnId,
       text: '',
@@ -128,6 +132,7 @@ export class SessionTelegramBridge extends Service implements ISessionTelegramBr
   }
 
   private onAssistantDelta(agentId: string, event: AssistantDelta): void {
+    if (this.btwAgentIds.has(agentId)) return;
     const state = this.agentStreams.get(agentId);
     if (state === undefined || state.turnId !== event.turnId) return;
     state.text += event.delta;
@@ -135,6 +140,7 @@ export class SessionTelegramBridge extends Service implements ISessionTelegramBr
   }
 
   private onThinkingDelta(agentId: string, event: ThinkingDelta): void {
+    if (this.btwAgentIds.has(agentId)) return;
     if (this.telegramConfig.verbosity !== 'verbose') return;
     const state = this.agentStreams.get(agentId);
     if (state === undefined || state.turnId !== event.turnId) return;
@@ -143,6 +149,7 @@ export class SessionTelegramBridge extends Service implements ISessionTelegramBr
   }
 
   private onTurnEnded(agentId: string, event: TurnEnded): void {
+    if (this.btwAgentIds.has(agentId)) return;
     const state = this.agentStreams.get(agentId);
     if (state === undefined || state.turnId !== event.turnId) return;
     const footer = event.reason === 'completed' ? '' : `\n\n${bold(`Turn ${event.reason}`)}`;
@@ -152,6 +159,7 @@ export class SessionTelegramBridge extends Service implements ISessionTelegramBr
   }
 
   private onToolCallStarted(agentId: string, event: ToolCallStarted): void {
+    if (this.btwAgentIds.has(agentId)) return;
     if (this.telegramConfig.toolActivity?.enabled !== true) return;
     const state = this.agentStreams.get(agentId);
     if (state === undefined || state.turnId !== event.turnId) return;
@@ -166,6 +174,7 @@ export class SessionTelegramBridge extends Service implements ISessionTelegramBr
   }
 
   private onToolResult(agentId: string, event: ToolResultEvent): void {
+    if (this.btwAgentIds.has(agentId)) return;
     if (this.telegramConfig.toolActivity?.enabled !== true) return;
     const state = this.agentStreams.get(agentId);
     if (state === undefined || state.turnId !== event.turnId) return;
@@ -178,6 +187,7 @@ export class SessionTelegramBridge extends Service implements ISessionTelegramBr
   }
 
   private onAgentStatusUpdated(agentId: string, event: AgentStatusUpdated): void {
+    if (this.btwAgentIds.has(agentId)) return;
     const state = this.agentStreams.get(agentId);
     if (state === undefined) return;
     state.header = this.buildHeader(agentId, event);
@@ -206,6 +216,9 @@ export class SessionTelegramBridge extends Service implements ISessionTelegramBr
   }
 
   private formatStreamMessage(state: AgentStreamState, finalize: boolean): string {
+    if (this.telegramConfig.redact === true) {
+      return finalize ? 'response ready (redacted)' : '';
+    }
     const header = state.header.length > 0 ? `${state.header}\n\n` : '';
     const body = markdownToTelegramHtml(state.text);
     const result = `${header}${body}`;
@@ -268,8 +281,9 @@ export class SessionTelegramBridge extends Service implements ISessionTelegramBr
     const text = normalizeInboundText(update);
     if (text === undefined || text.length === 0) return;
 
-    if (text === '/btw') {
-      void this.btw.start().catch((error) => {
+    const btwQuestion = this.parseBtwCommand(text);
+    if (btwQuestion !== undefined) {
+      void this.handleBtw(btwQuestion).catch((error) => {
         this.log.warn(`telegram /btw failed: ${String(error)}`);
       });
       return;
@@ -282,6 +296,79 @@ export class SessionTelegramBridge extends Service implements ISessionTelegramBr
     void prompt.submit({ input: parts }).catch((error) => {
       this.log.warn(`telegram prompt submit failed: ${String(error)}`);
     });
+  }
+
+  private parseBtwCommand(text: string): string | undefined {
+    const match = /^\/btw(?:@\S+)?(?:\s+(.*))?$/s.exec(text);
+    if (match === null) return undefined;
+    const rest = match[1]?.trim() ?? '';
+    return rest.length > 0 ? rest : '';
+  }
+
+  private async handleBtw(question: string): Promise<void> {
+    if (this.telegramConfig.btw?.enabled === false) {
+      await this.gateway.sendMessage({ text: 'BTW side questions are disabled.', parseMode: 'HTML' });
+      return;
+    }
+    if (question.length === 0) {
+      await this.gateway.sendMessage({ text: 'Usage: /btw <question>', parseMode: 'HTML' });
+      return;
+    }
+    const agentId = await this.btw.start();
+    this.btwAgentIds.add(agentId);
+    const handle = this.lifecycle.get(agentId);
+    if (handle === undefined) {
+      this.btwAgentIds.delete(agentId);
+      await this.gateway.sendMessage({ text: 'Failed to start BTW side question.', parseMode: 'HTML' });
+      return;
+    }
+    const prompt = handle.accessor.get(IAgentPromptService);
+    const bus = handle.accessor.get(IEventBus);
+    const state = { turnId: -1, text: '' };
+    const disposables: IDisposable[] = [
+      bus.subscribe(TurnStarted, (e) => {
+        if (state.turnId === -1) state.turnId = e.turnId;
+      }),
+      bus.subscribe(AssistantDelta, (e) => {
+        if (e.turnId !== state.turnId) return;
+        state.text += e.delta;
+      }),
+      bus.subscribe(TurnEnded, (e) => {
+        if (e.turnId !== state.turnId) return;
+        void this.sendBtwAnswer(state.text, e.reason === 'completed').finally(() => {
+          this.cleanupBtw(agentId, disposables);
+        });
+      }),
+    ];
+    try {
+      const result = await prompt.submit({ input: [{ type: 'text', text: question }] });
+      if (result === undefined) {
+        this.cleanupBtw(agentId, disposables);
+        await this.gateway.sendMessage({ text: 'Failed to submit BTW question.', parseMode: 'HTML' });
+        return;
+      }
+      state.turnId = result.turn_id;
+    } catch (error) {
+      this.cleanupBtw(agentId, disposables);
+      await this.gateway.sendMessage({ text: 'Failed to submit BTW question.', parseMode: 'HTML' });
+      this.log.warn(`telegram /btw submit failed: ${String(error)}`);
+    }
+  }
+
+  private cleanupBtw(agentId: string, disposables: IDisposable[]): void {
+    for (const d of disposables) d.dispose();
+    this.btwAgentIds.delete(agentId);
+  }
+
+  private async sendBtwAnswer(text: string, completed: boolean): Promise<void> {
+    const footer = completed ? '' : `\n\n${bold('Turn ended')}`;
+    const body = this.telegramConfig.redact === true ? 'response ready (redacted)' : markdownToTelegramHtml(text);
+    const html = `${body}${footer}`;
+    try {
+      await this.gateway.sendMessage({ text: html, parseMode: 'HTML' });
+    } catch (error) {
+      this.log.warn(`telegram /btw answer send failed: ${String(error)}`);
+    }
   }
 
   private async handleCallback(callbackQueryId: string, data: string): Promise<void> {
