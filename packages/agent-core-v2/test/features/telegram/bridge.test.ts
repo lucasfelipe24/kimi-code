@@ -58,11 +58,14 @@ describe('SessionTelegramBridge', () => {
   let promptSubmit: ReturnType<typeof vi.fn>;
   let btwStart: ReturnType<typeof vi.fn>;
   let bus: FakeEventBus;
+  let pendingChangeEmitter: Emitter<void>;
+  let handle: IAgentScopeHandle;
 
   beforeEach(() => {
     disposables = new DisposableStore();
     ix = disposables.add(new TestInstantiationService());
     bus = new FakeEventBus();
+    pendingChangeEmitter = disposables.add(new Emitter<void>('pending-change'));
     gatewaySendMessage = vi.fn().mockResolvedValue(1);
     gatewayEditMessage = vi.fn().mockResolvedValue(undefined);
     promptSubmit = vi.fn().mockResolvedValue({ turn_id: 1 });
@@ -97,7 +100,7 @@ describe('SessionTelegramBridge', () => {
       setMessageReaction: vi.fn().mockResolvedValue(undefined),
     } as unknown as ITelegramGatewayService);
 
-    const handle = {
+    handle = {
       id: MAIN_AGENT_ID,
       kind: 'agent',
       accessor: {
@@ -126,7 +129,7 @@ describe('SessionTelegramBridge', () => {
       listPending: vi.fn(() => []),
       isRecentlyResolved: vi.fn(),
       cancelPendingForTurn: vi.fn(),
-      onDidChangePending: noOpEvent,
+      onDidChangePending: pendingChangeEmitter.event,
       onDidResolve: noOpEvent,
     } as unknown as ISessionInteractionService);
 
@@ -203,7 +206,7 @@ describe('SessionTelegramBridge', () => {
     expect(promptSubmit).toHaveBeenCalledWith(expect.objectContaining({ input: [{ type: 'text', text: 'do work' }] }));
   });
 
-  it('starts btw on /btw command', async () => {
+  it('replies usage for /btw without question', async () => {
     ix.get(ISessionTelegramBridge);
     const handler = (ix.get(ITelegramGatewayService) as unknown as { registerInbound: ReturnType<typeof vi.fn> }).registerInbound.mock.calls[0]![0] as (update: unknown) => void;
 
@@ -213,7 +216,8 @@ describe('SessionTelegramBridge', () => {
     });
 
     await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(btwStart).toHaveBeenCalled();
+    expect(btwStart).not.toHaveBeenCalled();
+    expect(gatewaySendMessage).toHaveBeenCalledWith(expect.objectContaining({ text: 'Usage: /btw <question>' }));
   });
 
   it('drops inbound when gateway chatId is unset', async () => {
@@ -271,5 +275,168 @@ describe('SessionTelegramBridge', () => {
     expect(gatewaySendMessage).toHaveBeenCalled();
     const lastCall = gatewaySendMessage.mock.calls.at(-1)![0] as { text: string };
     expect(lastCall.text.length).toBeLessThanOrEqual(4096);
+  });
+
+  it('routes /btw <question> to side question and returns the answer', async () => {
+    const btwBus = new FakeEventBus();
+    const btwPromptSubmit = vi.fn().mockResolvedValue({ turn_id: 7 });
+    const btwHandle = {
+      id: 'agent-1',
+      kind: 'agent',
+      accessor: {
+        get: (id: unknown) =>
+          id === IEventBus ? btwBus : id === IAgentPromptService ? { submit: btwPromptSubmit } : undefined,
+      },
+      dispose: () => {},
+    } as unknown as IAgentScopeHandle;
+
+    btwStart.mockResolvedValue('agent-1');
+    ix.stub(IAgentLifecycleService, {
+      _serviceBrand: undefined,
+      onDidCreate: noOpEvent,
+      onDidDispose: noOpEvent,
+      create: vi.fn(),
+      fork: vi.fn().mockResolvedValue(btwHandle),
+      get: vi.fn((agentId: string) =>
+        agentId === MAIN_AGENT_ID ? handle : agentId === 'agent-1' ? btwHandle : undefined,
+      ),
+      list: vi.fn(() => [handle]),
+      broadcastPermissionMode: vi.fn(),
+      remove: vi.fn(),
+    } as unknown as IAgentLifecycleService);
+
+    ix.get(ISessionTelegramBridge);
+    const handler = (ix.get(ITelegramGatewayService) as unknown as { registerInbound: ReturnType<typeof vi.fn> }).registerInbound.mock.calls[0]![0] as (update: unknown) => void;
+
+    handler({
+      updateId: 5,
+      message: { messageId: 5, chat: { id: 42, type: 'private' }, text: '/btw what is 2+2?' },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(btwStart).toHaveBeenCalled();
+    expect(promptSubmit).not.toHaveBeenCalled();
+    expect(btwPromptSubmit).toHaveBeenCalledWith(expect.objectContaining({ input: [{ type: 'text', text: 'what is 2+2?' }] }));
+
+    btwBus.publish(new TurnStarted({ turnId: 7, origin: USER_PROMPT_ORIGIN }));
+    btwBus.publish(new AssistantDelta({ turnId: 7, delta: 'The answer is ' }));
+    btwBus.publish(new AssistantDelta({ turnId: 7, delta: '4.' }));
+    btwBus.publish(new TurnEnded({ turnId: 7, reason: 'completed', durationMs: 0 }));
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const lastCall = gatewaySendMessage.mock.calls.at(-1)![0] as { text: string };
+    expect(lastCall.text).toContain('The answer is 4.');
+  });
+
+  it('consumes /btw when btw.enabled is false without starting', async () => {
+    ix.stub(IConfigService, {
+      _serviceBrand: undefined,
+      ready: Promise.resolve(),
+      onDidChangeConfiguration: noOpEvent,
+      onDidSectionChange: noOpEvent,
+      onDidChangeDiagnostics: noOpEvent,
+      get: vi.fn((domain: string) =>
+        domain === 'telegram' ? { enabled: true, toolActivity: { enabled: true }, btw: { enabled: false } } : undefined,
+      ),
+      inspect: vi.fn(),
+      getAll: vi.fn(() => ({})),
+      set: vi.fn(),
+      replace: vi.fn(),
+      replaceSections: vi.fn(),
+      reload: vi.fn(),
+      diagnostics: vi.fn(() => []),
+    } as unknown as IConfigService);
+
+    ix.get(ISessionTelegramBridge);
+    const handler = (ix.get(ITelegramGatewayService) as unknown as { registerInbound: ReturnType<typeof vi.fn> }).registerInbound.mock.calls[0]![0] as (update: unknown) => void;
+
+    handler({
+      updateId: 6,
+      message: { messageId: 6, chat: { id: 42, type: 'private' }, text: '/btw what is 2+2?' },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(btwStart).not.toHaveBeenCalled();
+    expect(promptSubmit).not.toHaveBeenCalled();
+    expect(gatewaySendMessage).toHaveBeenCalledWith(expect.objectContaining({ text: 'BTW side questions are disabled.' }));
+  });
+
+  it('redacts assistant content when redact is true', async () => {
+    ix.stub(IConfigService, {
+      _serviceBrand: undefined,
+      ready: Promise.resolve(),
+      onDidChangeConfiguration: noOpEvent,
+      onDidSectionChange: noOpEvent,
+      onDidChangeDiagnostics: noOpEvent,
+      get: vi.fn((domain: string) =>
+        domain === 'telegram' ? { enabled: true, toolActivity: { enabled: true }, redact: true } : undefined,
+      ),
+      inspect: vi.fn(),
+      getAll: vi.fn(() => ({})),
+      set: vi.fn(),
+      replace: vi.fn(),
+      replaceSections: vi.fn(),
+      reload: vi.fn(),
+      diagnostics: vi.fn(() => []),
+    } as unknown as IConfigService);
+
+    ix.get(ISessionTelegramBridge);
+
+    bus.publish(new TurnStarted({ turnId: 4, origin: USER_PROMPT_ORIGIN }));
+    bus.publish(new AssistantDelta({ turnId: 4, delta: 'secret content' }));
+    bus.publish(new TurnEnded({ turnId: 4, reason: 'completed', durationMs: 0 }));
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(gatewaySendMessage).toHaveBeenCalledWith(expect.objectContaining({ text: 'response ready (redacted)' }));
+  });
+
+  it('keeps ask questions readable when redact is true', async () => {
+    ix.stub(IConfigService, {
+      _serviceBrand: undefined,
+      ready: Promise.resolve(),
+      onDidChangeConfiguration: noOpEvent,
+      onDidSectionChange: noOpEvent,
+      onDidChangeDiagnostics: noOpEvent,
+      get: vi.fn((domain: string) =>
+        domain === 'telegram' ? { enabled: true, toolActivity: { enabled: true }, redact: true } : undefined,
+      ),
+      inspect: vi.fn(),
+      getAll: vi.fn(() => ({})),
+      set: vi.fn(),
+      replace: vi.fn(),
+      replaceSections: vi.fn(),
+      reload: vi.fn(),
+      diagnostics: vi.fn(() => []),
+    } as unknown as IConfigService);
+
+    ix.stub(ISessionInteractionService, {
+      _serviceBrand: undefined,
+      request: vi.fn(),
+      enqueue: vi.fn(),
+      respond: vi.fn(),
+      listPending: vi.fn((_kind: string) => [
+        {
+          id: 'q1',
+          payload: {
+            questions: [{ question: 'Pick one', options: [{ label: 'A' }, { label: 'B' }] }],
+          },
+        },
+      ]),
+      isRecentlyResolved: vi.fn(),
+      cancelPendingForTurn: vi.fn(),
+      onDidChangePending: pendingChangeEmitter.event,
+      onDidResolve: noOpEvent,
+    } as unknown as ISessionInteractionService);
+
+    ix.get(ISessionTelegramBridge);
+    pendingChangeEmitter.fire();
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(gatewaySendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: expect.stringContaining('Pick one'),
+        inlineButtons: expect.anything(),
+      }),
+    );
   });
 });
