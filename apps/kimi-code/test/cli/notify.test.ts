@@ -5,11 +5,11 @@
 
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { Command } from 'commander';
+import { maskTelegramToken, type TelegramConfig } from '@moonshot-ai/kimi-code-sdk';
 
 import {
   handleNotifySetup,
   handleNotifyStatus,
-  maskToken,
   registerNotifyCommand,
   type NotifyDeps,
 } from '#/cli/sub/notify';
@@ -43,27 +43,24 @@ class ExitCalled extends Error {
 
 interface FakeHarness {
   ensureConfigFile: () => Promise<void>;
-  supportsAtomicSectionReplace: () => boolean;
-  replaceConfigSections: (sections: Record<string, unknown>) => Promise<void>;
-  configPath: string;
+  getTelegramConfig: () => Promise<TelegramConfig>;
+  setTelegramConfig: (patch: TelegramConfig) => Promise<TelegramConfig>;
+  runTelegramSetup: (input: {
+    token: string;
+    chatId?: string;
+    interactive?: boolean;
+  }) => Promise<{ readonly ok: true; readonly chatId: string; readonly tokenFingerprint: string } | { readonly ok: false; readonly status: string; readonly detail: string }>;
   close: () => Promise<void>;
 }
 
-function makeHarness(): {
-  harness: FakeHarness;
-  replacedSections: Record<string, unknown>[];
-} {
-  const replacedSections: Record<string, unknown>[] = [];
-  const harness: FakeHarness = {
+function makeHarness(): FakeHarness {
+  return {
     ensureConfigFile: async () => {},
-    supportsAtomicSectionReplace: () => true,
-    replaceConfigSections: async (sections) => {
-      replacedSections.push(sections);
-    },
-    configPath: '/home/test/.kimi-code/config.toml',
+    getTelegramConfig: async () => ({}),
+    setTelegramConfig: async (patch) => patch,
+    runTelegramSetup: async () => ({ ok: true, chatId: '111', tokenFingerprint: 'fp' }),
     close: async () => {},
   };
-  return { harness, replacedSections };
 }
 
 function makeDeps(
@@ -97,9 +94,6 @@ function makeDeps(
       throw new ExitCalled(code);
     }) as NotifyDeps['exit'],
     env: {},
-    fetch: vi.fn(),
-    readTextFile: vi.fn(),
-    resolveConfigPath: async () => harness.configPath,
     promptToken: async () => {
       throw new Error('Unexpected interactive prompt');
     },
@@ -118,63 +112,46 @@ async function tryRun<T>(fn: () => Promise<T>): Promise<T | undefined> {
   }
 }
 
-function telegramFetch(responses: Record<string, unknown>): typeof fetch {
-  return vi.fn(async (url: string) => {
-    const method = url.split('/').pop() ?? '';
-    const result = responses[method];
-    return {
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      json: async () => ({ ok: true, result }),
-    } as Response;
-  }) as unknown as typeof fetch;
-}
-
-let originalFetch: typeof globalThis.fetch;
-
 beforeEach(() => {
-  originalFetch = globalThis.fetch;
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 });
 
-describe('maskToken', () => {
+describe('maskTelegramToken', () => {
   it('masks a long token to prefix and length', () => {
-    expect(maskToken('1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZ')).toMatch(/^1234…\(len \d+\)$/);
+    expect(maskTelegramToken('1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZ')).toMatch(/^1234…\(len \d+\)$/);
   });
 
   it('shows length for short tokens', () => {
-    expect(maskToken('abc')).toBe('…(len 3)');
+    expect(maskTelegramToken('abc')).toBe('…(len 3)');
   });
 
   it('marks unset tokens', () => {
-    expect(maskToken('')).toBe('(unset)');
+    expect(maskTelegramToken('')).toBe('(unset)');
   });
 });
 
 describe('handleNotifyStatus', () => {
   it('reports unconfigured when no token exists', async () => {
-    const { harness } = makeHarness();
-    const { deps, stdout } = makeDeps(harness, {
-      readTextFile: async () => '[providers]\n',
-    });
+    const harness = makeHarness();
+    const { deps, stdout } = makeDeps(harness);
 
     await handleNotifyStatus(deps);
 
     expect(stdout.join('')).toContain('not configured');
   });
 
-  it('shows masked token and chat id from config.toml', async () => {
-    const { harness } = makeHarness();
-    const { deps, stdout } = makeDeps(harness, {
-      readTextFile: async () =>
-        '[telegram]\nbot_token = "1234567890:SECRET"\nchat_id = "987654321"\nenabled = true\n',
-      fetch: telegramFetch({ getMe: { id: 1, username: 'testbot' } }),
+  it('shows masked token and chat id from effective config', async () => {
+    const harness = makeHarness();
+    harness.getTelegramConfig = async () => ({
+      botToken: '1234567890:SECRET',
+      chatId: '987654321',
+      enabled: true,
     });
+    const { deps, stdout } = makeDeps(harness);
 
     await handleNotifyStatus(deps);
 
@@ -182,96 +159,72 @@ describe('handleNotifyStatus', () => {
     expect(output).toContain('Token: 1234…(len 17)');
     expect(output).toContain('Chat ID: 987654321');
     expect(output).toContain('Enabled: yes');
-    expect(output).toContain('connected as @testbot');
   });
 
-  it('falls back to environment variables', async () => {
-    const { harness } = makeHarness();
-    const { deps, stdout } = makeDeps(harness, {
-      readTextFile: async () => '[providers]\n',
-      env: {
-        KIMI_TELEGRAM_BOT_TOKEN: '1234567890:ENVSECRET',
-        KIMI_TELEGRAM_CHAT_ID: '111',
-      },
-      fetch: telegramFetch({ getMe: { id: 2, first_name: 'EnvBot' } }),
+  it('reports disabled when enabled is false', async () => {
+    const harness = makeHarness();
+    harness.getTelegramConfig = async () => ({
+      botToken: '1234567890:SECRET',
+      chatId: '987654321',
+      enabled: false,
     });
+    const { deps, stdout } = makeDeps(harness);
 
     await handleNotifyStatus(deps);
 
-    const output = stdout.join('');
-    expect(output).toContain('Token: 1234…(len 20)');
-    expect(output).toContain('Chat ID: 111');
+    expect(stdout.join('')).toContain('Enabled: no');
   });
 });
 
 describe('handleNotifySetup', () => {
-  it('writes telegram config when token and chat-id are provided', async () => {
-    const { harness, replacedSections } = makeHarness();
-    const { deps } = makeDeps(harness, {
-      fetch: telegramFetch({
-        getMe: { id: 1, username: 'testbot' },
-        getChat: { id: 987654321, type: 'private' },
-      }),
+  it('calls SDK runTelegramSetup when token and chat-id are provided', async () => {
+    const harness = makeHarness();
+    const run = vi.fn().mockResolvedValue({
+      ok: true,
+      chatId: '987654321',
+      tokenFingerprint: 'abc123',
     });
+    harness.runTelegramSetup = run;
+    const { deps, stdout } = makeDeps(harness);
 
     await handleNotifySetup(deps, { token: '1234567890:SECRET', chatId: '987654321' });
 
-    expect(replacedSections).toHaveLength(1);
-    expect(replacedSections[0]).toEqual({
-      telegram: { botToken: '1234567890:SECRET', chatId: '987654321', enabled: true },
+    expect(run).toHaveBeenCalledWith({
+      token: '1234567890:SECRET',
+      chatId: '987654321',
+      interactive: true,
     });
+    expect(stdout.join('')).toContain('Telegram notifications configured');
+    expect(stdout.join('')).toContain('Chat: 987654321');
   });
 
   it('discovers private chat when chat-id is omitted', async () => {
-    const { harness, replacedSections } = makeHarness();
-    let callCount = 0;
-    const { deps } = makeDeps(harness, {
-      fetch: vi.fn(async (url: string) => {
-        callCount += 1;
-        const method = url.split('/').pop() ?? '';
-        const result = method === 'getMe' ? { id: 1, username: 'testbot' } : [{ update_id: 5, message: { chat: { id: 111, type: 'private' } } }];
-        return {
-          ok: true,
-          status: 200,
-          statusText: 'OK',
-          json: async () => ({ ok: true, result }),
-        } as Response;
-      }) as unknown as typeof fetch,
+    const harness = makeHarness();
+    harness.runTelegramSetup = async (input) => ({
+      ok: true,
+      chatId: input.chatId ?? '111',
+      tokenFingerprint: 'fp',
     });
+    const { deps, stdout } = makeDeps(harness);
 
     await handleNotifySetup(deps, { token: '1234567890:SECRET' });
 
-    expect(replacedSections[0]).toEqual({
-      telegram: { botToken: '1234567890:SECRET', chatId: '111', enabled: true },
-    });
+    expect(stdout.join('')).toContain('Chat: 111');
   });
 
-  it('rejects non-private explicit chat ids', async () => {
-    const { harness } = makeHarness();
-    const { deps } = makeDeps(harness, {
-      fetch: telegramFetch({
-        getMe: { id: 1, username: 'testbot' },
-        getChat: { id: -1, type: 'group', title: 'Group' },
-      }),
+  it('exits with SDK failure detail on failure', async () => {
+    const harness = makeHarness();
+    harness.runTelegramSetup = async () => ({
+      ok: false,
+      status: 'error',
+      detail: 'Invalid bot token',
     });
+    const { deps, stderr, exitCodes } = makeDeps(harness);
 
-    await expect(handleNotifySetup(deps, { token: '1234567890:SECRET', chatId: '-1' })).rejects.toThrow(
-      'group chat',
-    );
-  });
+    await tryRun(() => handleNotifySetup(deps, { token: 'bad' }));
 
-  it('reports invalid tokens', async () => {
-    const { harness } = makeHarness();
-    const { deps } = makeDeps(harness, {
-      fetch: vi.fn().mockResolvedValue({
-        ok: false,
-        status: 401,
-        statusText: 'Unauthorized',
-        json: async () => ({ ok: false, description: 'Unauthorized' }),
-      } as Response),
-    });
-
-    await expect(handleNotifySetup(deps, { token: 'bad' })).rejects.toThrow('Invalid bot token');
+    expect(exitCodes).toEqual([1]);
+    expect(stderr.join('')).toContain('Invalid bot token');
   });
 });
 

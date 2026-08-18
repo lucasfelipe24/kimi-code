@@ -6,10 +6,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { handleNotifyCommand } from '#/tui/commands/notify';
 import type { SlashCommandHost } from '#/tui/commands/dispatch';
+import type { TelegramConfig } from '@moonshot-ai/kimi-code-sdk';
 
-vi.mock('node:fs/promises', () => ({
-  readFile: vi.fn(),
-}));
+function makeHarness(config: TelegramConfig = {}) {
+  return {
+    configPath: '/home/test/.kimi-code/config.toml',
+    getTelegramConfig: vi.fn().mockResolvedValue(config),
+  } as unknown as SlashCommandHost['harness'];
+}
 
 function makeHost(overrides: Partial<SlashCommandHost> = {}): {
   host: SlashCommandHost;
@@ -19,7 +23,7 @@ function makeHost(overrides: Partial<SlashCommandHost> = {}): {
   const notices: { title: string; detail?: string }[] = [];
   const errors: string[] = [];
   const host = {
-    harness: { configPath: '/home/test/.kimi-code/config.toml' } as SlashCommandHost['harness'],
+    harness: makeHarness(),
     showNotice: (title: string, detail?: string) => {
       notices.push({ title, detail });
     },
@@ -42,24 +46,21 @@ describe('handleNotifyCommand', () => {
   });
 
   it('reports unconfigured status', async () => {
-    const { readFile } = await import('node:fs/promises');
-    vi.mocked(readFile).mockRejectedValue(new Error('not found'));
-
     const { host, notices } = makeHost();
     await handleNotifyCommand(host, 'status');
 
     expect(notices).toHaveLength(1);
-    expect(notices[0]!.title).toContain('Telegram notifications');
-    expect(notices[0]!.title).toContain('Telegram notifications');
+    expect(notices[0]!.title).toContain('not configured');
   });
 
-  it('shows masked token and chat id from config', async () => {
-    const { readFile } = await import('node:fs/promises');
-    vi.mocked(readFile).mockResolvedValue(
-      '[telegram]\nbot_token = "1234567890:SECRET"\nchat_id = "987654321"\nenabled = true\n',
-    );
-
-    const { host, notices } = makeHost();
+  it('shows masked token and chat id from effective config', async () => {
+    const { host, notices } = makeHost({
+      harness: makeHarness({
+        botToken: '1234567890:SECRET',
+        chatId: '987654321',
+        enabled: true,
+      }),
+    });
     await handleNotifyCommand(host, 'status');
 
     expect(notices[0]!.detail).toContain('Token: 1234…(len 17)');
