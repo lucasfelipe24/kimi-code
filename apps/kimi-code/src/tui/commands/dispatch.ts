@@ -46,6 +46,7 @@ import {
 import { handleGoalCommand } from './goal';
 import { handleFeedbackCommand, showMcpServers, showStatusReport, showUsage } from './info';
 import { handleMemoryCommand } from './memory';
+import { handleNotifyCommand } from './notify';
 import { handleAddDirCommand } from './add-dir';
 import { parseSlashInput } from './parse';
 import { handlePluginsCommand } from './plugins';
@@ -530,6 +531,9 @@ async function handleBuiltInSlashCommand(
       return;
     case 'memory':
       handleMemoryCommand(host, args);
+      return;
+    case 'notify':
+      await handleNotifyCommand(host, args);
       return;
     case 'reload':
       await handleReloadCommand(host);
