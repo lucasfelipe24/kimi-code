@@ -116,7 +116,7 @@ describe('TowerFeature — experimental flag gating', () => {
   });
 });
 
-describe('tower flag — hard-disabled (no declaration registered)', () => {
+describe('tower flag — declared, default on', () => {
   let disposables: DisposableStore;
   let homeDir: string;
 
@@ -139,19 +139,31 @@ describe('tower flag — hard-disabled (no declaration registered)', () => {
     return { config: ix.get(IConfigService), flags: ix.get(IFlagService) };
   }
 
-  it('cannot be enabled by the dedicated or master env while no tower flag is registered', () => {
-    const { flags } = makeFlags({
-      KIMI_CODE_EXPERIMENTAL_TOWER: 'true',
-      [MASTER_ENV]: 'true',
-    });
-    expect(flags.explain(TOWER_FLAG_ID)).toBeUndefined();
+  it('is enabled by default, with no env or config input', () => {
+    const { flags } = makeFlags();
+    expect(flags.explain(TOWER_FLAG_ID)?.source).toBe('default');
+    expect(flags.enabled(TOWER_FLAG_ID)).toBe(true);
+  });
+
+  it('is forced off by the dedicated env', () => {
+    const { flags } = makeFlags({ KIMI_CODE_EXPERIMENTAL_TOWER: 'false' });
+    expect(flags.explain(TOWER_FLAG_ID)?.source).toBe('env');
     expect(flags.enabled(TOWER_FLAG_ID)).toBe(false);
   });
 
-  it('cannot be enabled through the [experimental] config section', async () => {
+  it('is disabled through the [experimental] config section', async () => {
     const { config, flags } = makeFlags();
-    await config.set(EXPERIMENTAL_SECTION, { [TOWER_FLAG_ID]: true });
-    expect(flags.explain(TOWER_FLAG_ID)).toBeUndefined();
+    await config.set(EXPERIMENTAL_SECTION, { [TOWER_FLAG_ID]: false });
+    expect(flags.explain(TOWER_FLAG_ID)?.source).toBe('config');
     expect(flags.enabled(TOWER_FLAG_ID)).toBe(false);
+  });
+
+  it('is forced on by the master env even over a dedicated env off', () => {
+    const { flags } = makeFlags({
+      KIMI_CODE_EXPERIMENTAL_TOWER: 'false',
+      [MASTER_ENV]: 'true',
+    });
+    expect(flags.explain(TOWER_FLAG_ID)?.source).toBe('master-env');
+    expect(flags.enabled(TOWER_FLAG_ID)).toBe(true);
   });
 });

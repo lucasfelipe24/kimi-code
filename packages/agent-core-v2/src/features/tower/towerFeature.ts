@@ -10,6 +10,7 @@ import { LifecycleScope } from '#/app/scopes';
 import { Feature } from '#/features/feature';
 import { registerFeature } from '#/features/featureRegistry';
 
+import './flag';
 import { TOWER_FLAG_ID } from './tower';
 import { ITowerRateLimitService } from './towerRateLimit';
 import { TowerRateLimitService } from './towerRateLimitService';
