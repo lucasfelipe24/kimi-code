@@ -25,6 +25,8 @@ export {
 export { handleSwarmCommand } from './swarm';
 export { handleWorkflowCommand } from './workflow';
 export { handleFeedbackCommand, showMcpServers, showStatusReport, showUsage } from './info';
+export { handleMemoryCommand } from './memory';
+export { handleNotifyCommand } from './notify';
 export { handlePluginsCommand } from './plugins';
 export { handleReloadCommand, handleReloadTuiCommand } from './reload';
 export { handleGoalCommand, parseGoalCommand, goalObjectiveLengthWarning } from './goal';
