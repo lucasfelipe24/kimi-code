@@ -115,10 +115,11 @@ Fields in the config file fall into two categories: **top-level scalars** that d
 | `memory` | `table` | — | Persistent-memory limits → [`memory`](#memory) |
 | `services` | `table` | — | Built-in external service configuration → [`services`](#services) |
 | `permission` | `table` | — | Initial permission rules → [`permission`](#permission) |
+| `telegram` | `table` | — | Telegram notifications → [`telegram`](#telegram) |
 | `hooks` | `array<table>` | — | Lifecycle hooks; see [Hooks](../customization/hooks.md) |
 | `identity` | `table` | — | Custom agent identity → [`identity`](#identity) |
 
-The following sections cover each of the nested tables in turn: `providers`, `models`, `thinking`, `loop_control`, `background`, `tools`, `image`, `memory`, `services`, and `permission`.
+The following sections cover each of the nested tables in turn: `providers`, `models`, `thinking`, `loop_control`, `background`, `tools`, `image`, `memory`, `services`, `permission`, and `telegram`.
 
 ## `providers`
 
@@ -605,6 +606,35 @@ pattern = "Bash"
 ::: tip
 MCP server declarations are configured in `~/.kimi-code/mcp.json` or the project-local `.kimi-code/mcp.json`, not in `config.toml`. The interactive configuration entry point is `/mcp-config`; see [Model Context Protocol](../customization/mcp.md).
 :::
+
+## `telegram`
+
+The `[telegram]` table configures Telegram notifications and remote interaction for the current user. It is global-only: project-local files cannot override it, so a workspace cannot enable Telegram or supply its own bot token. See [Telegram notifications](../guides/telegram-notifications.md) for setup instructions.
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `bot_token` | `string` | — | Bot token from BotFather |
+| `chat_id` | `string` | — | Telegram chat ID that receives messages |
+| `enabled` | `boolean` | `false` | Master switch for the integration |
+| `redact` | `boolean` | `false` | When `true`, scrub credential-shaped and diagnostic content from outbound messages |
+| `btw.enabled` | `boolean` | `true` | Allow the `/btw` side-question command in Telegram |
+| `tool_activity.enabled` | `boolean` | `false` | Send live tool-call start/result notices in addition to final answers |
+
+```toml
+[telegram]
+bot_token = "YOUR_BOT_TOKEN"
+chat_id = "YOUR_CHAT_ID"
+enabled = true
+redact = false
+
+[telegram.btw]
+enabled = true
+
+[telegram.tool_activity]
+enabled = false
+```
+
+You can also set the token, chat ID, and master switch through environment variables, which take priority and are never written back to the config file: `KIMI_TELEGRAM_BOT_TOKEN`, `KIMI_TELEGRAM_CHAT_ID`, and `KIMI_TELEGRAM_ENABLED`.
 
 ## `tui.toml`
 
