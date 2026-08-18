@@ -104,6 +104,22 @@ export type { ContentPart, Role, ThinkingEffort, ToolCall } from '@moonshot-ai/k
 // Contributed commands are an agent-core-v2 seam; the type is re-exported
 // from the v2 engine (v1 sessions report an empty command set).
 export type { AgentCommandInfo } from '@moonshot-ai/agent-core-v2/agent/command/agentCommand';
+// Telegram config + pairing types are owned by the v2 engine; the SDK surfaces
+// them through a thin typed accessor so apps/kimi-code does not import
+// agent-core-v2 directly.
+export type {
+  TelegramConfig,
+  TelegramSetupFailure,
+  TelegramSetupResult,
+  TelegramSetupStatus,
+  TelegramSetupSuccess,
+} from '#/v2/telegram';
+export {
+  maskTelegramToken,
+  telegramTokenFingerprint,
+  TELEGRAM_SECTION,
+} from '#/v2/telegram';
+export type { RunTelegramSetupSdkInput } from '#/v2/telegram';
 
 export type PermissionMode = 'yolo' | 'manual' | 'auto';
 

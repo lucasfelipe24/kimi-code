@@ -45,12 +45,15 @@ import type {
   RenameSessionInput,
   ResumeSessionInput,
   ReloadSessionInput,
+  RunTelegramSetupSdkInput,
   SessionSummary,
   SessionSummaryPage,
   SkillSummary,
+  TelegramConfig,
   TelemetryClient,
   TelemetryContextPatch,
   TelemetryProperties,
+  TelegramSetupResult,
   TestMcpServerOptions,
   UploadFileOptions,
   WorkspaceTrustInfo,
@@ -511,6 +514,31 @@ export class KimiHarness {
    */
   async replaceConfigSections(sections: Record<string, unknown>): Promise<void> {
     return this.rpc.replaceConfigSections(sections);
+  }
+
+  /**
+   * Typed read of the v2 engine's `[telegram]` config section. Requires the
+   * agent-core-v2 engine — a v1-backed harness rejects with `not_implemented`.
+   */
+  async getTelegramConfig(): Promise<TelegramConfig> {
+    return this.rpc.getTelegramConfig();
+  }
+
+  /**
+   * Deep-merge a patch into the `[telegram]` section. Requires the
+   * agent-core-v2 engine.
+   */
+  async setTelegramConfig(patch: TelegramConfig): Promise<TelegramConfig> {
+    return this.rpc.setTelegramConfig(patch);
+  }
+
+  /**
+   * Validate a Telegram bot token, pair or validate a private chat, and persist
+   * the resulting `[telegram]` section with `enabled: true`. Requires the
+   * agent-core-v2 engine.
+   */
+  async runTelegramSetup(input: RunTelegramSetupSdkInput): Promise<TelegramSetupResult> {
+    return this.rpc.runTelegramSetup(input);
   }
 
   /**
