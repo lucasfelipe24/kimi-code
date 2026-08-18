@@ -172,13 +172,13 @@ To prevent all users from firing at the same time on the hour, the scheduler app
 
 ## Telegram integration
 
-When Telegram notifications are configured, the agent can push a workspace file to the configured private chat with the `telegram_send` tool.
+When Telegram notifications are configured, the agent can push a workspace file to the configured private chat with the `TelegramSend` tool.
 
 | Tool | Default Approval | Description |
 | --- | --- | --- |
-| `telegram_send` | Requires approval | Send a workspace file to the Telegram chat |
+| `TelegramSend` | Requires approval | Send a workspace file to the Telegram chat |
 
-**`telegram_send`** accepts `path` (workspace-relative file path) and an optional `caption` (short text shown above the file). The path is resolved inside the workspace root and must point to a regular file; non-regular files and files larger than 50 MiB are rejected before any Telegram call is made. Images are sent as photos, and other files are sent as documents with their MIME type preserved. The tool only appears when the Telegram integration is effectively enabled.
+**`TelegramSend`** accepts `path` (workspace-relative file path) and an optional `caption` (short text shown below the file). The path is resolved inside the workspace root and must point to a regular file; non-regular files and files larger than 50 MiB are rejected before any Telegram call is made. The four image MIME types (`image/jpeg`, `image/png`, `image/gif`, `image/webp`) are sent as photos; other files are sent as documents. The tool only appears when the Telegram integration is effectively enabled.
 
 ## Next steps
 

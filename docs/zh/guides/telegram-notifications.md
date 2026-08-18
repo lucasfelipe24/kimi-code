@@ -2,7 +2,7 @@
 
 Kimi Code CLI 可以把会话更新推送到一个私有的 Telegram 聊天，并在聊天中接收简短回复和命令。这样你可以在手机上关注长时间运行的任务、用内联按钮回答 `AskUserQuestion` 提示，或者无需重新打开终端就能发送一条 `/btw` 旁路问题。
 
-当前版本的集成仅支持扁平的私聊模式：一个 bot、一个聊天，不支持论坛主题（forum topic）和富文本 Markdown。通知、回复驱动的轮次、按钮回答、`/btw` 以及 `telegram_send` 工具都在此模式下可用。
+当前版本的集成仅支持扁平的私聊模式：一个 bot、一个聊天，不支持论坛主题（forum topic）和富文本 Markdown。通知、回复驱动的轮次、按钮回答、`/btw` 以及 `TelegramSend` 工具都在此模式下可用。
 
 ## 开始之前
 
@@ -20,7 +20,7 @@ Kimi Code CLI 可以把会话更新推送到一个私有的 Telegram 聊天，�
 kimi notify setup
 ```
 
-按提示粘贴 BotFather 给出的 bot token。命令会进行一次短暂的轮询，然后向第一个给 bot 发消息的私聊发送测试消息。回复该消息后，CLI 就会把配对信息写入你的全局配置。
+按提示粘贴 BotFather 给出的 bot token。命令会进行一次短暂的轮询；第一个给 bot 发消息的私聊会被立即配对，CLI 随即把该聊天写入你的全局配置。轮询大约持续 60 秒。
 
 如果你已经知道 chat ID，也可以直接传入：
 
@@ -28,7 +28,7 @@ kimi notify setup
 kimi notify setup --chat-id YOUR_CHAT_ID
 ```
 
-要检查集成是否已配置、以及 bot 是否仍能访问 Telegram，可运行：
+要检查集成是否已配置，可运行：
 
 ```sh
 kimi notify status
@@ -58,12 +58,12 @@ enabled = false
 | --- | --- | --- | --- |
 | `bot_token` | `string` | — | 从 BotFather 获取的 bot token |
 | `chat_id` | `string` | — | 接收消息的 Telegram chat ID |
-| `enabled` | `boolean` | `false` | 集成的总开关 |
-| `redact` | `boolean` | `false` | 设为 `true` 时， outbound 消息会清除形似凭据和诊断日志的内容 |
-| `btw.enabled` | `boolean` | `true` | 允许在 Telegram 中使用 `/btw` 旁路问题命令 |
+| `enabled` | `boolean` | 开启（未设置即启用） | 集成的总开关 |
+| `redact` | `boolean` | `false` | 设为 `true` 时，Assistant 的 outbound 内容和 `/btw` 的回答会被替换为 "response ready (redacted)"；而 ask 问题及其选项按钮仍保持可读、可回答 |
+| `btw.enabled` | `boolean` | 启用（未设置） | `/btw` 的总开关；设为 `false` 时，`/btw` 会收到 "BTW side questions are disabled." 的回复，且不会启动旁路问题 |
 | `tool_activity.enabled` | `boolean` | `false` | 除最终答案外，同时发送工具调用的开始/结果通知 |
 
-你也可以通过环境变量设置两个必填项。环境变量优先于配置文件，且不会被写回磁盘：
+你也可以通过环境变量设置必填项。环境变量优先于配置文件，且不会被写回磁盘：
 
 ```sh
 export KIMI_TELEGRAM_BOT_TOKEN="YOUR_BOT_TOKEN"
@@ -73,7 +73,7 @@ export KIMI_TELEGRAM_ENABLED=1
 
 ## TUI 斜杠命令
 
-在交互式 TUI 中输入 `/notify` 可打开 Telegram 通知面板。你可以在面板中查看当前配对、重新运行 setup，或直接开关通知，无需手动编辑配置文件。
+在交互式 TUI 中输入 `/notify` 会显示当前 Telegram 配对的状态提示。`/notify setup` 会提示你在 shell 中运行 `kimi notify setup`；TUI 内没有 setup 交互界面，也无法直接开关通知。
 
 ## 在 Telegram 中使用 Kimi Code
 
@@ -82,8 +82,8 @@ export KIMI_TELEGRAM_ENABLED=1
 - **最终答案**：某个轮次完成时送达。
 - **`AskUserQuestion` 提示**：会附带内联按钮；点击按钮即可回答，也可以发送文字回复。
 - **文字回复**：聊天中的任意文字回复都会作为新的 prompt 注入当前会话，因此你可以直接在 Telegram 里继续对话。
-- **`/btw <问题>`**：在 fork 出的 subagent 中开启一段简短的旁路对话。回答会返回 Telegram，且不会影响 main session 的 transcript。
-- **`telegram_send`**：agent 可调用的工具，用于把工作区文件推送到聊天，并可附带一段说明文字。
+- **`/btw <问题>`**：启动一个隔离的旁路问题。回答会返回 Telegram，且问题和答案都不会进入 main session 的 transcript。只发送 `/btw` 而不带问题会返回用法提示。
+- **`TelegramSend`**：agent 可调用的工具，用于把工作区文件推送到聊天，并可附带一段说明文字。
 
 ::: tip 提示
 该集成只在承载当前会话的 Kimi Code 进程运行时有效。它不是一个常驻的远程 daemon。
@@ -92,10 +92,10 @@ export KIMI_TELEGRAM_ENABLED=1
 ## 安全说明
 
 - Telegram 配置只保存在用户级的 `config.toml` 中，不会进入项目级本地配置。
-- `kimi notify status` 和 `/notify` 面板只会显示脱敏后的 token，不会展示真实值。
+- `kimi notify status` 和 `/notify` 只会显示脱敏后的 token，不会展示真实值。
 - bot 只会向单个配置的私聊发送消息。当前版本不支持群组聊天和论坛主题。
 
 ## 下一步
 
-- [内置工具](../reference/tools.md) —— Agent 可调用的工具完整列表，包括 `telegram_send`
+- [内置工具](../reference/tools.md) —— Agent 可调用的工具完整列表，包括 `TelegramSend`
 - [环境变量](../configuration/env-vars.md) —— 影响 Kimi Code CLI 的所有运行时变量

@@ -19,7 +19,7 @@
 | `/secondary-model` | `/subagent-model` | 选择 subagent 的默认模型（写入 `[secondary_model] default_model`，详见[subagent 模型池](../configuration/config-files.md#subagent-模型池)）。在 subagent 模型池实验功能启用时可见 | 是 |
 | `/visual-model` | — | 选择用于图像 / 视频检查的模型（当前模型为纯文本时生效；写入 `[visual_model] model`，详见[`visual_model` 节](../configuration/config-files.md#visual_model))。仅提供声明支持图像、视频或音频输入的模型 | 是 |
 | `/settings` | `/config` | 打开 TUI 内的设置面板 | 是 |
-| `/notify` | — | 打开 Telegram 通知面板，查看配对、运行 setup 或开关通知。详见 [Telegram 通知](../guides/telegram-notifications.md) | 是 |
+| `/notify` | — | 显示当前 Telegram 配对状态。`/notify setup` 会提示你在 shell 中运行 `kimi notify setup`。详见 [Telegram 通知](../guides/telegram-notifications.md) | 是 |
 | `/experiments` | `/experimental` | 打开实验功能面板 | 是 |
 | `/permission` | — | 选择权限模式 | 是 |
 | `/editor` | — | 配置 `Ctrl-G` 调起的外部编辑器 | 是 |

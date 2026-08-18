@@ -615,9 +615,9 @@ The `[telegram]` table configures Telegram notifications and remote interaction 
 | --- | --- | --- | --- |
 | `bot_token` | `string` | — | Bot token from BotFather |
 | `chat_id` | `string` | — | Telegram chat ID that receives messages |
-| `enabled` | `boolean` | `false` | Master switch for the integration |
-| `redact` | `boolean` | `false` | When `true`, scrub credential-shaped and diagnostic content from outbound messages |
-| `btw.enabled` | `boolean` | `true` | Allow the `/btw` side-question command in Telegram |
+| `enabled` | `boolean` | on (unset = enabled) | Master switch for the integration |
+| `redact` | `boolean` | `false` | When `true`, outbound assistant content and `/btw` answers are replaced with "response ready (redacted)"; ask questions and their option buttons stay readable and answerable |
+| `btw.enabled` | `boolean` | enabled (unset) | Kill switch for `/btw`; when `false`, `/btw` is answered with "BTW side questions are disabled." and no side question starts |
 | `tool_activity.enabled` | `boolean` | `false` | Send live tool-call start/result notices in addition to final answers |
 
 ```toml

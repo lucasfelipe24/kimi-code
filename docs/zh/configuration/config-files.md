@@ -614,9 +614,9 @@ MCP server 的声明配置写在 `~/.kimi-code/mcp.json` 或项目内 `.kimi-cod
 | --- | --- | --- | --- |
 | `bot_token` | `string` | — | 从 BotFather 获取的 bot token |
 | `chat_id` | `string` | — | 接收消息的 Telegram chat ID |
-| `enabled` | `boolean` | `false` | 集成的总开关 |
-| `redact` | `boolean` | `false` | 设为 `true` 时，outbound 消息会清除形似凭据和诊断日志的内容 |
-| `btw.enabled` | `boolean` | `true` | 允许在 Telegram 中使用 `/btw` 旁路问题命令 |
+| `enabled` | `boolean` | 开启（未设置即启用） | 集成的总开关 |
+| `redact` | `boolean` | `false` | 设为 `true` 时，Assistant 的 outbound 内容和 `/btw` 的回答会被替换为 "response ready (redacted)"；而 ask 问题及其选项按钮仍保持可读、可回答 |
+| `btw.enabled` | `boolean` | 启用（未设置） | `/btw` 的总开关；设为 `false` 时，`/btw` 会收到 "BTW side questions are disabled." 的回复，且不会启动旁路问题 |
 | `tool_activity.enabled` | `boolean` | `false` | 除最终答案外，同时发送工具调用的开始/结果通知 |
 
 ```toml

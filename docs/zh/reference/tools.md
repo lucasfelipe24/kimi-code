@@ -172,13 +172,13 @@ Memory 还有固定的硬限制：每条 body 最多 4096 个 UTF-8 字节，nam
 
 ## Telegram 集成
 
-配置 Telegram 通知后，Agent 可以使用 `telegram_send` 工具把工作区文件推送到已配置的私聊。
+配置 Telegram 通知后，Agent 可以使用 `TelegramSend` 工具把工作区文件推送到已配置的私聊。
 
 | 工具 | 默认审批 | 说明 |
 | --- | --- | --- |
-| `telegram_send` | 需审批 | 把工作区文件发送到 Telegram 聊天 |
+| `TelegramSend` | 需审批 | 把工作区文件发送到 Telegram 聊天 |
 
-**`telegram_send`** 接受 `path`（工作区相对路径）和可选的 `caption`（显示在文件上方的简短文字）。路径会解析到工作区根目录内部，且必须指向普通文件；非普通文件和超过 50 MiB 的文件会在调用 Telegram 之前被拒绝。图片会以 photo 形式发送，其他文件则以 document 形式发送并保留 MIME 类型。仅在 Telegram 集成实际启用时，该工具才会出现在工具列表中。
+**`TelegramSend`** 接受 `path`（工作区相对路径）和可选的 `caption`（显示在文件下方的简短文字）。路径会解析到工作区根目录内部，且必须指向普通文件；非普通文件和超过 50 MiB 的文件会在调用 Telegram 之前被拒绝。四种图片 MIME 类型（`image/jpeg`、`image/png`、`image/gif`、`image/webp`）会以 photo 形式发送；其他文件则以 document 形式发送。仅在 Telegram 集成实际启用时，该工具才会出现在工具列表中。
 
 ## 下一步
 
