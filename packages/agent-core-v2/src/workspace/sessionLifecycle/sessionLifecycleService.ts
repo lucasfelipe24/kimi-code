@@ -141,6 +141,7 @@ export class SessionLifecycleService extends Disposable implements ISessionLifec
   private readonly _onDidForkSession = this._register(new Emitter<SessionForkedEvent>());
   readonly onDidForkSession: Event<SessionForkedEvent> = this._onDidForkSession.event;
   private readonly resuming = new Map<string, Promise<ISessionScopeHandle | undefined>>();
+  private readonly resumeFailures = new Map<string, Error>();
 
   constructor(
     private readonly instantiation: IInstantiationService,
@@ -329,6 +330,7 @@ export class SessionLifecycleService extends Disposable implements ISessionLifec
     if (inflight !== undefined) return inflight;
     const live = this.sessions.get(sessionId);
     if (live !== undefined) return Promise.resolve(live);
+    this.resumeFailures.delete(sessionId);
     const promise = this.doResume(sessionId, opts)
       .catch((error: unknown) => {
         this.telemetry
@@ -336,11 +338,18 @@ export class SessionLifecycleService extends Disposable implements ISessionLifec
           .track2('session_load_failed', {
             reason: isError2(error) ? error.code : error instanceof Error ? error.name : 'unknown',
           });
+        this.resumeFailures.set(sessionId, error instanceof Error ? error : new Error('session resume failed'));
         throw error;
       })
       .finally(() => this.resuming.delete(sessionId));
     this.resuming.set(sessionId, promise);
     return promise;
+  }
+
+  async whenResumeSettled(sessionId: string): Promise<void> {
+    await this.resuming.get(sessionId);
+    const failure = this.resumeFailures.get(sessionId);
+    if (failure !== undefined) throw failure;
   }
 
   private async doResume(
@@ -360,11 +369,17 @@ export class SessionLifecycleService extends Disposable implements ISessionLifec
       additionalDirs: opts?.additionalDirs,
       mcpServers: opts?.mcpServers,
     });
-    const agents = handle.accessor.get(IAgentLifecycleService);
-    if (agents.get(MAIN_AGENT_ID) === undefined) {
-      await agents.create({ agentId: MAIN_AGENT_ID });
+    try {
+      const agents = handle.accessor.get(IAgentLifecycleService);
+      if (agents.get(MAIN_AGENT_ID) === undefined) {
+        await agents.create({ agentId: MAIN_AGENT_ID });
+      }
+      await this.announceCreated({ sessionId, handle, source: 'resume' });
+    } catch (error) {
+      this.sessions.delete(sessionId);
+      handle.dispose();
+      throw error;
     }
-    await this.announceCreated({ sessionId, handle, source: 'resume' });
     return handle;
   }
 
