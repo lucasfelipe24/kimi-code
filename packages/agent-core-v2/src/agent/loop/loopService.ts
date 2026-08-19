@@ -60,6 +60,7 @@ import {
   RunEnded,
   ThinkingDelta,
   ToolCallDelta,
+  turnPromptAttachments,
   turnPromptText,
   TurnStarted,
   TurnStepCompleted,
@@ -455,6 +456,7 @@ export class AgentLoopService extends Disposable implements IAgentLoopService {
         turnId: job.turn.id,
         origin,
         prompt: isDisplayablePromptOrigin(origin) ? turnPromptText(job.seed.input, origin) : undefined,
+        promptAttachments: turnPromptAttachments(job.seed.input),
       }),
     );
     void this.runTurn(job.turn, job.ready).then(job.result.resolve, job.result.reject);
