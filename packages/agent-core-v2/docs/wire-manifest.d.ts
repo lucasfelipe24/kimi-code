@@ -24,7 +24,7 @@
 // cross-reducers), blobs (the folding states whose blob codec offloads inline
 // media to blob storage), owner (the source file declaring the class).
 
-// Index (54 record types)
+// Index (57 record types)
 //   config.update                      profile                                                               src/agent/profile/profileOps.ts
 //   context.append_loop_event          contextMemory, turn                                                   src/agent/contextMemory/contextEvents.ts
 //   context.append_message             contextMemory, goalForkNotice, plan, task.notificationDelivery, todo  src/agent/contextMemory/contextEvents.ts
@@ -57,6 +57,8 @@
 //   profile.bind                       profile, profile.activeTools                                          src/agent/profile/profileOps.ts
 //   prompt.accepted                    promptAdmission                                                       src/agent/prompt/promptOps.ts
 //   runtime.set_binding                runtimeBinding                                                        src/agent/runtimeBinding/runtimeBindingOps.ts
+//   staleGuard.cleared                 staleGuard                                                            src/features/staleGuard/staleGuardOps.ts
+//   staleGuard.recorded                staleGuard                                                            src/features/staleGuard/staleGuardOps.ts
 //   swarm_mode.enter                   swarm                                                                 src/features/swarm/swarmOps.ts
 //   swarm_mode.exit                    contextMemory, swarm                                                  src/features/swarm/swarmOps.ts
 //   task.started                       task                                                                  src/agent/task/taskOps.ts
@@ -65,6 +67,7 @@
 //   token_counting.measured            tokenCounting                                                         src/agent/tokenCounting/tokenCountingOps.ts
 //   token_counting.rebased             tokenCounting                                                         src/agent/tokenCounting/tokenCountingOps.ts
 //   token_counting.truncated           tokenCounting                                                         src/agent/tokenCounting/tokenCountingOps.ts
+//   token_counting.turn_recorded       tokenCounting                                                         src/agent/tokenCounting/tokenCountingOps.ts
 //   tools.register_user_tool           userTool                                                              src/agent/userTool/userToolOps.ts
 //   tools.reset_active_tools           profile.activeTools                                                   src/agent/profile/profileOps.ts
 //   tools.set_active_tools             profile.activeTools                                                   src/agent/profile/profileOps.ts
@@ -499,6 +502,24 @@ interface RuntimeSetBindingPayload {
 }
 
 /**
+ * states: staleGuard
+ * owner: src/features/staleGuard/staleGuardOps.ts
+ */
+interface StaleGuardClearedPayload {
+  _name: 'staleGuard.cleared';
+}
+
+/**
+ * states: staleGuard
+ * owner: src/features/staleGuard/staleGuardOps.ts
+ */
+interface StaleGuardRecordedPayload {
+  _name: 'staleGuard.recorded';
+  path: string;
+  mtimeMs: number;
+}
+
+/**
  * states: swarm
  * owner: src/features/swarm/swarmOps.ts
  */
@@ -575,6 +596,17 @@ interface TokenCountingTruncatedPayload {
   _name: 'token_counting.truncated';
   length: number;
   tokens: number;
+}
+
+/**
+ * states: tokenCounting
+ * owner: src/agent/tokenCounting/tokenCountingOps.ts
+ */
+interface TokenCountingTurnRecordedPayload {
+  _name: 'token_counting.turn_recorded';
+  length: number;
+  tokens: number;
+  turnId: number;
 }
 
 /**
@@ -800,6 +832,8 @@ interface WirePayloadMap {
   "profile.bind": ProfileBindPayload;
   "prompt.accepted": PromptAcceptedPayload;
   "runtime.set_binding": RuntimeSetBindingPayload;
+  "staleGuard.cleared": StaleGuardClearedPayload;
+  "staleGuard.recorded": StaleGuardRecordedPayload;
   "swarm_mode.enter": SwarmModeEnterPayload;
   "swarm_mode.exit": SwarmModeExitPayload;
   "task.started": TaskStartedPayload;
@@ -808,6 +842,7 @@ interface WirePayloadMap {
   "token_counting.measured": TokenCountingMeasuredPayload;
   "token_counting.rebased": TokenCountingRebasedPayload;
   "token_counting.truncated": TokenCountingTruncatedPayload;
+  "token_counting.turn_recorded": TokenCountingTurnRecordedPayload;
   "tools.register_user_tool": ToolsRegisterUserToolPayload;
   "tools.reset_active_tools": ToolsResetActiveToolsPayload;
   "tools.set_active_tools": ToolsSetActiveToolsPayload;

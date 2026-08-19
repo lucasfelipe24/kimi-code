@@ -27,7 +27,7 @@
 // references become '(circular)', and class instances collapse to a '(ClassName)'
 // marker — the wire shape of an entry is the JSON projection of the type here.
 //
-// Index (App: 0 keys · Workspace: 6 keys · Session: 17 keys · Agent: 100 keys)
+// Index (App: 0 keys · Workspace: 6 keys · Session: 17 keys · Agent: 101 keys)
 //   App
 //   Workspace
 //     workspaceDirs.ephemeralDirs          src/workspace/workspaceDirs/workspaceDirsService.ts
@@ -125,6 +125,7 @@
 //     runtimeBinding                                  src/agent/runtimeBinding/runtimeBindingOps.ts
 //     shellCommand.tasks                              src/agent/shellCommand/shellCommandService.ts
 //     skill                                           src/agent/skill/skillOps.ts
+//     staleGuard                                      src/features/staleGuard/staleGuardOps.ts
 //     stepRetry.failedAttempts                        src/agent/stepRetry/stepRetryService.ts
 //     stepRetry.lastFailedDriverId                    src/agent/stepRetry/stepRetryService.ts
 //     swarm                                           src/features/swarm/swarmOps.ts
@@ -1584,7 +1585,7 @@ export interface AgentStateSnapshot {
   'task.notificationDelivery': readonly string[];
   'task.scheduledNotificationKeys': Set<string>;
   // src/agent/tokenCounting/tokenCountingOps.ts
-  // replayable · durable — folds: TokenCountingMeasured, TokenCountingTruncated, TokenCountingRebased
+  // replayable · durable — folds: TokenCountingMeasured, TokenCountingTruncated, TokenCountingRebased, TokenCountingTurnRecorded
   'tokenCounting': /* TokenCountingState — packages/agent-core-v2/src/agent/tokenCounting/tokenCountingOps.ts */ {
     readonly anchors: readonly /* TokenAnchor — packages/agent-core-v2/src/agent/tokenCounting/tokenCountingOps.ts */ {
       readonly length: number;
@@ -1655,6 +1656,9 @@ export interface AgentStateSnapshot {
     readonly id?: string;
     readonly revisionCount?: Readonly<Record<string, number>>;
   };
+  // src/features/staleGuard/staleGuardOps.ts
+  // replayable · durable — folds: StaleGuardRecorded, StaleGuardCleared
+  'staleGuard': /* StaleGuardModelState — packages/agent-core-v2/src/features/staleGuard/staleGuardOps.ts */ Map<string, number>;
   // src/features/swarm/swarmOps.ts
   // replayable · durable — folds: SwarmModeEnter, SwarmModeExit
   'swarm': 'task' | 'tool' | 'manual' | null;
