@@ -64,7 +64,6 @@ export type PersistenceScopeName =
   | 'logs'
   | 'cache'
   | 'credentials'
-  | 'cron'
   | 'memory';
 
 export interface IBootstrapService {
