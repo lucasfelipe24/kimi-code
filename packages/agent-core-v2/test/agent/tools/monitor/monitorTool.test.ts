@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   IAgentTaskService,
   type AgentTask,
+  type AgentTaskWaitDelivery,
   type IAgentTaskEntry,
   type AgentTaskInfo,
   type AgentTaskOutputSnapshot,
@@ -98,6 +99,7 @@ function fakeTasks(): IAgentTaskService & { readonly registerSpy: ReturnType<typ
     }),
     readOutput: async () => '',
     suppressTerminalNotification: async () => {},
+    markTasksDeliveredViaWait: (_tasks: readonly AgentTaskWaitDelivery[]): void => {},
     detach: () => undefined,
     stop: async () => undefined,
     stopByUser: async () => undefined,

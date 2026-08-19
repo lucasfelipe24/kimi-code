@@ -52,16 +52,18 @@ import {
   type AgentTaskOutputSnapshot,
   type AgentTaskStatus,
   type AgentTaskTrackOptions,
+  type AgentTaskWaitDelivery,
   type ForegroundTaskReleaseReason,
   type IAgentTaskEntry,
   type RegisterAgentTaskOptions,
 } from './task';
 import { resolveAgentTaskConfig } from './configSection';
 import { AgentTaskPersistence } from './persist';
-import { taskKey, TaskNotified, TaskStarted, TaskTerminated } from './taskOps';
+import { taskKey, TaskNotified, TaskStarted, TaskTerminated, TaskWaitDelivered } from './taskOps';
 import { formatTaskList } from '#/agent/tools/task/task-list/taskListTool';
 import '#/agent/tools/task/task-output/taskOutputTool';
 import '#/agent/tools/task/task-stop/taskStopTool';
+import '#/agent/tools/task/task-wait/taskWaitTool';
 
 interface ForegroundRelease {
   readonly promise: Promise<ForegroundTaskReleaseReason>;
@@ -99,6 +101,13 @@ export const taskNotificationDeliveryKey = defineState(
     const key = notificationKey(origin);
     if (!s.includes(key)) {
       s.push(key);
+    }
+  })
+  .on(TaskWaitDelivered, (s, e) => {
+    for (const key of e.keys) {
+      if (!s.includes(key)) {
+        s.push(key);
+      }
     }
   });
 
@@ -615,6 +624,23 @@ export class AgentTaskService extends Disposable implements IAgentTaskService {
 
     const ghost = this.ghosts.get(taskId);
     if (ghost !== undefined) return;
+  }
+
+  markTasksDeliveredViaWait(tasks: readonly AgentTaskWaitDelivery[]): void {
+    if (tasks.length === 0) return;
+    const keys: string[] = [];
+    for (const { taskId, status } of tasks) {
+      const origin: TaskNotificationOrigin = {
+        taskId,
+        status,
+        notificationId: taskNotificationId(taskId, status),
+      };
+      const key = notificationKey(origin);
+      this.pendingNotificationRequests.get(key)?.abort();
+      this.markDeliveredNotification(origin);
+      keys.push(key);
+    }
+    void this.dispatcher.dispatch(new TaskWaitDelivered({ keys }));
   }
 
   detach(taskId: string): AgentTaskInfo | undefined {
@@ -1141,6 +1167,7 @@ export class AgentTaskService extends Disposable implements IAgentTaskService {
     const context = await this.buildAgentTaskNotificationContext(info);
     if (context === undefined) return;
     const key = notificationKey(context.origin);
+    if (this.deliveredNotificationKeys.has(key)) return;
     const request = new TaskNotificationStepRequest(
       {
         role: 'user',
@@ -1203,7 +1230,7 @@ export class AgentTaskService extends Disposable implements IAgentTaskService {
       kind: 'task',
       taskId: info.taskId,
       status: info.status,
-      notificationId: `task:${info.taskId}:${info.status}`,
+      notificationId: taskNotificationId(info.taskId, info.status),
     };
     const key = notificationKey(origin);
     if (this.buildingNotificationKeys.has(key)) return undefined;
@@ -1421,6 +1448,10 @@ function isTaskOrigin(origin: unknown): origin is TaskNotificationOrigin {
     typeof value['status'] === 'string' &&
     typeof value['notificationId'] === 'string'
   );
+}
+
+function taskNotificationId(taskId: string, status: string): string {
+  return `task:${taskId}:${status}`;
 }
 
 function notificationKey(origin: TaskNotificationOrigin): string {

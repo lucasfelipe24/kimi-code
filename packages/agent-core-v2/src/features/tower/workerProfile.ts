@@ -38,6 +38,7 @@ const TOWER_WORKER_TOOLS = [
   'TaskOutput',
   'TaskStop',
   'TodoList',
+  'WaitFor',
   'WebSearch',
   'FetchURL',
   'Write',

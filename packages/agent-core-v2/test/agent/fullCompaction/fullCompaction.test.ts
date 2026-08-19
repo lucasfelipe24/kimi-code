@@ -23,7 +23,7 @@ import {
 } from '#/agent/fullCompaction/strategy';
 import { IAgentMemoryRecallService } from '#/agent/memoryRecall/memoryRecall';
 import { AgentMemoryRecallService } from '#/agent/memoryRecall/memoryRecallService';
-import type { IExternalHooksRunnerService } from '#/app/externalHooksRunner/externalHooksRunner';
+import type { IExternalHooksRunnerService } from '#/features/externalHooks/app/externalHooksRunner';
 import { MASTER_ENV } from '#/app/flag/flagService';
 import { estimateTokensForMessages } from '#/kosong/contract/tokens';
 import { ISessionMemoryAccess } from '#/session/persistentMemory/memorySeed';
@@ -31,7 +31,7 @@ import type { EffectiveMemory } from '#/workspace/persistentMemory/memoryCatalog
 import { recordingTelemetry, type TelemetryRecord } from '../../app/telemetry/stubs';
 import type { TestAgentContext, TestAgentOptions, TestAgentServiceOverride } from '../../harness';
 import { agentService, appServices, createCommandRunner, execEnvServices, hostEnvironmentServices, sessionServices, testAgent } from '../../harness';
-import { makeHookRunner } from '../externalHooks/runner-stub';
+import { makeHookRunner } from '../../features/externalHooks/runner-stub';
 import { IAgentToolSelectAnnouncementsService } from '#/agent/toolSelect/toolSelectAnnouncements';
 import {
   IAgentFullCompactionService,
@@ -349,7 +349,7 @@ describe('FullCompaction', () => {
       properties: expect.objectContaining({
         agent_id: 'main',
         source: 'manual',
-        tokens_before: 3_584,
+        tokens_before: 3_591,
         tokens_after: expect.any(Number),
         duration_ms: expect.any(Number),
         compacted_count: 6,
@@ -801,7 +801,7 @@ describe('FullCompaction', () => {
       session_id: 'test-session',
       cwd: dir,
       trigger: 'auto',
-      token_count: 3_584,
+      token_count: 3_591,
     });
     expect(post).toMatchObject({
       hook_event_name: 'PostCompact',
@@ -887,7 +887,7 @@ describe('FullCompaction', () => {
       event: 'compaction_finished',
       properties: expect.objectContaining({
         source: 'manual',
-        tokens_before: 20_238,
+        tokens_before: 20_857,
         retry_count: 1,
         trace_id: 'trace-compact-1',
       }),
@@ -1270,7 +1270,7 @@ describe('FullCompaction', () => {
       properties: expect.objectContaining({
         agent_id: 'main',
         source: 'manual',
-        tokens_before: 20_238,
+        tokens_before: 20_857,
         duration_ms: expect.any(Number),
         round: 1,
         retry_count: 0,
@@ -1495,7 +1495,7 @@ describe('FullCompaction', () => {
       event: 'compaction_failed',
       properties: expect.objectContaining({
         source: 'manual',
-        tokens_before: 20_238,
+        tokens_before: 20_857,
         duration_ms: expect.any(Number),
         retry_count: 4,
         error_type: 'APIConnectionError',
@@ -1693,9 +1693,9 @@ describe('FullCompaction', () => {
 
   it('auto-compacts very large context in one full-history round when the summarizer accepts it', async () => {
     // The window must stay above the harness's fixed request overhead
-    // (system prompt + tools, ~19k): the post-compaction size is reported on
+    // (system prompt + tools, ~20k): the post-compaction size is reported on
     // the full-request basis, so a smaller window could never be satisfied.
-    const maxContextTokens = 24_000;
+    const maxContextTokens = 26_000;
     const ctx = testAgent();
     ctx.configure({
       provider: CATALOGUED_PROVIDER,
@@ -1871,12 +1871,12 @@ describe('FullCompaction', () => {
       event: 'compaction_finished',
       properties: expect.objectContaining({
         source: 'auto',
-        tokens_before: 3_591,
-        // 3539 estimated request-overhead tokens (system prompt + tools) +
+        tokens_before: 3_598,
+        // 3546 estimated request-overhead tokens (system prompt + tools) +
         // 9 measured summary output tokens (scripted compaction exchange) +
         // 21 estimated tokens for the kept user messages — the summary
         // component is the REAL provider count, not a text estimate.
-        tokens_after: 3_575,
+        tokens_after: 3_582,
         compacted_count: 7,
         retry_count: 0,
       }),

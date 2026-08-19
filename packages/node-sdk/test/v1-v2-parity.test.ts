@@ -449,8 +449,9 @@ function projectResumedAgents(
  *   DESCRIPTIONS are engine-owned constants that legitimately drift between
  *   the engines (the subagent/cron docs embed engine-specific facts); v1
  *   additionally registers the `select_tools` meta tool v2 has no counterpart
- *   for, while v2 registers the `Memory` / `Monitor` builtins and carries
- *   `TowerInit` as the v2-only tower-mode entry point. These are engine design,
+ *   for, while v2 registers the `Memory` / `Monitor` / `Workflow` builtins and
+ *   carries `TowerInit` (the tower-mode entry point) and `WaitFor` (the
+ *   background-task wait primitive) as v2-only tools. These are engine design,
  *   not resume data. A model-less agent's roster is not compared at all (v1
  *   initializes builtin tools only on a profiled agent; v2 exposes them unbound).
  */
@@ -466,11 +467,18 @@ function projectResumedAgent(agent: ResumedAgentState, home: HomePair): unknown 
     projected['tools'] = [];
   } else {
     const tools = projected['tools'] as readonly Record<string, unknown>[];
-    // `select_tools` is v1-only; `Memory`, `Monitor`, `TowerInit`, and
-    // `Workflow` are v2-only builtins. None has a counterpart on the other
+    // `select_tools` is v1-only; `Memory`, `Monitor`, `Workflow`, `TowerInit`,
+    // and `WaitFor` are v2-only builtins. None has a counterpart on the other
     // engine, so drop them before the roster comparison (see the tools note
     // above).
-    const engineOnlyTools = new Set(['select_tools', 'Memory', 'Monitor', 'TowerInit', 'Workflow']);
+    const engineOnlyTools = new Set([
+      'select_tools',
+      'Memory',
+      'Monitor',
+      'TowerInit',
+      'Workflow',
+      'WaitFor',
+    ]);
     projected['tools'] = tools
       .filter((tool) => !engineOnlyTools.has(tool['name'] as string))
       .map((tool) => ({ name: tool['name'], active: tool['active'], source: tool['source'] }))

@@ -1203,6 +1203,13 @@ export class AgentTestContext {
       'app',
     );
     this.root = createAppScope({ seeds: appSeeds });
+    const hookRunnerSeed = appSeeds.find(([id]) => id === IExternalHooksRunnerService);
+    if (hookRunnerSeed !== undefined) {
+      this.root.instantiation.provide(
+        IExternalHooksRunnerService,
+        hookRunnerSeed[1] as IExternalHooksRunnerService,
+      );
+    }
 
     const initialConfig = this.root.accessor.get(IConfigService);
     this.root.accessor
