@@ -2,8 +2,9 @@ import { z } from 'zod';
 
 import { createDecorator } from '#/_base/di/instantiation';
 import { type AgentTool } from '#/tool/toolContract';
+import { DEFAULT_PROFILE_NAME } from '#/session/subagent/spawn';
 
-export const DEFAULT_PROFILE_NAME = 'coder';
+export { DEFAULT_PROFILE_NAME };
 export const RESUMED_LABEL = 'subagent';
 
 export const SubagentToolInputSchema = z.preprocess(
@@ -13,14 +14,9 @@ export const SubagentToolInputSchema = z.preprocess(
     }
     const record = input as Record<string, unknown>;
     const normalized = { ...record };
-    const hasResumeId =
-      typeof normalized['resume'] === 'string' && normalized['resume'].trim().length > 0;
     const hasSubagentType =
       typeof normalized['subagent_type'] === 'string' && normalized['subagent_type'].length > 0;
-    if (!hasSubagentType && !hasResumeId) {
-      // No default — the model must choose explicitly.
-      delete normalized['subagent_type'];
-    } else if (!hasSubagentType) {
+    if (!hasSubagentType) {
       delete normalized['subagent_type'];
     }
     return normalized;
@@ -45,6 +41,12 @@ export const SubagentToolInputSchema = z.preprocess(
       .optional()
       .describe(
         'If true, return immediately without waiting for completion. Prefer false unless the task can run independently and there is a clear benefit to not waiting.',
+      ),
+    fork: z
+      .boolean()
+      .optional()
+      .describe(
+        'Fork the current context: the subagent starts with a snapshot of this agent\'s completed conversation history instead of zero context, inheriting this agent\'s agent type, tool set, and model. A non-empty resume is rejected. If subagent_type is provided, it must match this agent\'s type; if model is provided, it must be this agent\'s model or "primary". Different types and model overrides are rejected.',
       ),
     model: z
       .string()

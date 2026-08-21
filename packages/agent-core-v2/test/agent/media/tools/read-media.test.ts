@@ -48,6 +48,7 @@ import type { IConfigService, ConfigSectionChangedEvent } from '#/app/config/con
 import type { ILogService } from '#/_base/log/log';
 import { toDisposable } from '#/_base/di/lifecycle';
 import type { VisualMediaInspector } from '#/agent/media/visualInspection';
+import { stubAgentContext } from '../../agentContext/stubs';
 
 const WORKSPACE: WorkspaceConfig = { workspaceDir: '/workspace', additionalDirs: [] };
 
@@ -986,6 +987,8 @@ describe('AgentMediaToolsRegistrar', () => {
   function createRegistrarHarness(options: RegistrarHarnessOptions = {}) {
     const registry = new AgentToolRegistryService();
     const eventBus = new EventBusService();
+    const agentContext = stubAgentContext('main', 1);
+    eventBus.activateAgent(agentContext);
     const state: ProfileState = {
       alias: '',
       capabilities: capabilities({ image_in: false, video_in: false }),
@@ -1073,9 +1076,11 @@ describe('AgentMediaToolsRegistrar', () => {
       state.capabilities = caps;
       eventBus.publish(
         new AgentStatusUpdated({
+          agentId: 'main',
           model: alias,
           maxContextTokens: caps.max_context_tokens,
         }),
+        agentContext,
       );
     };
     const setVisualModel = (alias: string | undefined): void => {

@@ -29,7 +29,6 @@ import {
   TRANSCRIPT_KEEP_RECENT_ASSISTANT_COMPLETED,
   TRANSCRIPT_KEEP_RECENT_STEPS,
 } from '#/tui/utils/transcript-window';
-import { getTranscriptComponentEntry } from '#/tui/utils/transcript-component-metadata';
 import { ToolCallComponent } from '#/tui/components/messages/tool-call';
 import { ReadGroupComponent } from '#/tui/components/messages/read-group';
 import { replayBackgroundProjection } from '#/tui/utils/message-replay';
@@ -396,38 +395,44 @@ describe('KimiTUI resume message replay', () => {
     expect(transcript).toContain('pre</bash-stdout>post');
   });
 
-  it('bounds replayed shell frames while retaining the complete transcript content', async () => {
+  it('collapses long replayed shell output to its first 10 rows', async () => {
+    const stdout = Array.from({ length: 30 }, (_, i) => `row-${String(i + 1).padStart(2, '0')}`).join(
+      '\n',
+    );
     const driver = await replayIntoDriver([
       message(
         'user',
-        [
-          {
-            type: 'text',
-            text:
-              `<bash-stdout>${'  x\n'.repeat(49_999)}  final line\n</bash-stdout>` +
-              '<bash-stderr></bash-stderr>',
-          },
-        ],
+        [{ type: 'text', text: `<bash-stdout>${stdout}</bash-stdout><bash-stderr></bash-stderr>` }],
         { origin: { kind: 'shell_command', phase: 'output' } },
       ),
     ]);
 
-    const shellEntry = driver.state.transcriptEntries.find(
-      (entry) => entry.shellOutputDisplay !== undefined,
-    );
-    const shellComponent = driver.state.transcriptContainer.children.find(
-      (component) => getTranscriptComponentEntry(component)?.id === shellEntry?.id,
-    );
-    const rendered = shellComponent?.render(120) ?? [];
-    const transcript = stripAnsi(rendered.join('\n'));
+    const transcript = stripAnsi(driver.state.transcriptContainer.render(140).join('\n'));
+    expect(transcript).toContain('... (20 more lines, ctrl+o to expand)');
+    expect(transcript).toContain('row-01');
+    expect(transcript).not.toContain('row-11');
+  });
 
-    expect(shellEntry?.content.length).toBeGreaterThan(200_000);
-    expect(stripAnsi(shellEntry?.content ?? '')).toMatch(/^  x/);
-    expect(shellEntry?.shellOutputDisplay?.stdoutTail).toContain('\n  final line');
-    expect(rendered.length).toBeLessThanOrEqual(10);
-    expect(rendered.join('\n').length).toBeLessThanOrEqual(2_048);
-    expect(transcript).toContain('... (49995 earlier lines)');
-    expect(transcript).toContain('final line');
+  it('replayed shell output inherits an already-on ctrl+o expand state', async () => {
+    const stdout = Array.from({ length: 30 }, (_, i) => `row-${String(i + 1).padStart(2, '0')}`).join(
+      '\n',
+    );
+    const initial = makeSession([]);
+    const resumed = makeSession([
+      message(
+        'user',
+        [{ type: 'text', text: `<bash-stdout>${stdout}</bash-stdout><bash-stderr></bash-stderr>` }],
+        { origin: { kind: 'shell_command', phase: 'output' } },
+      ),
+    ]);
+    const driver = await makeDriver(initial);
+    driver.state.toolOutputExpanded = true;
+    await driver.switchToSession(resumed, 'Resumed session (ses-replay).');
+
+    const transcript = stripAnsi(driver.state.transcriptContainer.render(140).join('\n'));
+    expect(transcript).toContain('row-01');
+    expect(transcript).toContain('row-30');
+    expect(transcript).not.toContain('more lines');
   });
 
   it('does not render neutral goal completion context reminders as transcript messages', async () => {

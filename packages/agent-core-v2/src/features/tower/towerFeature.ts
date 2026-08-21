@@ -1,6 +1,5 @@
 import { ScopeActivation } from '#/_base/di/instantiation';
-import type { ServiceIdentifier, ServicesAccessor } from '#/_base/di/instantiation';
-import { IAgentScopeContext } from '#/agent/scopeContext/scopeContext';
+import type { ServiceIdentifier } from '#/_base/di/instantiation';
 import type {
   AgentToolCtor,
   AnyAgentTool,
@@ -39,22 +38,18 @@ import { TowerTeardownTool } from './tools/teardown/teardownTool';
 import { TOWER_WORKER_PROFILE_DEF } from './workerProfile';
 import { IAgentTowerModeInjection, TowerModeInjection } from './towerModeInjection';
 
-const towerOnly = (accessor: ServicesAccessor): boolean =>
-  accessor.get(IAgentScopeContext).agentId === 'main';
-
 interface TowerToolContribution {
   readonly id: ServiceIdentifier<AnyAgentTool>;
   readonly ctor: AgentToolCtor;
   readonly name: string;
-  readonly when?: (accessor: ServicesAccessor) => boolean;
 }
 
 export const TOWER_TOOL_CONTRIBUTIONS: readonly TowerToolContribution[] = [
-  { id: ITowerInitTool, ctor: TowerInitTool, name: 'TowerInit', when: towerOnly },
-  { id: ITowerPlanTool, ctor: TowerPlanTool, name: 'TowerPlan', when: towerOnly },
-  { id: ITowerSpawnTool, ctor: TowerSpawnTool, name: 'TowerSpawn', when: towerOnly },
-  { id: ITowerMergeTool, ctor: TowerMergeTool, name: 'TowerMerge', when: towerOnly },
-  { id: ITowerTeardownTool, ctor: TowerTeardownTool, name: 'TowerTeardown', when: towerOnly },
+  { id: ITowerInitTool, ctor: TowerInitTool, name: 'TowerInit' },
+  { id: ITowerPlanTool, ctor: TowerPlanTool, name: 'TowerPlan' },
+  { id: ITowerSpawnTool, ctor: TowerSpawnTool, name: 'TowerSpawn' },
+  { id: ITowerMergeTool, ctor: TowerMergeTool, name: 'TowerMerge' },
+  { id: ITowerTeardownTool, ctor: TowerTeardownTool, name: 'TowerTeardown' },
   { id: ITowerSendTool, ctor: TowerSendTool, name: 'TowerSend' },
   { id: ITowerInboxTool, ctor: TowerInboxTool, name: 'TowerInbox' },
   { id: ITowerFindingTool, ctor: TowerFindingTool, name: 'TowerFinding' },
@@ -79,7 +74,6 @@ export class TowerFeature extends Feature {
       this.contributeTool(tool.id, tool.ctor, {
         name: tool.name,
         domain: 'tower',
-        when: tool.when,
       });
     }
     this.contributeProfiles([TOWER_WORKER_PROFILE_DEF]);

@@ -124,8 +124,10 @@ describe('server-v2 /api/v1/sessions/{sid}/messages', () => {
   ): Promise<void> {
     const session = getLiveSessionById(server!.core.accessor, sessionId);
     if (session === undefined) throw new Error(`session ${sessionId} not found`);
-    let agent = session.accessor.get(IAgentLifecycleService).get('main');
-    agent ??= await session.accessor.get(IAgentLifecycleService).create({ agentId: 'main' });
+    let agent = session.accessor.get(IAgentLifecycleService).findAgentHandle('main');
+    if (agent === undefined) {
+      agent = await session.accessor.get(IAgentLifecycleService).create({ agentId: 'main' });
+    }
     if (messages.length > 0) {
       agent.accessor.get(IAgentContextMemoryService).append(...messages);
       await agent.accessor.get(IWireService).flush();

@@ -238,7 +238,7 @@ export class AgentTaskService extends Disposable implements IAgentTaskService {
     @IAtomicDocumentStore atomicDocs: IAtomicDocumentStore,
     @IFileSystemStorageService byteStore: IFileSystemStorageService,
     @ISessionContext session: ISessionContext,
-    @IAgentScopeContext scopeContext: IAgentScopeContext,
+    @IAgentScopeContext private readonly scopeContext: IAgentScopeContext,
     @ITaskService private readonly taskService: ITaskService,
     @IEventBus private readonly eventBus: IEventBus,
     @IEventDispatcher private readonly dispatcher: IEventDispatcher,
@@ -257,12 +257,12 @@ export class AgentTaskService extends Disposable implements IAgentTaskService {
     this.states.contributeState(taskDeliveredNotificationKeysKey);
     this.states.contributeState(taskActiveTaskReminderPendingKey);
     const fallbackRoot =
-      scopeContext.agentId === 'main'
+      this.scopeContext.agentId === 'main'
         ? { dir: session.sessionDir, scope: session.scope() }
         : undefined;
     this.persistence = new AgentTaskPersistence(
-      join(session.sessionDir, 'agents', scopeContext.agentId),
-      scopeContext.scope(),
+      join(session.sessionDir, 'agents', this.scopeContext.agentId),
+      this.scopeContext.scope(),
       atomicDocs,
       byteStore,
       fallbackRoot,
@@ -640,7 +640,9 @@ export class AgentTaskService extends Disposable implements IAgentTaskService {
       this.markDeliveredNotification(origin);
       keys.push(key);
     }
-    void this.dispatcher.dispatch(new TaskWaitDelivered({ keys }));
+    void this.dispatcher.dispatch(
+      new TaskWaitDelivered({ agentId: this.scopeContext.agentId, keys }),
+    );
   }
 
   detach(taskId: string): AgentTaskInfo | undefined {
@@ -1081,7 +1083,9 @@ export class AgentTaskService extends Disposable implements IAgentTaskService {
   }
 
   private recordTaskStarted(info: AgentTaskInfo): void {
-    void this.dispatcher.dispatch(new TaskStarted({ info }));
+    void this.dispatcher.dispatch(
+      new TaskStarted({ agentId: this.scopeContext.agentId, info }),
+    );
     this.telemetry.track2('background_task_created', {
       task_id: info.taskId,
       kind: info.kind === 'process' ? 'bash' : info.kind,
@@ -1089,7 +1093,9 @@ export class AgentTaskService extends Disposable implements IAgentTaskService {
   }
 
   private recordTaskTerminated(info: AgentTaskInfo, outputTail?: string): void {
-    void this.dispatcher.dispatch(new TaskTerminated({ info, outputTail }));
+    void this.dispatcher.dispatch(
+      new TaskTerminated({ agentId: this.scopeContext.agentId, info, outputTail }),
+    );
     this.telemetry.track2('background_task_completed', {
       task_id: info.taskId,
       kind: info.kind,
@@ -1283,6 +1289,7 @@ export class AgentTaskService extends Disposable implements IAgentTaskService {
   private fireNotificationHook(notification: AgentTaskNotification): void {
     void this.dispatcher.dispatch(
       new TaskNotified({
+        agentId: this.scopeContext.agentId,
         notificationType: notification.type,
         title: notification.title,
         body: notification.body,

@@ -58,6 +58,12 @@ export class SessionActivityStore {
     this.bump();
   }
 
+  /** Drop one session's live facts (e.g. it was archived — no further
+   *  work_changed frames will arrive to correct a stale badge). */
+  remove(sessionId: string): void {
+    if (this.activities.delete(sessionId)) this.bump();
+  }
+
   private bump(): void {
     this.version += 1;
     for (const listener of this.listeners) listener();
@@ -93,9 +99,14 @@ export class SessionActivityHub {
       token: opts.token,
       WebSocketImpl: opts.WebSocketImpl,
       handlers: {
-        onWorkChanged: (sessionId, facts) =>{  this.store.applyWorkChanged(sessionId, facts); },
-        onSessionCreated: () =>{  opts.onListChanged(); },
-        onMetaUpdated: () =>{  opts.onListChanged(); },
+        onWorkChanged: (sessionId, facts) => this.store.applyWorkChanged(sessionId, facts),
+        onSessionCreated: () => opts.onListChanged(),
+        onMetaUpdated: () => opts.onListChanged(),
+        onSessionArchived: (sessionId) => {
+          this.store.remove(sessionId);
+          opts.onListChanged();
+        },
+        onWorkspaceChanged: () => opts.onListChanged(),
         onReconnected: () => void this.seed(),
       },
     });
