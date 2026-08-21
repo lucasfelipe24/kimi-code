@@ -106,7 +106,7 @@ export class TelegramSendTool implements ITelegramSendTool {
     const filename = realPath.split('/').pop() ?? 'file';
     const ext = filename.slice(filename.lastIndexOf('.')).toLowerCase();
     const mime = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.webp' ? 'image/webp' : 'application/octet-stream';
-    const blob = new Blob([bytes], { type: mime });
+    const blob = new Blob([new Uint8Array(bytes)], { type: mime });
 
     try {
       const messageId = IMAGE_EXTENSIONS.has(ext)
