@@ -1,1 +1,0 @@
-Send a file from the current workspace to the connected Telegram chat. Images are sent as photos when their extension is recognized; other files are sent as documents. The path must resolve to a regular file inside the workspace root. Paths outside the workspace, non-regular files, and files larger than 50 MiB are rejected.

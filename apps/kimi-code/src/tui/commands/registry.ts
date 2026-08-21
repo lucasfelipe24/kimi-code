@@ -42,11 +42,6 @@ const ADD_DIR_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
   { value: 'list', description: 'Show configured additional workspace directories' },
 ];
 
-const NOTIFY_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
-  { value: 'status', description: 'Show Telegram notification config and connection state' },
-  { value: 'setup', description: 'Show how to configure Telegram notifications' },
-];
-
 /** Argument autocompletion for the `/goal` command (subcommands). */
 export function goalArgumentCompletions(
   argumentPrefix: string,
@@ -159,14 +154,6 @@ export function addDirArgumentCompletions(
     return completeAddDirPath(argumentPrefix);
   }
   return completeLeadingArg(ADD_DIR_ARG_COMPLETIONS, argumentPrefix);
-}
-
-/** Argument autocompletion for the `/notify` command (subcommands). */
-export function notifyArgumentCompletions(
-  argumentPrefix: string,
-  _context?: SlashCommandCompletionContext,
-): AutocompleteItem[] | null {
-  return completeLeadingArg(NOTIFY_ARG_COMPLETIONS, argumentPrefix);
 }
 
 function isPathLikeAddDirArgument(argumentPrefix: string): boolean {
@@ -422,15 +409,6 @@ export const BUILTIN_SLASH_COMMANDS = [
     priority: 60,
     availability: 'always',
     engineV2Only: true,
-  },
-  {
-    name: 'notify',
-    aliases: [],
-    description: 'Show Telegram notification status',
-    priority: 60,
-    availability: 'always',
-    argumentHint: '[status|setup]',
-    completeArgs: notifyArgumentCompletions,
   },
   {
     name: 'experiments',

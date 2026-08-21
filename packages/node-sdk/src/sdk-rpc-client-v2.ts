@@ -277,12 +277,6 @@ import {
 } from '@moonshot-ai/agent-core-v2';
 import type { AgentHandle, Klient } from '@moonshot-ai/klient';
 import { createKlient } from '@moonshot-ai/klient/memory';
-import { TelegramBotApiClient } from '@moonshot-ai/agent-core-v2/features/telegram/botApi';
-import {
-  discoverPrivateTelegramChat,
-  validateTelegramBotToken,
-  validateTelegramPrivateChat,
-} from '@moonshot-ai/agent-core-v2/features/telegram/setup';
 import { assertKimiHostIdentity, createKimiDefaultHeaders } from '@moonshot-ai/kimi-code-oauth';
 
 import { KimiAuthFacade } from '#/auth';
@@ -400,14 +394,6 @@ import {
   v2MetaToSessionMeta,
   v2SummaryToSessionSummary,
 } from '#/v2/session-mapper';
-import {
-  telegramTokenFingerprint,
-  TELEGRAM_SECTION,
-  type RunTelegramSetupSdkInput,
-  type TelegramConfig,
-  type TelegramSetupFailure,
-  type TelegramSetupResult,
-} from '#/v2/telegram';
 import { SessionEventWiring } from '#/v2/session-wiring';
 import {
   workflowCancelToV1,
@@ -930,78 +916,6 @@ export class SDKRpcClientV2 extends SDKRpcClientBase {
   override async replaceConfigSections(sections: Record<string, unknown>): Promise<void> {
     await this.configReady;
     await this.klient.global.config.replaceSections({ sections });
-  }
-
-  /**
-   * Typed read of the v2 engine's `[telegram]` config section (effective view:
-   * file + env overlays + section defaults). Returns an empty object when the
-   * section has never been written.
-   */
-  override async getTelegramConfig(): Promise<TelegramConfig> {
-    await this.configReady;
-    return (await this.klient.global.config.get<TelegramConfig>(TELEGRAM_SECTION)) ?? {};
-  }
-
-  /**
-   * Deep-merge `patch` into the `[telegram]` section and return the resulting
-   * effective config. Setting `enabled: true` does not validate connectivity —
-   * use {@link runTelegramSetup} for token/chat validation and pairing.
-   */
-  override async setTelegramConfig(patch: TelegramConfig): Promise<TelegramConfig> {
-    await this.configReady;
-    await this.klient.global.config.set({ domain: TELEGRAM_SECTION, patch });
-    return this.getTelegramConfig();
-  }
-
-  /**
-   * Validate a Telegram bot token via `getMe`, pair a private chat via
-   * `getUpdates` (or validate an explicit `--chat-id` via `getChat`), and
-   * persist the resulting `[telegram]` section with `enabled: true`. Any
-   * existing telegram fields (threading, streaming, verbosity, ...) are
-   * preserved.
-   *
-   * `fetchImpl` lets callers stub the Bot API in tests or route traffic
-   * through a custom fetch; when omitted the engine's default fetch is used.
-   */
-  override async runTelegramSetup(input: RunTelegramSetupSdkInput): Promise<TelegramSetupResult> {
-    const { fetchImpl, ...engineInput } = input;
-    const token = engineInput.token.trim();
-    const client = new TelegramBotApiClient({ botToken: token, fetchImpl });
-    const validation = await validateTelegramBotToken({ token, client, signal: engineInput.signal });
-    if (!validation.ok) return validation;
-
-    let chatResult: { readonly ok: true; readonly chatId: string } | TelegramSetupFailure;
-    if (engineInput.chatId !== undefined && engineInput.chatId.trim().length > 0) {
-      chatResult = await validateTelegramPrivateChat({
-        token,
-        chatId: engineInput.chatId,
-        client,
-        signal: engineInput.signal,
-      });
-    } else {
-      chatResult = await discoverPrivateTelegramChat({
-        token,
-        client,
-        pollTimeoutMs: engineInput.pollTimeoutMs,
-        pollIntervalMs: engineInput.pollIntervalMs,
-        signal: engineInput.signal,
-      });
-    }
-    if (!chatResult.ok) return chatResult;
-
-    const current = await this.getTelegramConfig();
-    await this.setTelegramConfig({
-      ...current,
-      botToken: token,
-      chatId: chatResult.chatId,
-      enabled: true,
-    });
-
-    return {
-      ok: true,
-      chatId: chatResult.chatId,
-      tokenFingerprint: telegramTokenFingerprint(token),
-    };
   }
 
   override async listPlugins(): Promise<readonly PluginSummary[]> {

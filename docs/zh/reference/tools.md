@@ -173,16 +173,6 @@ Memory 还有固定的硬限制：每条 body 最多 4096 个 UTF-8 字节，nam
 
 **`CronDelete`** 只接受一个 `id`。对周期任务，未来所有触发立即停止；对一次性任务，挂起的那次触发会被取消。已触发的一次性任务会自动删除，因此对已触发过的一次性任务调用 `CronDelete` 会返回 `No cron job with id ...`。删除不可撤销，需要还原时只能再次 `CronCreate`。`CronDelete` 在 Plan 模式下同样会被拦截。
 
-## Telegram 集成
-
-配置 Telegram 通知后，Agent 可以使用 `TelegramSend` 工具把工作区文件推送到已配置的私聊。
-
-| 工具 | 默认审批 | 说明 |
-| --- | --- | --- |
-| `TelegramSend` | 需审批 | 把工作区文件发送到 Telegram 聊天 |
-
-**`TelegramSend`** 接受 `path`（工作区相对路径）和可选的 `caption`（显示在文件下方的简短文字）。路径会解析到工作区根目录内部，且必须指向普通文件；非普通文件和超过 50 MiB 的文件会在调用 Telegram 之前被拒绝。四种图片 MIME 类型（`image/jpeg`、`image/png`、`image/gif`、`image/webp`）会以 photo 形式发送；其他文件则以 document 形式发送。仅在 Telegram 集成实际启用时，该工具才会出现在工具列表中。
-
 ## 下一步
 
 - [Agent 与 subagent](../customization/agents.md) — `Agent` 工具的调度机制与上下文隔离

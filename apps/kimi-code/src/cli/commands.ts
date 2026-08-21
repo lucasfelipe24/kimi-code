@@ -7,7 +7,6 @@ import { registerAcpCommand } from './sub/acp';
 import { registerDoctorCommand } from './sub/doctor';
 import { registerExportCommand } from './sub/export';
 import { registerLoginCommand } from './sub/login';
-import { registerNotifyCommand } from './sub/notify';
 import { registerProviderCommand } from './sub/provider';
 import { registerSearchCommand } from './sub/search';
 import { registerVisCommand } from './sub/vis';
@@ -123,7 +122,6 @@ export function createProgram(
   registerAcpCommand(program);
   registerWebCommand(program);
   registerLoginCommand(program);
-  registerNotifyCommand(program);
   registerDoctorCommand(program);
   registerVisCommand(program);
   registerMigrateCommand(program, onMigrate);

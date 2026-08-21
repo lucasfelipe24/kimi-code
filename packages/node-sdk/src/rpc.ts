@@ -78,9 +78,6 @@ import type {
   SkillSummary,
   SkippedWorkflowInfo,
   PluginCommandDef,
-  RunTelegramSetupSdkInput,
-  TelegramConfig,
-  TelegramSetupResult,
   Unsubscribe,
   UploadFileOptions,
   WorkflowDetail,
@@ -432,44 +429,6 @@ export abstract class SDKRpcClientBase {
     throw new KimiError(
       ErrorCodes.NOT_IMPLEMENTED,
       'This SDK client does not support atomic config section replacement.',
-    );
-  }
-
-  /**
-   * Typed read of the v2 engine's `[telegram]` config section. The v1 engine
-   * has no such section, so the base implementation throws `not_implemented`;
-   * `SDKRpcClientV2` overrides it via the klient config facade.
-   */
-  async getTelegramConfig(): Promise<TelegramConfig> {
-    throw new KimiError(
-      ErrorCodes.NOT_IMPLEMENTED,
-      'Telegram config requires the agent-core-v2 engine.',
-    );
-  }
-
-  /**
-   * Deep-merge a patch into the v2 engine's `[telegram]` config section. The
-   * v1 engine has no such section, so the base implementation throws
-   * `not_implemented`; `SDKRpcClientV2` overrides it via the klient config
-   * facade.
-   */
-  async setTelegramConfig(_patch: TelegramConfig): Promise<TelegramConfig> {
-    throw new KimiError(
-      ErrorCodes.NOT_IMPLEMENTED,
-      'Telegram config requires the agent-core-v2 engine.',
-    );
-  }
-
-  /**
-   * Validate a Telegram bot token, pair or validate a private chat, and persist
-   * the resulting `[telegram]` section. The v1 engine has no Telegram support,
-   * so the base implementation throws `not_implemented`; `SDKRpcClientV2`
-   * overrides it with the engine's setup logic.
-   */
-  async runTelegramSetup(_input: RunTelegramSetupSdkInput): Promise<TelegramSetupResult> {
-    throw new KimiError(
-      ErrorCodes.NOT_IMPLEMENTED,
-      'Telegram setup requires the agent-core-v2 engine.',
     );
   }
 

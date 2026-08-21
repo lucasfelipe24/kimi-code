@@ -115,11 +115,10 @@ timeout = 5
 | `memory` | `table` | — | 持久化 memory 限制 → [`memory`](#memory) |
 | `services` | `table` | — | 内置外部服务配置 → [`services`](#services) |
 | `permission` | `table` | — | 初始权限规则 → [`permission`](#permission) |
-| `telegram` | `table` | — | Telegram 通知 → [`telegram`](#telegram) |
 | `hooks` | `array<table>` | — | 生命周期 hook，详见 [Hooks](../customization/hooks.md) |
 | `identity` | `table` | — | 自定义 Agent 身份 → [`identity`](#identity) |
 
-以下各节对 `providers`、`models`、`thinking`、`loop_control`、`background`、`image`、`memory`、`services`、`permission`、`telegram` 等嵌套表逐一展开。
+以下各节对 `providers`、`models`、`thinking`、`loop_control`、`background`、`image`、`memory`、`services`、`permission` 等嵌套表逐一展开。
 
 ## `providers`
 
@@ -638,35 +637,6 @@ pattern = "Bash"
 ::: tip
 MCP server 的声明配置写在 `~/.kimi-code/mcp.json` 或项目内 `.kimi-code/mcp.json` 中，不在 `config.toml` 里。交互式配置入口是 `/mcp-config`，详见 [Model Context Protocol](../customization/mcp.md)。
 :::
-
-## `telegram`
-
-`[telegram]` 表配置当前用户的 Telegram 通知与远程交互。它仅全局生效：项目级本地文件无法覆盖，因此工作空间无法自行启用 Telegram 或注入自己的 bot token。setup 步骤详见 [Telegram 通知](../guides/telegram-notifications.md)。
-
-| 字段 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `bot_token` | `string` | — | 从 BotFather 获取的 bot token |
-| `chat_id` | `string` | — | 接收消息的 Telegram chat ID |
-| `enabled` | `boolean` | 开启（未设置即启用） | 集成的总开关 |
-| `redact` | `boolean` | `false` | 设为 `true` 时，Assistant 的 outbound 内容和 `/btw` 的回答会被替换为 "response ready (redacted)"；而 ask 问题及其选项按钮仍保持可读、可回答 |
-| `btw.enabled` | `boolean` | 启用（未设置） | `/btw` 的总开关；设为 `false` 时，`/btw` 会收到 "BTW side questions are disabled." 的回复，且不会启动旁路问题 |
-| `tool_activity.enabled` | `boolean` | `false` | 除最终答案外，同时发送工具调用的开始/结果通知 |
-
-```toml
-[telegram]
-bot_token = "YOUR_BOT_TOKEN"
-chat_id = "YOUR_CHAT_ID"
-enabled = true
-redact = false
-
-[telegram.btw]
-enabled = true
-
-[telegram.tool_activity]
-enabled = false
-```
-
-你也可以通过环境变量设置 token、chat ID 和总开关，环境变量优先于配置文件且不会被写回磁盘：`KIMI_TELEGRAM_BOT_TOKEN`、`KIMI_TELEGRAM_CHAT_ID`、`KIMI_TELEGRAM_ENABLED`。
 
 ## `tui.toml`
 

@@ -173,16 +173,6 @@ To prevent all users from firing at the same time on the hour, the scheduler app
 
 **`CronDelete`** accepts a single `id`. For recurring tasks, all future fires stop immediately; for one-time tasks, the pending fire is cancelled. One-time tasks that have already fired are auto-deleted, so calling `CronDelete` on an already-fired one-time task returns `No cron job with id ...`. Deletion is irreversible — use `CronCreate` again to restore. `CronDelete` is also blocked in Plan mode.
 
-## Telegram integration
-
-When Telegram notifications are configured, the agent can push a workspace file to the configured private chat with the `TelegramSend` tool.
-
-| Tool | Default Approval | Description |
-| --- | --- | --- |
-| `TelegramSend` | Requires approval | Send a workspace file to the Telegram chat |
-
-**`TelegramSend`** accepts `path` (workspace-relative file path) and an optional `caption` (short text shown below the file). The path is resolved inside the workspace root and must point to a regular file; non-regular files and files larger than 50 MiB are rejected before any Telegram call is made. The four image MIME types (`image/jpeg`, `image/png`, `image/gif`, `image/webp`) are sent as photos; other files are sent as documents. The tool only appears when the Telegram integration is effectively enabled.
-
 ## Next steps
 
 - [Agent & Sub-Agents](../customization/agents.md) — Scheduling mechanics and context isolation for the `Agent` tool

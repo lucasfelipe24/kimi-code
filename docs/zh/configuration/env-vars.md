@@ -179,18 +179,6 @@ kimi
 
 `KIMI_CODE_IDENTITY_*` 和 `KIMI_CODE_BUILTIN_PRODUCT_SKILLS` 这三个变量由默认的 `agent-core-v2` 引擎读取。设置 `KIMI_CODE_LEGACY_FLAG=1` 后，旧版 `kimi` / `kimi -p` 路径会忽略它们。反过来，`KIMI_SECONDARY_MODEL` 和 `KIMI_SECONDARY_EFFORT` 仅由旧版引擎读取，默认引擎会忽略它们。`KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL` 则由两个引擎共同读取：它同时门控 v2 的 [subagent 模型池](./config-files.md#subagent-模型池)和旧版的次主力模型配方。
 
-## Telegram 通知
-
-这组变量配置 Telegram 集成。它们优先于 `config.toml` 中的 `[telegram]` 表，且不会被写回配置文件。
-
-| 环境变量 | 用途 | 合法值 |
-| --- | --- | --- |
-| `KIMI_TELEGRAM_BOT_TOKEN` | 从 BotFather 获取的 bot token | 非空字符串 |
-| `KIMI_TELEGRAM_CHAT_ID` | 接收消息的 Telegram chat ID | 非空字符串 |
-| `KIMI_TELEGRAM_ENABLED` | 集成的总开关 | 真值：`1`/`true`/`yes`/`on`；假值：`0`/`false`/`no`/`off` |
-
-setup 与用法详见 [Telegram 通知](../guides/telegram-notifications.md)。
-
 ## 诊断日志
 
 这组变量控制日志级别和文件滚动，进程启动时读取一次：

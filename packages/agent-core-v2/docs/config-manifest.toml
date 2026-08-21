@@ -8,7 +8,7 @@
 # commented "# field: type" lines describe the remaining schema fields.
 # Values resolve as: default -> config.toml -> env overlay -> memory.
 
-# Index (29 sections · 2 overlay(s))
+# Index (28 sections · 2 overlay(s))
 #   background               src/agent/task/configSection.ts
 #   builtinProductSkills     src/app/skillCatalog/configSection.ts
 #   cron                     src/app/cron/configSection.ts
@@ -32,7 +32,6 @@
 #   services                 src/app/auth/configSection.ts
 #   subagent                 src/session/subagent/configSection.ts
 #   task                     src/agent/task/configSection.ts
-#   telegram                 src/features/telegram/configSection.ts
 #   thinking                 src/app/kosongConfig/configSection.ts
 #   tokenCounting            src/agent/tokenCounting/configSection.ts
 #   tools                    src/agent/toolPolicy/configSection.ts
@@ -441,35 +440,6 @@ timeout_ms = 7200000
 # print_wait_ceiling_s: integer
 # print_background_mode: "exit" | "drain" | "steer"
 # print_max_turns: integer
-
-# ##########################################################################
-# telegram
-#   owner: src/features/telegram/configSection.ts
-#   scope: core
-#   hooks: stripEnv
-#   env:
-#     bot_token <- KIMI_TELEGRAM_BOT_TOKEN (custom parse)
-#     chat_id <- KIMI_TELEGRAM_CHAT_ID (custom parse)
-#     enabled <- KIMI_TELEGRAM_ENABLED (custom parse)
-# ##########################################################################
-
-[telegram]
-# bot_token: string
-# chat_id: string
-# enabled: boolean
-# threaded: boolean
-# streaming: boolean
-# redact: boolean
-
-# [telegram.btw]
-  # enabled: boolean
-
-# [telegram.tool_activity]
-  # enabled: boolean
-
-# [telegram.rich]
-  # enabled: boolean
-# verbosity: "lean" | "verbose"
 
 # ##########################################################################
 # thinking

@@ -260,7 +260,7 @@ describe('resolveSlashCommandInput', () => {
   it('resolves /tower to the builtin command when the tower flag is enabled', () => {
     setExperimentalFeatures([{ id: 'tower', enabled: true }]);
 
-    expect(resolve('/tower Ship feature X')).toMatchObject({
+    expect(resolve('/tower Ship feature X', { engineV2: true })).toMatchObject({
       kind: 'builtin',
       name: 'tower',
       args: 'Ship feature X',
@@ -268,9 +268,10 @@ describe('resolveSlashCommandInput', () => {
   });
 
   it('does not resolve /tower as a builtin when the tower flag is disabled', () => {
-    expect(resolve('/tower Ship feature X')).toEqual({
-      kind: 'message',
-      input: '/tower Ship feature X',
+    expect(resolve('/tower Ship feature X', { engineV2: true })).toEqual({
+      kind: 'invalid',
+      commandName: 'tower',
+      reason: 'unavailable',
     });
   });
 
@@ -278,8 +279,9 @@ describe('resolveSlashCommandInput', () => {
     setExperimentalFeatures([{ id: 'tower', enabled: true }]);
 
     expect(resolve('/tower on', { engineV2: false })).toEqual({
-      kind: 'message',
-      input: '/tower on',
+      kind: 'invalid',
+      commandName: 'tower',
+      reason: 'unavailable',
     });
   });
 });

@@ -3365,6 +3365,7 @@ command = "vim"
       const srcVideo = join(dir, 'clip.mp4');
       await writeFile(srcVideo, 'video-bytes');
       const video = imageStore.addVideo('video/mp4', srcVideo);
+      imageStore.completeVideo(video, { fileId: 'file-v1' });
 
       driver.handleUserInput(`look ${image.placeholder} and ${video.placeholder}`);
 

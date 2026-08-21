@@ -179,18 +179,6 @@ Switches that control the behavior of subsystems such as telemetry, background t
 
 The three `KIMI_CODE_IDENTITY_*` / `KIMI_CODE_BUILTIN_PRODUCT_SKILLS` variables are read by the default `agent-core-v2` engine. The legacy `kimi` / `kimi -p` path selected with `KIMI_CODE_LEGACY_FLAG=1` ignores them. Conversely, `KIMI_SECONDARY_MODEL` and `KIMI_SECONDARY_EFFORT` are read by the legacy engine only, and the default engine ignores them. `KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL` is read by both engines: it gates the v2 [subagent model pool](./config-files.md#subagent-model-pool) and the legacy secondary-model recipe.
 
-## Telegram notifications
-
-These variables configure the Telegram integration. They take priority over the `[telegram]` table in `config.toml` and are never written back to it.
-
-| Variable | Purpose | Valid values |
-| --- | --- | --- |
-| `KIMI_TELEGRAM_BOT_TOKEN` | Bot token from BotFather | Non-empty string |
-| `KIMI_TELEGRAM_CHAT_ID` | Telegram chat ID that receives messages | Non-empty string |
-| `KIMI_TELEGRAM_ENABLED` | Master switch for the integration | Truthy: `1`/`true`/`yes`/`on`; falsy: `0`/`false`/`no`/`off` |
-
-See [Telegram notifications](../guides/telegram-notifications.md) for setup and usage.
-
 ## Diagnostic logs
 
 These variables control log level and file rotation, read once at process startup:
