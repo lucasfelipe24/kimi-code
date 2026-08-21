@@ -21,8 +21,8 @@ import { IAppendLogStore } from '#/persistence/interface/appendLogStore';
 import { IFileSystemStorageService } from '#/persistence/interface/storage';
 import { AppendLogStore } from '#/persistence/backends/node-fs/appendLogStore';
 import { InMemoryStorageService } from '#/persistence/backends/memory/inMemoryStorageService';
-import { IEventBus } from '#/app/event/eventBus';
-import { EventBusService } from '#/app/event/eventBusService';
+import { IEventBus, ISessionEventBus } from '#/app/event/eventBus';
+import { AgentEventBusView, EventBusService } from '#/app/event/eventBusService';
 import { AgentStatusUpdated } from '#/agent/usage/usageEvents';
 import { ContextSpliced } from '#/agent/contextMemory/contextEvents';
 import { stubContextMemory } from '../contextMemory/stubs';
@@ -52,11 +52,13 @@ describe('WorkflowModeService', () => {
     ix.stub(IAgentContextMemoryService, stubContextMemory());
     ix.stub(IFileSystemStorageService, new InMemoryStorageService());
     ix.set(IAppendLogStore, new SyncDescriptor(AppendLogStore));
-    ix.set(IEventBus, new SyncDescriptor(EventBusService));
+    const sessionBus = new EventBusService();
+    ix.stub(ISessionEventBus, sessionBus);
     registerTestAgentWire(ix, testWireScope('wire', 'workflow-test'), {
       log: ix.get(IAppendLogStore),
-      eventBus: ix.get(IEventBus),
+      eventBus: sessionBus,
     });
+    ix.set(IEventBus, new SyncDescriptor(AgentEventBusView));
     registerTestEventDispatcher(ix);
     ix.set(IAgentSystemReminderService, new SyncDescriptor(AgentSystemReminderService));
     ix.stub(IAgentContextInjectorService, {
@@ -145,7 +147,12 @@ describe('WorkflowModeService', () => {
       records.push(record);
     }
     expect(records).toEqual([
-      { type: 'workflow_mode.enter', trigger: 'manual', time: expect.any(Number) },
+      {
+        type: 'workflow_mode.enter',
+        agentId: 'test-agent',
+        trigger: 'manual',
+        time: expect.any(Number),
+      },
     ]);
 
     const ix2 = disposables.add(new TestInstantiationService());

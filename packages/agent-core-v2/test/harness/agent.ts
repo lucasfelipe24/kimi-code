@@ -33,6 +33,7 @@ import { AgentGoalService } from '#/features/goal/goalService';
 import { ISessionMcpHandle } from '#/session/mcp/sessionMcpHandle';
 import { ISessionWorkspaceInfo } from '#/session/workspaceInfo/workspaceInfo';
 import { ISessionMemoryAccess } from '#/session/persistentMemory/memorySeed';
+import { ISessionMemoryAccessFactory } from '#/session/persistentMemory/memoryAccessFactory';
 import { McpConnectionManager } from '#/mcpCore/connection-manager';
 import { loadAgentsMdForRoots, type LoadedAgentsMd } from '#/agent/profile/context';
 import { InMemorySkillCatalog } from '#/app/skillCatalog/registry';
@@ -1321,7 +1322,7 @@ export class AgentTestContext {
               additionalDirs: [],
               onDidChange: Event.None as Event<void>,
             } satisfies ISessionWorkspaceInfo);
-            reg.defineInstance(ISessionMemoryAccess, {
+            const sessionMemoryAccess: ISessionMemoryAccess = {
               _serviceBrand: undefined,
               ready: Promise.resolve(),
               onDidChange: Event.None as Event<void>,
@@ -1335,7 +1336,12 @@ export class AgentTestContext {
                   new Error('ISessionMemoryAccess.update is not supported in the test harness'),
                 ),
               forget: () => Promise.resolve(),
-            } satisfies ISessionMemoryAccess);
+            };
+            reg.defineInstance(ISessionMemoryAccess, sessionMemoryAccess);
+            reg.defineInstance(ISessionMemoryAccessFactory, {
+              _serviceBrand: undefined,
+              forActor: () => sessionMemoryAccess,
+            } satisfies ISessionMemoryAccessFactory);
             reg.defineInstance(
               IWorkspaceStateService,
               new WorkspaceStateService(this.root.accessor.get(IAppStateService)),
@@ -1477,6 +1483,12 @@ export class AgentTestContext {
 
     this.initializeRestorableServices();
     this.get(IAgentActivityView);
+
+    this.disposables.push(
+      this.session.accessor.get(IAgentLifecycleService).onDidCreateScope(({ handle }) => {
+        handle.accessor.get(IAgentMemoryExtractService).setExtractor(() => Promise.resolve([]));
+      }),
+    );
 
     const eventBus = this.get(IEventBus);
     this.disposables.push(

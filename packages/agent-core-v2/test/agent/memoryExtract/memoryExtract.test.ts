@@ -53,11 +53,13 @@ import {
   type AgentLLMRequestFinish,
   type AgentLLMRequestOverrides,
 } from '#/agent/llmRequester/llmRequester';
+import type { AgentContext } from '#/agent/agentContext/agentContext';
 import { IAgentScopeContext, makeAgentScopeContext } from '#/agent/scopeContext/scopeContext';
 import { RunEnded } from '#/agent/loop/turnEvents';
 import { TurnEnded } from '#/agent/loop/turnOps';
 import { IConfigService } from '#/app/config/config';
 import { IEventBus } from '#/app/event/eventBus';
+import { EventBusService } from '#/app/event/eventBusService';
 import {
   DEFAULT_MEMORY_CONFIG,
   type MemoryConfig,
@@ -263,6 +265,7 @@ describe('AgentMemoryExtractService', () => {
   let ix: TestInstantiationService;
   let context: IAgentContextMemoryService;
   let eventBus: IEventBus;
+  let agentContext: AgentContext;
   let access: FakeMemoryAccess;
   let requester: FakeLLMRequester;
   let configValue: MemoryConfig;
@@ -274,16 +277,15 @@ describe('AgentMemoryExtractService', () => {
 
   function build(): void {
     logLines = [];
+    const agentScopeContext = makeAgentScopeContext({ agentId, agentScope: `agents/${agentId}` });
+    agentContext = agentScopeContext.agentContext;
     ix = createServices(disposables, {
       base: [registerContextMemoryServices],
       strict: true,
       additionalServices: (reg) => {
         reg.defineInstance(ISessionMemoryAccess, access);
         reg.defineInstance(IAgentLLMRequesterService, requester);
-        reg.defineInstance(
-          IAgentScopeContext,
-          makeAgentScopeContext({ agentId, agentScope: `agents/${agentId}` }),
-        );
+        reg.defineInstance(IAgentScopeContext, agentScopeContext);
         reg.definePartialInstance(IConfigService, {
           get: (<T,>() => configValue as T) as IConfigService['get'],
         });
@@ -302,6 +304,7 @@ describe('AgentMemoryExtractService', () => {
     });
     context = ix.get(IAgentContextMemoryService);
     eventBus = ix.get(IEventBus);
+    (eventBus as EventBusService).activateAgent(agentContext);
     // Force construction so the turn.ended hook is installed.
     ix.get(IAgentMemoryExtractService);
   }
@@ -311,7 +314,8 @@ describe('AgentMemoryExtractService', () => {
   }
 
   function endTurn(reason: 'completed' | 'cancelled' | 'failed' | 'blocked' = 'completed'): void {
-    eventBus.publish(new TurnEnded({ agentId, turnId: 1, reason }));
+    (eventBus as EventBusService).activateAgent(agentContext);
+    eventBus.publish(new TurnEnded({ agentId, turnId: 1, reason }), agentContext);
   }
 
   function runEnded(): void {

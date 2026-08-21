@@ -1341,11 +1341,11 @@ describe('AgentTowerService', () => {
 });
 
 type InjectableDynamicInjector = {
-  inject(boundary: undefined, isNewTurn: boolean): Promise<void>;
+  inject(isNewTurn: boolean, signal?: AbortSignal): Promise<void>;
 };
 
 async function injectDynamic(injector: InjectableDynamicInjector): Promise<void> {
-  await injector.inject(undefined, false);
+  await injector.inject(false);
 }
 
 function appendAssistantTurn(

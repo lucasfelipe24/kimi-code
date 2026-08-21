@@ -9,6 +9,8 @@ import { isError2 } from '#/_base/errors/errors';
 import { ILogService } from '#/_base/log/log';
 import { IAgentPermissionModeService } from '#/agent/permissionMode/permissionMode';
 import { IAgentProfileService, type ProfileData } from '#/agent/profile/profile';
+import type { AgentContext } from '#/agent/agentContext/agentContext';
+import { IAgentScopeContext, makeAgentScopeContext } from '#/agent/scopeContext/scopeContext';
 import { IAgentTaskService } from '#/agent/task/task';
 import type { AgentTask, AgentTaskSettlement, AgentTaskSink } from '#/agent/task/types';
 import { IAgentUserToolService } from '#/agent/userTool/userTool';
@@ -182,6 +184,8 @@ describe('WorkflowRunService', () => {
     const lifecycle = {
       get: (agentId: string): IAgentScopeHandle | undefined =>
         agentId === 'main' ? callerHandle : childHandles.get(agentId),
+      findAgentHandle: (agentId: string): IAgentScopeHandle | undefined =>
+        agentId === 'main' ? callerHandle : childHandles.get(agentId),
       create: (opts?: CreateAgentOptions): Promise<IAgentScopeHandle> => {
         const id = `child-${String(childHandles.size + 1)}`;
         const child = makeHandle(
@@ -189,6 +193,10 @@ describe('WorkflowRunService', () => {
           new Map<ServiceIdentifier<unknown>, unknown>([
             [IAgentPermissionModeService as ServiceIdentifier<unknown>, { setMode: () => {} }],
             [IAgentUserToolService as ServiceIdentifier<unknown>, { inheritUserTools: () => {} }],
+            [
+              IAgentScopeContext as ServiceIdentifier<unknown>,
+              makeAgentScopeContext({ agentId: id, agentScope: `agents/${id}` }),
+            ],
           ]),
         );
         childHandles.set(id, child);
@@ -202,13 +210,13 @@ describe('WorkflowRunService', () => {
     const subagents = {
       hooks: createHooks<AgentTaskHooks, keyof AgentTaskHooks>(['onWillStartAgentTask']),
       run: (
-        agentId: string,
+        agent: AgentContext,
         request: AgentRunRequest,
         opts: RunAgentOptions,
       ): Promise<AgentRunHandle> => {
-        subagentRuns.push({ agentId, request });
+        subagentRuns.push({ agentId: agent.agentId, request });
         const handle: AgentRunHandle = {
-          agentId,
+          agentId: agent.agentId,
           turn: undefined as unknown as AgentRunHandle['turn'],
           completion: subagentCompletion(opts),
         };
