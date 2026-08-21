@@ -52,7 +52,8 @@ const appState: AppState = {
   planMode: false,
   inputMode: 'prompt',
   swarmMode: false,
-    workflowMode: false,
+  workflowMode: false,
+  towerMode: false,
   theme: 'dark',
   editorCommand: null,
   notifications: { enabled: true, condition: 'unfocused' },
@@ -145,6 +146,14 @@ describe('FooterComponent', () => {
 
     expect(rendered).toContain('thinking');
     expect(rendered).not.toContain('thinking:high');
+  });
+
+  it('shows the tower mode chip only when tower mode is on', () => {
+    const on = new FooterComponent({ ...appState, towerMode: true });
+    expect(on.render(120).join('\n')).toContain('tower');
+
+    const off = new FooterComponent(appState);
+    expect(off.render(120).join('\n')).not.toContain('tower');
   });
 });
 

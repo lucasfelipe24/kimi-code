@@ -25,6 +25,7 @@ import { IAgentContextInjectorService } from '#/agent/contextInjector/contextInj
 import { IAgentContextMemoryService } from '#/agent/contextMemory/contextMemory';
 import { ContextSpliced } from '#/agent/contextMemory/contextEvents';
 import { IAgentSystemReminderService } from '#/agent/systemReminder/systemReminder';
+import { IAgentScopeContext } from '#/agent/scopeContext/scopeContext';
 import { IAgentStateService } from '#/agent/state/agentState';
 import { IEventBus } from '#/app/event/eventBus';
 import { IWorkflowCatalogService } from '#/app/workflow/workflowCatalog';
@@ -45,6 +46,7 @@ export class WorkflowModeService extends Disposable implements IWorkflowModeServ
     @IAgentContextInjectorService dynamicInjector: IAgentContextInjectorService,
     @IAgentStateService private readonly agentState: IAgentStateService,
     @IWorkflowCatalogService private readonly catalog: IWorkflowCatalogService,
+    @IAgentScopeContext private readonly scopeContext: IAgentScopeContext,
   ) {
     super();
     this.agentState.contributeState(workflowModeKey);
@@ -53,7 +55,9 @@ export class WorkflowModeService extends Disposable implements IWorkflowModeServ
 
   enter(trigger: WorkflowModeTrigger): void {
     if (this.agentState.get(workflowModeKey) !== null) return;
-    void this.dispatcher.dispatch(new WorkflowModeEnter({ trigger }));
+    void this.dispatcher.dispatch(
+      new WorkflowModeEnter({ agentId: this.scopeContext.agentId, trigger }),
+    );
     this.reminders.appendSystemReminder(buildWorkflowEnterReminder(this.catalog), {
       kind: 'injection',
       variant: 'workflow_mode',
@@ -66,10 +70,13 @@ export class WorkflowModeService extends Disposable implements IWorkflowModeServ
     const last = history.at(-1);
     const willPop =
       last?.origin?.kind === 'injection' && last.origin.variant === 'workflow_mode';
-    void this.dispatcher.dispatch(new WorkflowModeExit({}));
+    void this.dispatcher.dispatch(
+      new WorkflowModeExit({ agentId: this.scopeContext.agentId }),
+    );
     if (willPop) {
       this.eventBus.publish(
         new ContextSpliced({
+          agentId: this.scopeContext.agentId,
           start: history.length - 1,
           deleteCount: 1,
           messages: [],

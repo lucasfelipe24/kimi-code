@@ -23,6 +23,7 @@ export {
   showSettingsSelector,
 } from './config';
 export { handleSwarmCommand } from './swarm';
+export { handleTowerCommand } from './tower';
 export { handleWorkflowCommand } from './workflow';
 export { handleFeedbackCommand, showMcpServers, showStatusReport, showUsage } from './info';
 export { handleMemoryCommand } from './memory';

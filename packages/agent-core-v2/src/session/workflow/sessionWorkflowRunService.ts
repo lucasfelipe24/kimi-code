@@ -94,7 +94,7 @@ export class WorkflowRunService extends Disposable implements IWorkflowRunServic
     input: StartWorkflowRunInput,
   ): Promise<{ readonly runId: string; readonly taskId: string }> {
     const definition = await this.resolveDefinition(input);
-    const caller = this.lifecycle.get(input.callerAgentId);
+    const caller = this.lifecycle.findAgentHandle(input.callerAgentId);
     if (caller === undefined) {
       throw new Error2(ErrorCodes.AGENT_NOT_FOUND, `Caller agent "${input.callerAgentId}" does not exist`, {
         details: { agentId: input.callerAgentId },
@@ -181,7 +181,7 @@ export class WorkflowRunService extends Disposable implements IWorkflowRunServic
     const record = this.runs.get(runId);
     if (record === undefined || record.taskId === undefined) return false;
     if (record.status !== 'running') return false;
-    const caller = this.lifecycle.get(record.callerAgentId);
+    const caller = this.lifecycle.findAgentHandle(record.callerAgentId);
     if (caller === undefined) return false;
     void caller.accessor
       .get(IAgentTaskService)

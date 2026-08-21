@@ -194,6 +194,7 @@ export function foldWireRecordFacts(
   let planActive: boolean | undefined;
   let planRevision: { readonly reviewPath?: string; readonly version?: number } | undefined;
   let swarmActive: boolean | undefined;
+  let towerActive: boolean | undefined;
 
   const appended: TranscriptItem[] = [];
   const activeCancelTurnIds = new Set<number>();
@@ -343,6 +344,14 @@ export function foldWireRecordFacts(
         pushMarker('swarm.exit', record);
         break;
       }
+      case 'tower_mode.enter': {
+        towerActive = true;
+        break;
+      }
+      case 'tower_mode.exit': {
+        towerActive = false;
+        break;
+      }
       case 'task.started':
       case 'task.terminated': {
         upsertTask(record);
@@ -455,7 +464,7 @@ export function foldWireRecordFacts(
         })
       : base.items;
 
-  const modesTouched = planActive !== undefined || swarmActive !== undefined;
+  const modesTouched = planActive !== undefined || swarmActive !== undefined || towerActive !== undefined;
   const meta: TranscriptMeta = {
     ...base.meta,
     goal: goalTouched ? goal : base.meta.goal,
@@ -469,6 +478,7 @@ export function foldWireRecordFacts(
                 ? (planRevision ?? {})
                 : undefined,
           swarm: swarmActive === undefined ? base.meta.modes?.swarm : swarmActive ? {} : undefined,
+          tower: towerActive === undefined ? base.meta.modes?.tower : towerActive ? {} : undefined,
         }
       : base.meta.modes,
   };

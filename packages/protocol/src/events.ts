@@ -575,6 +575,7 @@ export interface AgentStatusUpdatedEvent {
   readonly planMode?: boolean;
   readonly swarmMode?: boolean;
   readonly workflowMode?: boolean;
+  readonly towerMode?: boolean;
   readonly permission?: PermissionMode;
   readonly usage?: UsageStatus;
   readonly phase?: AgentPhase;
@@ -1644,6 +1645,7 @@ export const agentStatusUpdatedEventSchema = z.object({
   planMode: z.boolean().optional(),
   swarmMode: z.boolean().optional(),
   workflowMode: z.boolean().optional(),
+  towerMode: z.boolean().optional(),
   permission: permissionModeSchema.optional(),
   usage: usageStatusSchema.optional(),
   phase: agentPhaseSchema.optional(),

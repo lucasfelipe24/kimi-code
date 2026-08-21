@@ -16,6 +16,7 @@ import { IAgentPlanService } from '#/features/plan/plan';
 import { IAgentProfileService } from '#/agent/profile/profile';
 import { IAgentSwarmService } from '#/features/swarm/agent/swarm';
 import { IWorkflowModeService } from '#/agent/workflow/workflowMode';
+import { IAgentTowerService } from '#/features/tower/tower';
 import { UNKNOWN_CAPABILITY } from '#/kosong/contract/capability';
 import { IModelCatalog } from '#/kosong/model/catalog';
 import { IModelService } from '#/kosong/model/model';
@@ -139,6 +140,7 @@ describe('Session legacy status (best-effort runtime state)', () => {
         [IAgentPlanService, { status: () => Promise.resolve(null) }],
         [IAgentSwarmService, { isActive: false }],
         [IWorkflowModeService, { isActive: false }],
+        [IAgentTowerService, { isActive: false }],
         [
           IAgentActivityView,
           { state: () => ({ lifecycle: 'ready', background: [] }) },
@@ -202,6 +204,7 @@ describe('Session legacy status (best-effort runtime state)', () => {
         [IAgentPlanService, { status: () => Promise.resolve(null) }],
         [IAgentSwarmService, { isActive: false }],
         [IWorkflowModeService, { isActive: false }],
+        [IAgentTowerService, { isActive: false }],
         [IModelService, { getDefaultModel: () => undefined }],
         [
           IAgentActivityView,
@@ -266,6 +269,7 @@ describe('Session legacy status (best-effort runtime state)', () => {
         [IAgentPlanService, { status: () => Promise.resolve(null) }],
         [IAgentSwarmService, { isActive: false }],
         [IWorkflowModeService, { isActive: false }],
+        [IAgentTowerService, { isActive: false }],
         [IModelService, { getDefaultModel: () => 'default-model' }],
         [
           IModelCatalog,
@@ -355,6 +359,7 @@ describe('Session legacy status (best-effort runtime state)', () => {
         [IAgentPlanService, { status: () => Promise.resolve(null) }],
         [IAgentSwarmService, { isActive: false }],
         [IWorkflowModeService, { isActive: false }],
+        [IAgentTowerService, { isActive: false }],
         [
           IAgentActivityView,
           { state: () => ({ lifecycle: 'ready', background: [] }) },

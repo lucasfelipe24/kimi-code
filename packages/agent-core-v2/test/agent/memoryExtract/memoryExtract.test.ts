@@ -311,7 +311,7 @@ describe('AgentMemoryExtractService', () => {
   }
 
   function endTurn(reason: 'completed' | 'cancelled' | 'failed' | 'blocked' = 'completed'): void {
-    eventBus.publish(new TurnEnded({ turnId: 1, reason }));
+    eventBus.publish(new TurnEnded({ agentId, turnId: 1, reason }));
   }
 
   function runEnded(): void {

@@ -17,6 +17,7 @@ import { isAbortError, linkAbortSignal } from '#/_base/utils/abort';
 import type { ILogService } from '#/_base/log/log';
 import { IAgentPermissionModeService } from '#/agent/permissionMode/permissionMode';
 import { IAgentProfileService } from '#/agent/profile/profile';
+import { agentContextOf } from '#/agent/scopeContext/scopeContext';
 import { IAgentUserToolService } from '#/agent/userTool/userTool';
 import { applyProfilePromptPrefix } from '#/app/agentProfileCatalog/promptPrefix';
 import type { IConfigService } from '#/app/config/config';
@@ -136,7 +137,7 @@ export class SubagentWorkflowHost implements WorkflowHost {
         description: request.label ?? 'workflow agent',
       });
       const run = await subagents.run(
-        child.id,
+        agentContextOf(child),
         { kind: 'prompt', prompt: promptText },
         { signal: controller.signal },
       );

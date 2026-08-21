@@ -19,6 +19,7 @@ import { IAgentPlanService } from '#/features/plan/plan';
 import { IAgentProfileService } from '#/agent/profile/profile';
 import { IAgentSwarmService } from '#/features/swarm/agent/swarm';
 import { IWorkflowModeService } from '#/agent/workflow/workflowMode';
+import { IAgentTowerService } from '#/features/tower/tower';
 import { agentContextOf } from '#/agent/scopeContext/scopeContext';
 import {
   getLiveSessionById,
@@ -71,6 +72,7 @@ export class SessionLegacyService implements ISessionLegacyService {
     const plan = agent.accessor.get(IAgentPlanService);
     const swarm = agent.accessor.get(IAgentSwarmService);
     const wfMode = agent.accessor.get(IWorkflowModeService);
+    const tower = agent.accessor.get(IAgentTowerService);
 
     const model = profile.getModel();
     const capabilities = profile.getModelCapabilities();
@@ -89,6 +91,7 @@ export class SessionLegacyService implements ISessionLegacyService {
       plan_mode: planData !== null,
       swarm_mode: swarm.isActive,
       workflow_mode: wfMode.isActive,
+      tower_mode: tower.isActive,
       context_tokens: tokens,
       max_context_tokens: maxTokens > 0 ? maxTokens : undefined,
       context_usage: maxTokens > 0 ? Math.min(1, tokens / maxTokens) : undefined,

@@ -17,6 +17,7 @@ function fakeInitialAppState(): AppState {
     inputMode: 'prompt',
     swarmMode: false,
     workflowMode: false,
+    towerMode: false,
     turnTimingLabel: null,
     thinkingEffort: 'off',
     contextUsage: 0,

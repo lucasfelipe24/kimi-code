@@ -29,7 +29,10 @@ import { defineState } from '#/state/state';
 
 import type { WorkflowModeTrigger } from './workflowMode';
 
-const workflowModeEnterSchema = z.object({ trigger: z.custom<WorkflowModeTrigger>() });
+const workflowModeEnterSchema = z.object({
+  agentId: z.string(),
+  trigger: z.custom<WorkflowModeTrigger>(),
+});
 
 export class WorkflowModeEnter extends Event2<z.infer<typeof workflowModeEnterSchema>> {
   static override readonly type = 'workflow_mode.enter';
@@ -38,7 +41,7 @@ export class WorkflowModeEnter extends Event2<z.infer<typeof workflowModeEnterSc
 }
 export interface WorkflowModeEnter extends z.infer<typeof workflowModeEnterSchema> {}
 
-const workflowModeExitSchema = z.object({});
+const workflowModeExitSchema = z.object({ agentId: z.string() });
 
 export class WorkflowModeExit extends Event2<z.infer<typeof workflowModeExitSchema>> {
   static override readonly type = 'workflow_mode.exit';
@@ -50,11 +53,11 @@ export interface WorkflowModeExit extends z.infer<typeof workflowModeExitSchema>
 export const workflowModeKey = defineState('workflowMode', (): WorkflowModeTrigger | null => null)
   .replayable({ schema: z.custom<WorkflowModeTrigger | null>() })
   .on(WorkflowModeEnter, (_s, e, ctx) => {
-    ctx.emit(new AgentStatusUpdated({ workflowMode: true }));
+    ctx.emit(new AgentStatusUpdated({ agentId: e.agentId, workflowMode: true }));
     return e.trigger;
   })
-  .on(WorkflowModeExit, (_s, _e, ctx) => {
-    ctx.emit(new AgentStatusUpdated({ workflowMode: false }));
+  .on(WorkflowModeExit, (_s, e, ctx) => {
+    ctx.emit(new AgentStatusUpdated({ agentId: e.agentId, workflowMode: false }));
     return null;
   });
 

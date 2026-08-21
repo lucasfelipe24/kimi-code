@@ -84,13 +84,13 @@ export class SessionTelegramBridge extends Service implements ISessionTelegramBr
     );
     this._register(
       this.lifecycle.onDidCreate((agent) => {
-        this.attachAgent(agent.id);
+        this.attachAgent(agent.agentId);
       }),
     );
     this._register(
-      this.lifecycle.onDidDispose((agentId) => {
-        this.agentStreams.delete(agentId);
-        this.btwAgentIds.delete(agentId);
+      this.lifecycle.onDidDispose((agent) => {
+        this.agentStreams.delete(agent.agentId);
+        this.btwAgentIds.delete(agent.agentId);
       }),
     );
     for (const agent of this.lifecycle.list()) {
@@ -108,7 +108,7 @@ export class SessionTelegramBridge extends Service implements ISessionTelegramBr
   }
 
   private attachAgent(agentId: string): void {
-    const handle = this.lifecycle.get(agentId);
+    const handle = this.lifecycle.findAgentHandle(agentId);
     if (handle === undefined) return;
     const bus = handle.accessor.get(IEventBus);
     this._register(bus.subscribe(TurnStarted, (e) => { this.onTurnStarted(agentId, e); }));
@@ -289,7 +289,7 @@ export class SessionTelegramBridge extends Service implements ISessionTelegramBr
       return;
     }
 
-    const handle = this.lifecycle.get(MAIN_AGENT_ID);
+    const handle = this.lifecycle.findAgentHandle(MAIN_AGENT_ID);
     if (handle === undefined) return;
     const prompt = handle.accessor.get(IAgentPromptService);
     const parts: ContentPart[] = [{ type: 'text', text }];
@@ -316,7 +316,7 @@ export class SessionTelegramBridge extends Service implements ISessionTelegramBr
     }
     const agentId = await this.btw.start();
     this.btwAgentIds.add(agentId);
-    const handle = this.lifecycle.get(agentId);
+    const handle = this.lifecycle.findAgentHandle(agentId);
     if (handle === undefined) {
       this.btwAgentIds.delete(agentId);
       await this.gateway.sendMessage({ text: 'Failed to start BTW side question.', parseMode: 'HTML' });

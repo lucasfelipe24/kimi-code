@@ -8,6 +8,7 @@ import {
   addDirArgumentCompletions,
   sortSlashCommands,
   swarmArgumentCompletions,
+  towerArgumentCompletions,
   type KimiSlashCommand,
 } from '#/tui/commands/index';
 import { describe, expect, it } from 'vitest';
@@ -74,6 +75,22 @@ describe('built-in slash command registry', () => {
     ]);
     expect(values('on')).toBeNull();
     expect(values('off')).toBeNull();
+    expect(values('Ship feature X')).toBeNull();
+  });
+
+  it('offers tower subcommand argument completions', () => {
+    const values = (prefix: string): string[] | null => {
+      const items = towerArgumentCompletions(prefix);
+      return items === null ? null : items.map((item) => item.value);
+    };
+
+    expect(values('')).toEqual(['status', 'teardown', 'on', 'off']);
+    expect(values('T')).toEqual(['teardown']);
+    expect(towerArgumentCompletions('tea')).toEqual([
+      { value: 'teardown', label: 'teardown', description: 'Tear down the tower' },
+    ]);
+    expect(values('status')).toBeNull();
+    expect(values('on')).toBeNull();
     expect(values('Ship feature X')).toBeNull();
   });
 
@@ -176,6 +193,7 @@ describe('built-in slash command registry', () => {
         'status',
         'theme',
         'title',
+        'tower',
         'undo',
         'usage',
         'version',
@@ -208,6 +226,24 @@ describe('built-in slash command registry', () => {
     expect((command as KimiSlashCommand).experimentalFlag).toBeUndefined();
     expect((command as KimiSlashCommand).engineV2Only).toBe(true);
     expect(resolveSlashCommandAvailability(command!, '')).toBe('always');
+  });
+
+  it('gates tower behind the tower experiment and the v2 engine', () => {
+    const command = findBuiltInSlashCommand('tower');
+    expect(command).toBeDefined();
+    expect((command as KimiSlashCommand).experimentalFlag).toBe('tower');
+    expect((command as KimiSlashCommand).engineV2Only).toBe(true);
+  });
+
+  it('keeps tower reads and toggles always available but defers objectives to idle', () => {
+    const command = findBuiltInSlashCommand('tower');
+    expect(command).toBeDefined();
+    expect(resolveSlashCommandAvailability(command!, '')).toBe('always');
+    expect(resolveSlashCommandAvailability(command!, 'on')).toBe('always');
+    expect(resolveSlashCommandAvailability(command!, 'off')).toBe('always');
+    expect(resolveSlashCommandAvailability(command!, 'status')).toBe('always');
+    expect(resolveSlashCommandAvailability(command!, 'teardown')).toBe('always');
+    expect(resolveSlashCommandAvailability(command!, 'Ship feature X')).toBe('idle-only');
   });
 });
 

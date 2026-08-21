@@ -40,6 +40,8 @@ const AGENT_TOOLS = [
   'Memory',
   'Monitor',
   'TowerInit',
+  'TowerStatus',
+  'TowerTeardown',
   // Workflow is main-agent-only by design: subagent profiles (coder/explore)
   // keep it out so delegated tasks never nest workflow runs (cost + approval).
   'Workflow',

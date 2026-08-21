@@ -9,7 +9,6 @@ import { LifecycleScope } from '#/app/scopes';
 import { Feature } from '#/features/feature';
 import { registerFeature } from '#/features/featureRegistry';
 
-import './flag';
 import { TOWER_FLAG_ID } from './tower';
 import { ITowerRateLimitService } from './towerRateLimit';
 import { TowerRateLimitService } from './towerRateLimitService';
@@ -36,7 +35,6 @@ import { TowerStatusTool } from './tools/status/statusTool';
 import { ITowerTeardownTool } from './tools/teardown/teardown';
 import { TowerTeardownTool } from './tools/teardown/teardownTool';
 import { TOWER_WORKER_PROFILE_DEF } from './workerProfile';
-import { IAgentTowerModeInjection, TowerModeInjection } from './towerModeInjection';
 
 interface TowerToolContribution {
   readonly id: ServiceIdentifier<AnyAgentTool>;
@@ -64,8 +62,9 @@ export class TowerFeature extends Feature {
   constructor(@IFlagService flags: IFlagService) {
     super();
     if (!flags.enabled(TOWER_FLAG_ID)) return;
-    this.contributeAgentService(IAgentTowerModeInjection, TowerModeInjection, {
-      activation: ScopeActivation.OnScopeCreated,
+    assembledFlagServices.add(flags);
+    this.onDispose(() => {
+      assembledFlagServices.delete(flags);
     });
     this.contributeService(LifecycleScope.App, ITowerRateLimitService, TowerRateLimitService, {
       activation: ScopeActivation.OnDemand,
@@ -78,6 +77,24 @@ export class TowerFeature extends Feature {
     }
     this.contributeProfiles([TOWER_WORKER_PROFILE_DEF]);
   }
+}
+
+const assembledFlagServices = new WeakSet<IFlagService>();
+let assembledOverrideForTests: boolean | undefined;
+
+/**
+ * Whether the App scope owning `flags` ran its tower feature assembly with
+ * the flag on. A live `/experiments` flip does not re-assemble features, so
+ * until a restart the tower tools/profile do not exist and the mode
+ * machinery must stay inert. Keyed per App scope (via its flag service) so
+ * coexisting Apps in one process do not leak assembly state into each other.
+ */
+export function isTowerFeatureAssembled(flags: IFlagService): boolean {
+  return assembledOverrideForTests ?? assembledFlagServices.has(flags);
+}
+
+export function _setTowerFeatureAssembledForTests(value: boolean | undefined): void {
+  assembledOverrideForTests = value;
 }
 
 registerFeature(TowerFeature);

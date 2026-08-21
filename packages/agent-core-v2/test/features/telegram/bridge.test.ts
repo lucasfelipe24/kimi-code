@@ -116,6 +116,7 @@ describe('SessionTelegramBridge', () => {
       create: vi.fn(),
       fork: vi.fn(),
       get: vi.fn((agentId: string) => (agentId === MAIN_AGENT_ID ? handle : undefined)),
+      findAgentHandle: vi.fn((agentId: string) => (agentId === MAIN_AGENT_ID ? handle : undefined)),
       list: vi.fn(() => [handle]),
       broadcastPermissionMode: vi.fn(),
       remove: vi.fn(),
@@ -169,10 +170,10 @@ describe('SessionTelegramBridge', () => {
   it('streams assistant deltas into a Telegram message', async () => {
     ix.get(ISessionTelegramBridge);
 
-    bus.publish(new TurnStarted({ turnId: 1, origin: USER_PROMPT_ORIGIN }));
-    bus.publish(new AssistantDelta({ turnId: 1, delta: 'hello' }));
-    bus.publish(new AssistantDelta({ turnId: 1, delta: ' world' }));
-    bus.publish(new TurnEnded({ turnId: 1, reason: 'completed', durationMs: 0 }));
+    bus.publish(new TurnStarted({ agentId: MAIN_AGENT_ID, turnId: 1, origin: USER_PROMPT_ORIGIN }));
+    bus.publish(new AssistantDelta({ agentId: MAIN_AGENT_ID, turnId: 1, delta: 'hello' }));
+    bus.publish(new AssistantDelta({ agentId: MAIN_AGENT_ID, turnId: 1, delta: ' world' }));
+    bus.publish(new TurnEnded({ agentId: MAIN_AGENT_ID, turnId: 1, reason: 'completed', durationMs: 0 }));
 
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(gatewaySendMessage).toHaveBeenCalled();
@@ -183,10 +184,10 @@ describe('SessionTelegramBridge', () => {
   it('reports tool call activity', async () => {
     ix.get(ISessionTelegramBridge);
 
-    bus.publish(new TurnStarted({ turnId: 2, origin: USER_PROMPT_ORIGIN }));
-    bus.publish(new ToolCallStarted({ turnId: 2, toolCallId: 'c1', name: 'Read', args: {} }));
+    bus.publish(new TurnStarted({ agentId: MAIN_AGENT_ID, turnId: 2, origin: USER_PROMPT_ORIGIN }));
+    bus.publish(new ToolCallStarted({ agentId: MAIN_AGENT_ID, turnId: 2, toolCallId: 'c1', name: 'Read', args: {} }));
     await new Promise((resolve) => setTimeout(resolve, 5));
-    bus.publish(new ToolResultEvent({ turnId: 2, toolCallId: 'c1', output: 'ok' }));
+    bus.publish(new ToolResultEvent({ agentId: MAIN_AGENT_ID, turnId: 2, toolCallId: 'c1', output: 'ok' }));
 
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(gatewaySendMessage).toHaveBeenCalledWith(expect.objectContaining({ text: '🔧 Read' }));
@@ -267,9 +268,9 @@ describe('SessionTelegramBridge', () => {
 
     ix.get(ISessionTelegramBridge);
 
-    bus.publish(new TurnStarted({ turnId: 3, origin: USER_PROMPT_ORIGIN }));
-    bus.publish(new AssistantDelta({ turnId: 3, delta: 'x'.repeat(5000) }));
-    bus.publish(new TurnEnded({ turnId: 3, reason: 'completed', durationMs: 0 }));
+    bus.publish(new TurnStarted({ agentId: MAIN_AGENT_ID, turnId: 3, origin: USER_PROMPT_ORIGIN }));
+    bus.publish(new AssistantDelta({ agentId: MAIN_AGENT_ID, turnId: 3, delta: 'x'.repeat(5000) }));
+    bus.publish(new TurnEnded({ agentId: MAIN_AGENT_ID, turnId: 3, reason: 'completed', durationMs: 0 }));
 
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(gatewaySendMessage).toHaveBeenCalled();
@@ -300,6 +301,9 @@ describe('SessionTelegramBridge', () => {
       get: vi.fn((agentId: string) =>
         agentId === MAIN_AGENT_ID ? handle : agentId === 'agent-1' ? btwHandle : undefined,
       ),
+      findAgentHandle: vi.fn((agentId: string) =>
+        agentId === MAIN_AGENT_ID ? handle : agentId === 'agent-1' ? btwHandle : undefined,
+      ),
       list: vi.fn(() => [handle]),
       broadcastPermissionMode: vi.fn(),
       remove: vi.fn(),
@@ -318,10 +322,10 @@ describe('SessionTelegramBridge', () => {
     expect(promptSubmit).not.toHaveBeenCalled();
     expect(btwPromptSubmit).toHaveBeenCalledWith(expect.objectContaining({ input: [{ type: 'text', text: 'what is 2+2?' }] }));
 
-    btwBus.publish(new TurnStarted({ turnId: 7, origin: USER_PROMPT_ORIGIN }));
-    btwBus.publish(new AssistantDelta({ turnId: 7, delta: 'The answer is ' }));
-    btwBus.publish(new AssistantDelta({ turnId: 7, delta: '4.' }));
-    btwBus.publish(new TurnEnded({ turnId: 7, reason: 'completed', durationMs: 0 }));
+    btwBus.publish(new TurnStarted({ agentId: 'agent-1', turnId: 7, origin: USER_PROMPT_ORIGIN }));
+    btwBus.publish(new AssistantDelta({ agentId: 'agent-1', turnId: 7, delta: 'The answer is ' }));
+    btwBus.publish(new AssistantDelta({ agentId: 'agent-1', turnId: 7, delta: '4.' }));
+    btwBus.publish(new TurnEnded({ agentId: 'agent-1', turnId: 7, reason: 'completed', durationMs: 0 }));
 
     await new Promise((resolve) => setTimeout(resolve, 20));
     const lastCall = gatewaySendMessage.mock.calls.at(-1)![0] as { text: string };
@@ -351,6 +355,9 @@ describe('SessionTelegramBridge', () => {
       get: vi.fn((agentId: string) =>
         agentId === MAIN_AGENT_ID ? handle : agentId === 'agent-1' ? btwHandle : undefined,
       ),
+      findAgentHandle: vi.fn((agentId: string) =>
+        agentId === MAIN_AGENT_ID ? handle : agentId === 'agent-1' ? btwHandle : undefined,
+      ),
       list: vi.fn(() => [handle]),
       broadcastPermissionMode: vi.fn(),
       remove: vi.fn(),
@@ -369,9 +376,9 @@ describe('SessionTelegramBridge', () => {
     expect(gatewaySendMessage).toHaveBeenCalledWith(expect.objectContaining({ text: 'Failed to submit BTW question.' }));
 
     const messageCountAfterFailure = gatewaySendMessage.mock.calls.length;
-    btwBus.publish(new TurnStarted({ turnId: 7, origin: USER_PROMPT_ORIGIN }));
-    btwBus.publish(new AssistantDelta({ turnId: 7, delta: 'ignored' }));
-    btwBus.publish(new TurnEnded({ turnId: 7, reason: 'completed', durationMs: 0 }));
+    btwBus.publish(new TurnStarted({ agentId: 'agent-1', turnId: 7, origin: USER_PROMPT_ORIGIN }));
+    btwBus.publish(new AssistantDelta({ agentId: 'agent-1', turnId: 7, delta: 'ignored' }));
+    btwBus.publish(new TurnEnded({ agentId: 'agent-1', turnId: 7, reason: 'completed', durationMs: 0 }));
 
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(gatewaySendMessage).toHaveBeenCalledTimes(messageCountAfterFailure);
@@ -431,9 +438,9 @@ describe('SessionTelegramBridge', () => {
 
     ix.get(ISessionTelegramBridge);
 
-    bus.publish(new TurnStarted({ turnId: 4, origin: USER_PROMPT_ORIGIN }));
-    bus.publish(new AssistantDelta({ turnId: 4, delta: 'secret content' }));
-    bus.publish(new TurnEnded({ turnId: 4, reason: 'completed', durationMs: 0 }));
+    bus.publish(new TurnStarted({ agentId: MAIN_AGENT_ID, turnId: 4, origin: USER_PROMPT_ORIGIN }));
+    bus.publish(new AssistantDelta({ agentId: MAIN_AGENT_ID, turnId: 4, delta: 'secret content' }));
+    bus.publish(new TurnEnded({ agentId: MAIN_AGENT_ID, turnId: 4, reason: 'completed', durationMs: 0 }));
 
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(gatewaySendMessage).toHaveBeenCalledWith(expect.objectContaining({ text: 'response ready (redacted)' }));

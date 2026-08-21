@@ -6,11 +6,11 @@ export const TOWER_FLAG_ENV = 'KIMI_CODE_EXPERIMENTAL_TOWER';
 
 export const towerFlag: FlagDefinitionInput = {
   id: TOWER_FLAG_ID,
-  title: 'Tower multi-agent orchestration',
+  title: 'Tower mode',
   description:
-    'Mission planning with worker/reviewer agents in git worktrees, the inbox protocol, and the /tower skill.',
+    'Enable tower mode: coordinate multiple agents on a shared objective, toggled with the /tower command.',
   env: TOWER_FLAG_ENV,
-  default: true,
+  default: false,
   surface: 'both',
 };
 

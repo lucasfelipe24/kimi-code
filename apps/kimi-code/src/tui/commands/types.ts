@@ -1,5 +1,5 @@
 import type { AutocompleteItem, SlashCommand } from '@moonshot-ai/pi-tui';
-import type { FlagId, Session } from '@moonshot-ai/kimi-code-sdk';
+import type { Session } from '@moonshot-ai/kimi-code-sdk';
 
 export type SlashCommandAvailability = 'always' | 'idle-only';
 
@@ -18,8 +18,9 @@ export interface KimiSlashCommand<Name extends string = string> extends SlashCom
   readonly description: string;
   readonly priority?: number;
   readonly availability?: SlashCommandAvailability | ((args: string) => SlashCommandAvailability);
-  /** When set, the command is hidden from the palette and blocked unless this flag is enabled. */
-  readonly experimentalFlag?: FlagId;
+  /** When set, the command is hidden from the palette and blocked unless this flag is enabled.
+   * A plain string: the gating flag may live in either engine's registry (v1 core or v2 domain). */
+  readonly experimentalFlag?: string;
   /** When true, the command is available only when the TUI runs on engine v2. */
   readonly engineV2Only?: boolean;
   /**

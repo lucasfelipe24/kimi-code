@@ -163,6 +163,7 @@ describe('WorkflowRunService', () => {
       },
       history: () => [],
       checkpointDepth: () => 0,
+      modelCheckpointDepths: () => [],
       undo: () => {},
       restore: async () => {},
       flush: async () => {},

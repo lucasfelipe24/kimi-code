@@ -20,15 +20,8 @@ import { IAgentSystemReminderService } from '#/agent/systemReminder/systemRemind
 import { AgentSystemReminderService } from '#/agent/systemReminder/systemReminderService';
 import { IEventBus } from '#/app/event/eventBus';
 import { EventBusService } from '#/app/event/eventBusService';
-import { IFeatureManager } from '#/app/feature/featureManager';
-import { IAgentTowerService } from '#/features/tower/tower';
-import {
-  IAgentTowerModeInjection,
-  TowerModeInjection,
-} from '#/features/tower/towerModeInjection';
 import { IWireService } from '#/wire/wire';
 import { registerLogServices } from '../../_base/log/stubs';
-import { createTestAgent, type TestAgentContext } from '../../harness';
 import { registerContextMemoryServices, type StubContextMemory } from '../contextMemory/stubs';
 import {
   runWillBeginStepHooks,
@@ -71,11 +64,9 @@ describe('AgentContextInjectorService', () => {
   let ix: TestInstantiationService;
   let context: IAgentContextMemoryService;
   let loop: StubLoop;
-  let towerActive: boolean;
 
   beforeEach(() => {
     disposables = new DisposableStore();
-    towerActive = false;
     loop = stubLoopWithHooks();
     ix = createServices(disposables, {
       base: [registerContextMemoryServices, registerLogServices],
@@ -86,19 +77,6 @@ describe('AgentContextInjectorService', () => {
         reg.defineInstance(IAgentStateService, new AgentStateService());
         reg.define(IAgentSystemReminderService, AgentSystemReminderService);
         reg.define(IAgentContextInjectorService, AgentContextInjectorService);
-        reg.defineInstance(IAgentTowerService, {
-          _serviceBrand: undefined,
-          get isActive() {
-            return towerActive;
-          },
-          enter: () => {
-            towerActive = true;
-          },
-          exit: () => {
-            towerActive = false;
-          },
-        });
-        reg.define(IAgentTowerModeInjection, TowerModeInjection);
       },
     });
     context = ix.get(IAgentContextMemoryService);
@@ -424,44 +402,6 @@ describe('AgentContextInjectorService', () => {
     ]);
   });
 
-  it('re-emits the active tower protocol reminder after compaction rearm', async () => {
-    towerActive = true;
-    ix.get(IAgentTowerModeInjection);
-
-    await runInjectionStep(true);
-    expect(lastText(context)).toContain('Tower mode is active.');
-    expect(lastText(context)).toContain('TowerSend');
-    expect(lastText(context)).toContain('Do not hallucinate protocol actions');
-
-    spliceContext(0, context.get().length, [compactionSummary('Compacted summary.')]);
-    await runInjectionStep();
-
-    expect(
-      context
-        .get()
-        .filter(
-          (message) =>
-            message.origin?.kind === 'injection' && message.origin.variant === 'tower_mode',
-        ),
-    ).toHaveLength(1);
-    expect(lastText(context)).toContain('Tower mode is active.');
-  });
-
-  it('does not emit the tower reminder while tower mode is inactive', async () => {
-    ix.get(IAgentTowerModeInjection);
-
-    await runInjectionStep(true);
-
-    expect(
-      context
-        .get()
-        .some(
-          (message) =>
-            message.origin?.kind === 'injection' && message.origin.variant === 'tower_mode',
-        ),
-    ).toBe(false);
-  });
-
   it('does not re-arm the new-turn flag for non-compaction splices', async () => {
     const seen: boolean[] = [];
     injector(ix).register('per_turn_test', ({ isNewTurn }) => {
@@ -558,25 +498,5 @@ describe('AgentContextInjectorService', () => {
 
     expect(context.get()).toHaveLength(1);
     expect(lastText(context)).toContain('surviving reminder');
-  });
-});
-
-describe('TowerFeature — tower-mode injection wiring', () => {
-  let ctx: TestAgentContext;
-
-  afterEach(async () => {
-    try {
-      await ctx.expectResumeMatches();
-    } finally {
-      await ctx.dispose();
-    }
-  });
-
-  it('materializes the injection provider through the feature seam', async () => {
-    ctx = createTestAgent();
-
-    const manager = ctx.get(IFeatureManager);
-    expect(manager.units().find((unit) => unit.name === 'tower')).toBeDefined();
-    expect(ctx.get(IAgentTowerModeInjection)).toBeInstanceOf(TowerModeInjection);
   });
 });

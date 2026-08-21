@@ -819,6 +819,7 @@ export class SessionEventHandler {
     if (event.planMode !== undefined) patch.planMode = event.planMode;
     if (event.swarmMode !== undefined) patch.swarmMode = event.swarmMode;
     if (event.workflowMode !== undefined) patch.workflowMode = event.workflowMode;
+    if (event.towerMode !== undefined) patch.towerMode = event.towerMode;
     if (event.permission !== undefined) {
       patch.permissionMode = event.permission;
     }

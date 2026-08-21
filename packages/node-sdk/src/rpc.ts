@@ -159,6 +159,10 @@ export type SetSessionWorkflowModeRpcInput =
   | (SessionIdRpcInput & { readonly enabled: true; readonly trigger: WorkflowModeTrigger })
   | (SessionIdRpcInput & { readonly enabled: false });
 
+export interface SetSessionTowerModeRpcInput extends SessionIdRpcInput {
+  readonly enabled: boolean;
+}
+
 export interface ActivateSkillRpcInput extends SessionIdRpcInput {
   readonly name: string;
   readonly args?: string | undefined;
@@ -774,6 +778,14 @@ export abstract class SDKRpcClientBase {
   async swarm(input: SessionPromptRpcInput): Promise<void> {
     await this.enterSwarmMode({ sessionId: input.sessionId, trigger: 'task' });
     return this.prompt(input);
+  }
+
+  async setTowerMode(input: SetSessionTowerModeRpcInput): Promise<void> {
+    void input;
+    throw new KimiError(
+      ErrorCodes.NOT_IMPLEMENTED,
+      'setTowerMode is only available on the agent-core-v2 engine.',
+    );
   }
 
   private async enterSwarmMode(
