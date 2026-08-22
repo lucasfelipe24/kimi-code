@@ -67,10 +67,11 @@ export const ErrorCode = {
   PROMPT_ID_CONFLICT: 40927,
   /** memory 内容被拒绝（疑似凭证 / 敏感信息） */
   MEMORY_CONTENT_REJECTED: 40928,
-  /** memory scope 已达容量上限 */
-  MEMORY_SCOPE_FULL: 40929,
+  MCP_OAUTH_FAILED: 40929,
   /** memory 写入需要受信任的 workspace（project scope） */
   MEMORY_TRUST_REQUIRED: 40930,
+  /** memory scope 已达容量上限 */
+  MEMORY_SCOPE_FULL: 40931,
 
   APPROVAL_EXPIRED: 41001,
   QUESTION_EXPIRED: 41002,
